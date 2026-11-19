@@ -58,7 +58,8 @@ export async function assemble() {
       assets.set('owners/' + pin.prefix + '/' + output, body);
     }
   }
-  const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json'];
+  const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
+    'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal.json'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   verifyImports(assets);
   const template = await readFile(join(root, 'web/sw.js'), 'utf8');

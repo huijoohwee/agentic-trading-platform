@@ -183,3 +183,17 @@ start().catch(error => {
   byId('fatal').hidden = false;
   byId('fatal').textContent = error.message;
 });
+
+const rehearsal = byId('rehearsal');
+let opening;
+rehearsal.addEventListener('toggle', async () => {
+  if (!rehearsal.open || opening) return;
+  try {
+    opening = import('./rehearsal-view.mjs');
+    const { mountRehearsal } = await opening;
+    await mountRehearsal(byId('rehearsal-body'));
+  } catch (error) {
+    opening = null;
+    byId('rehearsal-body').textContent = error.message;
+  }
+});

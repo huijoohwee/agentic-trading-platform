@@ -1,6 +1,6 @@
 # Agentic Trading Platform
 
-A local decision journal for a synthetic limit ticket. Enter quantity, price and an explicit evaluation time, inspect the R01 freshness reason and save the observation. A tab reopens the exact accepted inputs, fixture digest and policy revision from IndexedDB. Its revision fence rejects a competing stale edit.
+A device-local decision journal and Moomoo × Qoder competition rehearsal. Enter quantity, price and an explicit evaluation time, inspect the R01 freshness reason and save the observation. A tab reopens the exact accepted inputs, fixture digest and policy revision from IndexedDB. Its revision fence rejects a competing stale edit.
 
 ## Run
 
@@ -13,6 +13,22 @@ npm run dev
 Open [the local workspace](http://127.0.0.1:4181). Wait for **Offline ready** before disconnecting. The TEST quote is realtime at 09:00:00 UTC on 19 November 2026. At 09:05:00, R01 passes. Choose **Advance 1 s** and it fails. Save the draft, close the tab and reopen the same URL offline. The **Saved observation** section shows the recorded result. Open **Source evidence and calculation** for the input digest and an on-demand Sheets calculation.
 
 The browser’s origin owns this private fixture. A different hostname or port opens a separate store. Clearing browser site data removes the record. The local runner serves loopback and the service worker caches only the sealed static assets. The app has no broker account, live market input or execution interface.
+
+## Replay the competition offline
+
+Open **Moomoo × Qoder competition rehearsal** in the journal after **Offline ready** appears. Disconnect, select **Run A · practice** and choose **Replay run**. Expand **Decision and execution log** to inspect the two five-share fills at $24 and $26 against a $25 buy limit. The second execution breaches the limit even though the average is $25. The run also exercises an independent risk veto, a repeated trigger, cancellation after a partial fill and a halt until simulator readback.
+
+Choose **Export replay**, then replay **Run B · competition**. The Performance card shows the Friday mark of $99,992.93, final ranked equity of $100,835.37105 and later account equity of $100,934.36445. Final-day exercise is included in ranked equity. The later sale affects account equity. Reopen the page offline to see B, then choose A’s file under **Restore replay file** to reproduce A’s policy, evidence and decisions. An invalid archive leaves the last verified snapshot available. Each tab can select a run. The last successful selection is the default on reopen.
+
+The browser and CLI use the same pinned synthetic calendar, instruments, two tapes and 59 independent rule examples. The evaluator keeps monetary totals in millionths of a USD. Dates, readbacks, reviewer roles and order effects are fixture data. These runs exercise the offline parts of VCC-24/25/27/28. Qoder session provenance, provider fee rounding, actual simulator settlement and scored competition participation require provider evidence. Each export contains fixture aliases, versioned inputs, event receipts, positions, the equity series and a digest. Restore checks its contents against the pinned fixture and replays the full run. This format accepts only the two included fixtures.
+
+```sh
+npm run rehearsal
+npm run --silent rehearsal -- --export A > rehearsal-A.json
+npm run rehearsal -- --restore rehearsal-A.json
+```
+
+The rehearsal loads on opening its disclosure. Its assets are in the same sealed offline cache as the journal. The rehearsal’s local storage key holds one verified archive independently of the original ticket’s IndexedDB schema. To recover the previous journal, serve its retained build at the same origin and reload after the service worker activates. Export the rehearsal first to retain a portable copy.
 
 ## Build and verify
 

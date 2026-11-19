@@ -8,6 +8,7 @@
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "check": "node --test test/*.test.mjs",
-    "check:browser": "node test/browser.mjs"
+    "check:browser": "node test/browser.mjs",
+    "rehearsal": "node scripts/rehearse.mjs"
   }
 }

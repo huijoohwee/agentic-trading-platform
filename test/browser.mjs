@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -47,6 +48,8 @@ try {
     await expectText(page,'state','PASS');
     await page.waitForFunction(() => !document.querySelector('#fields').disabled);
     await checkDashboard(page, mobile ? 1 : 3);
+    assert.equal(await page.evaluate(() => performance.getEntriesByType('resource')
+      .some(e => e.name.endsWith('/src/rehearsal-view.mjs'))),false);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     if (mobile) {
       const advance = page.getByRole('button',{name:'Advance 1 s'});
@@ -101,6 +104,41 @@ try {
     await reopened.locator('#evidence summary').click();
     await reopened.waitForFunction(() => document.querySelector('#notional').textContent.includes('$100.00'));
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
+    await reopened.locator('#rehearsal summary').first().click();
+    await reopened.getByRole('button',{name:'Replay run'}).click();
+    await expectText(reopened,'replay-status','Verified run A · 23 synthetic events');
+    const grid = reopened.getByRole('list',{name:'Competition rehearsal snapshot'});
+    assert.equal(await grid.locator(':scope > li.agentic-dashboard-card').count(),3);
+    assert.equal(await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length),name==='mobile' ? 1 : 3);
+    assert.match(await grid.innerText(),/99985|99,985/);
+    assert.match(await grid.innerText(),/BUY 1 TEST remaining/);
+    await reopened.getByText('Decision and execution log (23)',{exact:true}).click();
+    const detail = reopened.locator('#rehearsal summary').filter({hasText:'second-fill · OFF_LIMIT'});
+    await detail.click();
+    assert.match(await detail.locator('..').innerText(),/26/);
+    const file = reopened.waitForEvent('download');
+    await reopened.getByRole('button',{name:'Export replay'}).click();
+    const bytes = await readFile(await (await file).path());
+    const A = JSON.parse(bytes.toString());
+    await reopened.getByLabel('Synthetic run').selectOption('B');
+    await reopened.getByRole('button',{name:'Replay run'}).click();
+    await expectText(reopened,'replay-status','Verified run B · 26 synthetic events');
+    assert.match(await grid.innerText(),/100,835\.37105/);
+    assert.match(await grid.innerText(),/100,934\.36445/);
+    await reopened.reload();
+    await reopened.locator('#rehearsal summary').first().click();
+    await expectText(reopened,'replay-status','Verified run B · 26 synthetic events');
+    const input = reopened.getByLabel('Restore replay file');
+    await input.setInputFiles({name:'tampered.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...A,sha256:'changed'}))});
+    await expectText(reopened,'replay-status','Archive integrity or binding mismatch');
+    assert.match(await grid.innerText(),/fixture-competition/);
+    await input.setInputFiles({name:'practice.json',mimeType:'application/json',buffer:bytes});
+    await expectText(reopened,'replay-status','Verified run A · 23 synthetic events');
+    assert.match(await grid.innerText(),/fixture-practice/);
+    assert.equal(await reopened.getByRole('heading',{name:'Run A · practice'}).count(),1);
+    await expectText(reopened,'revision','Revision 1');
+    assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
+    console.log(name + ': first offline replay, drill-down, export A, reopen B, tamper rejection and exact restore A passed.');
     if (process.env.TRADING_SCREENSHOT_DIR) {
       await reopened.screenshot({path:join(process.env.TRADING_SCREENSHOT_DIR,name+'.png'),fullPage:true});
     }
