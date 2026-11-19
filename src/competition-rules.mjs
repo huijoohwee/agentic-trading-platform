@@ -120,4 +120,3 @@ export function research(signal, at) {
   if (signal.action === 'EXIT') return signal.closes.at(-1) <= signal.priorHigh ? 'CANDIDATE' : 'NO_TRADE';
   return signal.closes.every(close => close > signal.priorHigh) ? 'CANDIDATE' : 'NO_TRADE';
 }
-

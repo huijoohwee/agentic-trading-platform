@@ -18,4 +18,3 @@ if (!args.length) {
 } else {
   throw Error('Usage: npm run rehearsal [-- --export A|B | --restore FILE]');
 }
-

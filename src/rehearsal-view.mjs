@@ -147,4 +147,3 @@ export async function mountRehearsal(host) {
   if (saved !== null) await update(() => restore(fixture,saved),false);
   else status.textContent = 'Choose a synthetic run to replay on this device.';
 }
-
