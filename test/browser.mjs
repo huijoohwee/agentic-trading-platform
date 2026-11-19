@@ -19,6 +19,17 @@ const watch = context => context.on('page', page => {
   page.on('requestfailed', request => errors.push(request.url() + ' ' + request.failure()?.errorText));
   page.on('request', request => { if (!request.url().startsWith(origin + '/')) errors.push(request.url()); });
 });
+async function checkDashboard(page, columns) {
+  const dashboard = page.getByRole('main', { name: 'Decision journal' });
+  const cards = dashboard.getByRole('list', { name: 'Trading ticket workflow' });
+  assert.deepEqual(await cards.locator('li h2').allTextContents(), [
+    'Quote freshness', 'Draft ticket', 'Saved observation',
+  ]);
+  assert.equal(await cards.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length), columns);
+  assert.equal(await dashboard.evaluate(element => getComputedStyle(element).containerName), 'agentic-dashboard');
+  assert.equal(await cards.locator(':scope > li.agentic-collection-item.agentic-dashboard-card').count(), 3);
+}
+
 const expectText = (page, id, value) => page.waitForFunction(([id, value]) =>
   document.getElementById(id)?.textContent === value,[id,value],{timeout:8000});
 
@@ -31,6 +42,7 @@ try {
     await expectText(page,'offline-status','Offline ready');
     await expectText(page,'state','PASS');
     await page.waitForFunction(() => !document.querySelector('#fields').disabled);
+    await checkDashboard(page, mobile ? 1 : 3);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     if (mobile) {
       const advance = page.getByRole('button',{name:'Advance 1 s'});
@@ -81,6 +93,7 @@ try {
     assert.equal(await reopened.getByLabel('Quantity').inputValue(),'4');
     assert.equal(await reopened.getByLabel('Evaluation time (UTC)').inputValue(),'09:05:01');
     await expectText(reopened,'state','FAIL');
+    await checkDashboard(reopened, name === 'mobile' ? 1 : 3);
     await reopened.locator('#evidence summary').click();
     await reopened.waitForFunction(() => document.querySelector('#notional').textContent.includes('$100.00'));
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);

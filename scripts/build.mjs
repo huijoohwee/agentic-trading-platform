@@ -14,8 +14,8 @@ const pins = [
     digest: 'e4e22c9918554853470984847528440dedbb4f099214e867284fcf2bcd17817d',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
   { repo: 'agentic-design-system', prefix: 'design', revision: 'fd18c30f7820bace18b450f9fc40206392c0de28',
-    digest: 'c5832bd0f2d4a18e6405b4d0852104e7d0a91bced9a028467a55b9afa5b9d570',
-    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/THIRD-PARTY-NOTICES.txt'] },
+    digest: '7d7744fd1c996eb61af0e70a6e08edfc354fb84b44b747c0e8e7214d44793879',
+    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/THIRD-PARTY-NOTICES.txt'] },
 ];
 
 export function ownerRoot() {

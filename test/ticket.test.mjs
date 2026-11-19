@@ -71,12 +71,18 @@ test('the sealed graph rejects legacy Sheets imports and modified UI projection 
   const bad = new Map(assets);
   bad.set('src/browser.mjs',Buffer.from("import '@agentic-base/views-react/sheets';"));
   assert.throws(() => verifyImports(bad),/Unowned module/);
-  const changed = new Map([
+  const designSources = new Map([
     ['LICENSE',assets.get('owners/design/LICENSE')],
     ['site/favicon.svg',assets.get('owners/design/site/favicon.svg')],
     ['site/THIRD-PARTY-NOTICES.txt',assets.get('owners/design/site/THIRD-PARTY-NOTICES.txt')],
-    ['site/vendor/shared-ui-profile.css',Buffer.from('body {}')],
+    ['site/vendor/shared-ui-profile.css',assets.get('owners/design/profile.css')],
+    ['site/collection-layout.css',assets.get('owners/design/site/collection-layout.css')],
   ]);
-  assert.throws(() => verifyOwner('agentic-design-system',changed),/Owner bytes/);
+  verifyOwner('agentic-design-system',designSources);
+  for (const path of ['site/vendor/shared-ui-profile.css', 'site/collection-layout.css']) {
+    const changed = new Map(designSources);
+    changed.set(path, Buffer.from('body {}'));
+    assert.throws(() => verifyOwner('agentic-design-system',changed),/Owner bytes/);
+  }
   assert.equal([...assets.keys()].filter(key => key.endsWith('profile.css')).length,1);
 });
