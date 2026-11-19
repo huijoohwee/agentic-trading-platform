@@ -1,0 +1,14 @@
+{
+  "id": "test-demo-20261119",
+  "symbol": "TEST.DEMO",
+  "currency": "USD",
+  "quote": {
+    "observedAt": "2026-11-19T09:00:00Z",
+    "freshness": "realtime",
+    "price": 25
+  },
+  "policy": {
+    "revision": "test-policy-1",
+    "maxAgeMinutes": 5
+  }
+}

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#162d2a">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>Decision journal · Agentic Trading</title>
+  <link rel="icon" href="./owners/design/site/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./owners/design/profile.css">
+  <link rel="stylesheet" href="./journal.css">
+  <script type="module" src="./src/browser.mjs"></script>
+</head>
+<body>
+  <header class="masthead"><div class="wrap mast-inner">
+    <strong>Agentic Trading</strong><span id="offline-status" role="status">Opening local workspace…</span>
+  </div></header>
+  <main class="wrap">
+    <header class="intro"><div><p class="context">Synthetic trading workspace</p><h1>Decision journal</h1></div>
+      <span class="date">19 Nov 2026 · UTC</span></header>
+    <div id="fatal" role="alert" hidden></div>
+    <div class="workspace">
+      <section class="check-card" aria-labelledby="check-heading">
+        <div class="section-line"><h2 id="check-heading">Quote freshness</h2><span class="code">R01</span></div>
+        <div id="verdict" aria-live="polite" aria-atomic="true"><strong id="state">Checking…</strong>
+          <p id="reason"></p></div>
+        <div class="measure"><div><span>Quote age</span><strong id="age">—</strong></div>
+          <progress id="window" aria-label="Quote age within the five-minute policy window" value="0" max="300"></progress>
+          <div class="scale"><span>0 s</span><span>5 min threshold</span></div></div>
+        <dl class="facts"><div><dt>Symbol</dt><dd id="quote-symbol">—</dd></div>
+          <div><dt>Synthetic quote</dt><dd id="quote-price">—</dd></div>
+          <div><dt>Observed at</dt><dd id="observed">—</dd></div>
+          <div><dt>Policy revision</dt><dd id="policy">—</dd></div></dl>
+        <p class="scope">R01 checks the quote timestamp. The ticket stays a draft.</p>
+      </section>
+      <section class="ticket-card" aria-labelledby="ticket-heading">
+        <div class="section-line"><h2 id="ticket-heading">Draft ticket</h2><span class="code">LIMIT</span></div>
+        <form id="ticket" class="agentic-form-controls">
+          <fieldset id="fields" disabled><legend class="sr">Ticket inputs</legend>
+            <div class="pair"><div class="field"><label for="side">Side</label><select id="side" name="side"><option value="BUY">Buy</option><option value="SELL">Sell</option></select></div>
+              <div class="field"><label for="quantity">Quantity</label><input id="quantity" type="number" name="quantity" step="any" min="0" required></div></div>
+            <div class="field"><label for="limit-price">Limit price (USD)</label><input id="limit-price" type="number" name="limitPrice" step="any" min="0" required></div>
+            <div class="field"><label for="metadata">Quote metadata</label><select id="metadata" name="metadata"><option value="as-received">As received · realtime</option>
+              <option value="missing">Freshness class missing</option></select></div>
+            <label for="evaluation-time">Evaluation time (UTC)</label>
+            <div class="time-row"><input id="evaluation-time" name="evaluationTime" type="time" step="1" required>
+              <button id="advance" type="button" class="agentic-form-control">Advance 1 s</button></div>
+            <div class="actions"><button id="save" type="submit" class="agentic-form-control">Save draft</button>
+              <button id="reopen" type="button" class="agentic-form-control" hidden>Load saved revision</button></div>
+          </fieldset>
+          <p id="feedback" role="status"></p>
+        </form>
+      </section>
+    </div>
+    <section class="saved-card" aria-labelledby="saved-heading">
+      <div class="section-line"><h2 id="saved-heading">Saved observation</h2><span id="revision" class="code">Unsaved</span></div>
+      <p id="empty">Save a draft to keep its inputs and source revision on this device.</p>
+      <div id="record" hidden><dl class="saved-facts"><div><dt>Ticket</dt><dd id="saved-ticket"></dd></div>
+        <div><dt>Limit price</dt><dd id="saved-price"></dd></div><div><dt>Evaluation (UTC)</dt><dd id="saved-time"></dd></div>
+        <div><dt>R01 result</dt><dd id="saved-result"></dd></div></dl>
+        <details id="evidence" data-dashboard-primitive="disclosure"><summary>Source evidence and calculation</summary>
+          <dl class="facts"><div><dt>Fixture ID</dt><dd id="fixture-id"></dd></div>
+          <div><dt>Policy</dt><dd id="saved-policy"></dd></div><div><dt>Fixture SHA-256</dt><dd id="digest"></dd></div></dl>
+          <p id="notional" role="status"></p>
+        </details></div>
+    </section>
+  </main>
+</body>
+</html>
