@@ -7,15 +7,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: '30871e732e53f8f5963aaed46a7f6cbe3d1ddaca',
+  { repo: 'agentic-base', prefix: 'base', revision: '1323ed2d223ef0356293baf1c86eb4f28138150a',
     digest: '26495bae8a77de8727b731c1886c0bfc8e8387ad38e022b0306c2d0d4af7398c',
     paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs')] },
   { repo: 'agentic-sheets', prefix: 'sheets', revision: '370b0698523b92ef569f27175a74c34a52c4a3f4',
     digest: 'e4e22c9918554853470984847528440dedbb4f099214e867284fcf2bcd17817d',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
-  { repo: 'agentic-design-system', prefix: 'design', revision: 'fd18c30f7820bace18b450f9fc40206392c0de28',
-    digest: '7d7744fd1c996eb61af0e70a6e08edfc354fb84b44b747c0e8e7214d44793879',
-    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/THIRD-PARTY-NOTICES.txt'] },
+  { repo: 'agentic-design-system', prefix: 'design', revision: '55af790e365915fe1bde17ea8d4d887f80365f1a',
+    digest: '7e25628d3c6bac670bdc5efd262b80a6053f5fe392fa86ebf5f9bab83235bec2',
+    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/THIRD-PARTY-NOTICES.txt'] },
 ];
 
 export function ownerRoot() {
@@ -58,7 +58,7 @@ export async function assemble() {
       assets.set('owners/' + pin.prefix + '/' + output, body);
     }
   }
-  const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json'];
+  const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   verifyImports(assets);
   const template = await readFile(join(root, 'web/sw.js'), 'utf8');

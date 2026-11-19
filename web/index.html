@@ -13,69 +13,60 @@
   <script type="module" src="./src/browser.mjs"></script>
 </head>
 <body>
-  <main class="agentic-dashboard-layout" aria-labelledby="journal-heading">
-    <header class="agentic-dashboard-header">
-      <div class="session"><strong>Agentic Trading</strong><span id="offline-status" role="status">Opening local workspace…</span></div>
-      <h1 id="journal-heading" data-dashboard-primitive="heading">Decision journal</h1>
-      <p data-dashboard-primitive="text">Synthetic trading workspace · <time datetime="2026-11-19">19 Nov 2026</time> · UTC</p>
-    </header>
-    <div id="fatal" role="alert" hidden></div>
-    <div class="agentic-dashboard-region">
-      <ol data-dashboard-primitive="container" data-columns="3" aria-label="Trading ticket workflow">
-        <li class="agentic-collection-item agentic-dashboard-card" data-layout="grid" data-accent="primary">
-          <p class="agentic-dashboard-eyebrow">R01</p>
-          <h2 id="check-heading">Quote freshness</h2>
-          <section id="quote" aria-labelledby="check-heading">
-            <div id="verdict" aria-live="polite" aria-atomic="true"><strong id="state">Checking…</strong>
-              <p id="reason"></p></div>
-            <div class="measure"><div><span>Quote age</span><strong id="age">—</strong></div>
-              <progress id="window" aria-label="Quote age within the five-minute policy window" value="0" max="300"></progress>
-              <div class="scale"><span>0 s</span><span>5 min threshold</span></div></div>
-            <dl class="facts"><div><dt>Symbol</dt><dd id="quote-symbol">—</dd></div>
-              <div><dt>Synthetic quote</dt><dd id="quote-price">—</dd></div>
-              <div><dt>Observed at</dt><dd id="observed">—</dd></div>
-              <div><dt>Policy revision</dt><dd id="policy">—</dd></div></dl>
-            <p class="agentic-dashboard-description">R01 checks the quote timestamp. The ticket stays a draft.</p>
-          </section>
-        </li>
-        <li class="agentic-collection-item agentic-dashboard-card" data-layout="grid" data-accent="secondary">
-          <p class="agentic-dashboard-eyebrow">LIMIT</p>
-          <h2 id="ticket-heading">Draft ticket</h2>
-          <section aria-labelledby="ticket-heading">
-            <form id="ticket" class="agentic-form-controls">
-              <fieldset id="fields" disabled><legend class="sr">Ticket inputs</legend>
-                <div class="pair"><div class="field"><label for="side">Side</label><select id="side" name="side"><option value="BUY">Buy</option><option value="SELL">Sell</option></select></div>
-                  <div class="field"><label for="quantity">Quantity</label><input id="quantity" type="number" name="quantity" step="any" min="0" required></div></div>
-                <div class="field"><label for="limit-price">Limit price (USD)</label><input id="limit-price" type="number" name="limitPrice" step="any" min="0" required></div>
-                <div class="field"><label for="metadata">Quote metadata</label><select id="metadata" name="metadata"><option value="as-received">As received · realtime</option>
-                  <option value="missing">Freshness class missing</option></select></div>
-                <label for="evaluation-time">Evaluation time (UTC)</label>
-                <div class="time-row"><input id="evaluation-time" name="evaluationTime" type="time" step="1" required>
-                  <button id="advance" type="button" class="agentic-form-control">Advance 1 s</button></div>
-                <div class="agentic-dashboard-actions"><button id="save" type="submit" class="agentic-form-control">Save draft</button>
-                  <button id="reopen" type="button" class="agentic-form-control" hidden>Load saved revision</button></div>
-              </fieldset>
-              <p id="feedback" role="status"></p>
-            </form>
-          </section>
-        </li>
-        <li class="agentic-collection-item agentic-dashboard-card" data-layout="grid" data-accent="success">
-          <p id="revision" class="agentic-dashboard-eyebrow">Unsaved</p>
-          <h2 id="saved-heading">Saved observation</h2>
-          <section aria-labelledby="saved-heading">
-            <p id="empty" class="agentic-dashboard-description">Save a draft to keep its inputs and source revision on this device.</p>
-            <div id="record" hidden><dl class="facts"><div><dt>Ticket</dt><dd id="saved-ticket"></dd></div>
-              <div><dt>Limit price</dt><dd id="saved-price"></dd></div><div><dt>Evaluation (UTC)</dt><dd id="saved-time"></dd></div>
-              <div><dt>R01 result</dt><dd id="saved-result"></dd></div></dl>
-              <details id="evidence" data-dashboard-primitive="disclosure"><summary>Source evidence and calculation</summary>
-                <dl class="facts"><div><dt>Fixture ID</dt><dd id="fixture-id"></dd></div>
-                <div><dt>Policy</dt><dd id="saved-policy"></dd></div><div><dt>Fixture SHA-256</dt><dd id="digest"></dd></div></dl>
-                <p id="notional" role="status"></p>
-              </details></div>
-          </section>
-        </li>
-      </ol>
-    </div>
+  <main id="journal" aria-label="Decision journal">
+    <noscript>Enable JavaScript to open the offline trading journal.</noscript>
   </main>
+  <template id="session-slot">
+    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" role="status">Opening local workspace…</span></div>
+  </template>
+  <template id="age-slot">
+    <div class="measure"><div><span>Quote age</span><strong id="age">—</strong></div>
+    <progress id="window" aria-label="Quote age within the five-minute policy window" value="0" max="300"></progress>
+    <div class="scale"><span>0 s</span><span>5 min threshold</span></div></div>
+  </template>
+  <template id="quote-slot">
+    <section id="quote" aria-labelledby="check-heading">
+      <div id="verdict" aria-live="polite" aria-atomic="true"><strong id="state">Checking…</strong>
+        <p id="reason"></p></div>
+
+      <dl class="facts"><div><dt>Symbol</dt><dd id="quote-symbol">—</dd></div>
+        <div><dt>Synthetic quote</dt><dd id="quote-price">—</dd></div>
+        <div><dt>Observed at</dt><dd id="observed">—</dd></div>
+        <div><dt>Policy revision</dt><dd id="policy">—</dd></div></dl>
+      <p>R01 checks the quote timestamp. The ticket stays a draft.</p>
+    </section>
+  </template>
+  <template id="ticket-slot">
+    <form id="ticket" aria-labelledby="ticket-heading" class="agentic-form-controls">
+      <fieldset id="fields" disabled><legend class="sr">Ticket inputs</legend>
+        <div class="pair"><div class="field"><label for="side">Side</label><select id="side" name="side"><option value="BUY">Buy</option><option value="SELL">Sell</option></select></div>
+          <div class="field"><label for="quantity">Quantity</label><input id="quantity" type="number" name="quantity" step="any" min="0" required></div></div>
+        <div class="field"><label for="limit-price">Limit price (USD)</label><input id="limit-price" type="number" name="limitPrice" step="any" min="0" required></div>
+        <div class="field"><label for="metadata">Quote metadata</label><select id="metadata" name="metadata"><option value="as-received">As received · realtime</option>
+          <option value="missing">Freshness class missing</option></select></div>
+        <label for="evaluation-time">Evaluation time (UTC)</label>
+        <div class="time-row"><input id="evaluation-time" name="evaluationTime" type="time" step="1" required>
+          <button id="advance" type="button" class="agentic-form-control">Advance 1 s</button></div>
+        <div class="agentic-dashboard-actions"><button id="save" type="submit" class="agentic-form-control">Save draft</button>
+          <button id="reopen" type="button" class="agentic-form-control" hidden>Load saved revision</button></div>
+      </fieldset>
+      <p id="feedback" role="status"></p>
+    </form>
+  </template>
+  <template id="saved-slot">
+    <p id="empty">Save a draft to keep its inputs and source revision on this device.</p>
+    <div id="record" role="region" aria-labelledby="saved-heading" hidden><dl class="facts"><div><dt>Ticket</dt><dd id="saved-ticket"></dd></div>
+      <div><dt>Limit price</dt><dd id="saved-price"></dd></div><div><dt>Evaluation (UTC)</dt><dd id="saved-time"></dd></div>
+      <div><dt>R01 result</dt><dd id="saved-result"></dd></div></dl>
+    </div>
+  </template>
+  <template id="evidence-slot">
+    <details id="evidence" hidden data-dashboard-primitive="disclosure"><summary>Source evidence and calculation</summary>
+      <dl class="facts"><div><dt>Fixture ID</dt><dd id="fixture-id"></dd></div>
+      <div><dt>Policy</dt><dd id="saved-policy"></dd></div><div><dt>Fixture SHA-256</dt><dd id="digest"></dd></div></dl>
+      <p id="notional" role="status"></p>
+    </details>
+  </template>
+  <div id="fatal" role="alert" hidden></div>
 </body>
 </html>

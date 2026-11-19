@@ -20,7 +20,11 @@ const watch = context => context.on('page', page => {
   page.on('request', request => { if (!request.url().startsWith(origin + '/')) errors.push(request.url()); });
 });
 async function checkDashboard(page, columns) {
-  const dashboard = page.getByRole('main', { name: 'Decision journal' });
+  const dashboard = page.getByRole('region', { name: 'Dashboard content', exact: true });
+  assert.equal(await dashboard.getAttribute('data-agentic-base-dashboard-layout'), 'true');
+  assert.equal(await dashboard.locator(':scope > header .agentic-base-dashboard-layout-heading h1').innerText(), 'Decision journal');
+  assert.equal(await dashboard.getByRole('region', {name:'Dashboard highlight'}).locator('#window').count(), 1);
+  assert.equal(await dashboard.locator(':scope > .agentic-base-dashboard-layout-sections #evidence').count(), 1);
   const cards = dashboard.getByRole('list', { name: 'Trading ticket workflow' });
   assert.deepEqual(await cards.locator('li h2').allTextContents(), [
     'Quote freshness', 'Draft ticket', 'Saved observation',

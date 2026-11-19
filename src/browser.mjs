@@ -1,7 +1,9 @@
 import { IndexedDBAdapter } from '../owners/base/src/index.mjs';
 import { assessTicket, readFixture, ticketInputs, utcMillis } from './rules.mjs';
 import { createTicketStore } from './tickets.mjs';
+import { mountTradingDashboard } from './dashboard.mjs';
 
+mountTradingDashboard(document);
 const byId = id => document.getElementById(id);
 const form = byId('ticket');
 const fields = byId('fields');
@@ -106,6 +108,7 @@ async function start() {
     const record = current.record;
     byId('empty').hidden = Boolean(record);
     byId('record').hidden = !record;
+    byId('evidence').hidden = !record;
     byId('reopen').hidden = !record && !blocked;
     byId('revision').textContent = record ? 'Revision ' + record.revision : 'Unsaved';
     if (!record) return;

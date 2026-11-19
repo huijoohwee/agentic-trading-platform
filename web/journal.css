@@ -4,9 +4,9 @@ body { margin: 0; color: CanvasText; background: Canvas; font: var(--agentic-fon
 #offline-status, .scale { font-size: .75rem; }
 h2 { margin: 0; font-size: 1.125rem; }
 p { margin: 0; }
-#quote:has([data-state="PASS"]) { --freshness-color: var(--agentic-dashboard-success); }
-#quote:has([data-state="FAIL"]), #fatal { --freshness-color: light-dark(#903c28, #ffa68d); }
-#quote:has([data-state="UNKNOWN"]) { --freshness-color: light-dark(#6c5113, #e8c675); }
+#journal:has([data-state="PASS"]) { --freshness-color: var(--agentic-dashboard-success); }
+#journal:has([data-state="FAIL"]), #fatal { --freshness-color: light-dark(#903c28, #ffa68d); }
+#journal:has([data-state="UNKNOWN"]) { --freshness-color: light-dark(#6c5113, #e8c675); }
 #state { display: block; font-size: 2rem; line-height: 1.2; }
 #state, #fatal { color: var(--freshness-color); }
 #verdict, .measure, #fields, .facts { margin-block: var(--agentic-control-padding-inline); }
