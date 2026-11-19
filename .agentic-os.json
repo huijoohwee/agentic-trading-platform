@@ -1,0 +1,32 @@
+{
+  "schema": "agentic-os/repository-profile/v1",
+  "repository": "github.com/huijoohwee/agentic-trading-platform",
+  "canonical": {
+    "localRef": "refs/heads/main",
+    "remoteRef": "refs/remotes/origin/main"
+  },
+  "adapters": {
+    "repository": {
+      "id": "git",
+      "version": "1"
+    },
+    "provider": null
+  },
+  "requiredChecks": [],
+  "capabilities": [
+    "retain-all-cleanup"
+  ],
+  "authority": {
+    "runtime": "consumer",
+    "release": "consumer"
+  },
+  "cleanup": {
+    "worktreeProjection": "retain",
+    "worktreeRegistration": "retain",
+    "remoteTrackingRef": "retain",
+    "localBranch": "retain",
+    "remoteBranch": "retain",
+    "unreachableObjects": "retain"
+  },
+  "profileDigest": "7588eb3fe8748eeb360cb1220315ce6c2c816b08ec9efbb71008ac1804e76724"
+}
