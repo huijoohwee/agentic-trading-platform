@@ -21,9 +21,16 @@ function facts(rows) {
   }
   return list;
 }
-function disclosure(title, content) {
+function timestamp(at, label = at) {
+  const time = node('time', label);
+  time.dateTime = at;
+  return time;
+}
+function disclosure(title, content, at) {
   const section = node('details');
-  section.append(node('summary', title), content);
+  const summary = node('summary', title);
+  if (at) summary.prepend(timestamp(at), ' · ');
+  section.append(summary, content);
   return section;
 }
 function chart(points) {
@@ -49,7 +56,7 @@ function trace(pack) {
     const rows = Object.entries(e).map(([key,value]) => [key, typeof value === 'object' ? JSON.stringify(value) : value]);
     rows.push(['Equity after event',money(pack.snapshot.curve[i].equity)]);
     const details = facts(rows);
-    item.append(disclosure(receipt.at + ' · ' + receipt.id + ' · ' + receipt.reason, details));
+    item.append(disclosure(receipt.id + ' · ' + receipt.reason, details, receipt.at));
     list.append(item);
   }
   return disclosure('Decision and execution log (' + list.children.length + ')', list);
@@ -68,9 +75,14 @@ export async function mountRehearsal(host) {
       const { rehearseForward } = await import('./forward-rehearsal.mjs');
       const { timeline } = rehearseForward();
       scheduleLog.replaceChildren(...timeline.map(row => {
-        const item = node('li', row.at.slice(11) + ' · ' + row.action + ' · ' + row.outcome);
+        const item = node('li');
+        item.append(timestamp(row.at, row.at.slice(11)), ' · ' + row.action + ' · ' + row.outcome);
         if (row.request) item.append(node('code', row.request.method + ' ' + row.request.path));
-        if (row.cursor) item.append(node('small', 'Last completed event · ' + row.cursor));
+        if (row.cursor) {
+          const cursor = node('small', 'Last completed event · ');
+          cursor.append(node('samp', row.cursor));
+          item.append(cursor);
+        }
         return item;
       }));
     } catch (error) { scheduleLog.replaceChildren(node('li', error.message)); }

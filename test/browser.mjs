@@ -200,6 +200,10 @@ try {
     const openingTime = reopened.locator('dd:visible').filter({hasText:/^2026-11-04T15:00:00Z$/});
     const drawdown = grid.getByText('0.001%', {exact:true});
     assert.deepEqual(await openingTime.evaluate(typography), await drawdown.evaluate(typography));
+    const openingLabel = reopened.locator('summary time').filter({hasText:'2026-11-04T15:00:00Z'});
+    assert.equal(await openingLabel.getAttribute('datetime'), await openingTime.textContent());
+    assert.deepEqual(await openingLabel.evaluate(typography), reference);
+    assert.equal(await reopened.locator('#schedule li time').count(), await reopened.locator('#schedule li').count());
     for (const value of await reopened.locator('dd, code, pre, kbd, samp, time').all()) {
       assert.deepEqual(await value.evaluate(typography), reference, await value.textContent());
     }
