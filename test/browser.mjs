@@ -10,6 +10,9 @@ const journalCss = await readFile(new URL('../web/journal.css', import.meta.url)
 assert.doesNotMatch(journalCss, /(?:--agentic-font-[\w-]+|font-family|font)\s*:|\.agentic-(?:mono(?:-detail)?|text-detail)\b/u,
   'Trading must inherit font families and data roles from the pinned Design System');
 
+assert.doesNotMatch(journalCss, /\.agentic-(?:ktv-|base-data-table|panel-section-)/u,
+  'The replay log must use the owner styles for its inspector, table and disclosure');
+
 let chromium;
 try { ({ chromium } = await import('playwright')); }
 catch { ({ chromium } = createRequire(join(ownerRoot(),'agentic-graph','package.json'))('playwright')); }
@@ -166,10 +169,25 @@ try {
     assert.equal(await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length),name==='mobile' ? 1 : 3);
     assert.match(await grid.innerText(),/99985|99,985/);
     assert.match(await grid.innerText(),/BUY 1 TEST remaining/);
+    assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource')
+      .some(entry => entry.name.endsWith('/browser-data-view.js'))), false);
     await reopened.getByText('Decision and execution log (23)',{exact:true}).click();
-    const detail = reopened.locator('#rehearsal summary').filter({hasText:'second-fill · OFF_LIMIT'});
-    await detail.click();
-    assert.match(await detail.locator('..').innerText(),/26/);
+    const logTable = reopened.getByRole('table', { name: 'Replay events' });
+    const evidence = reopened.getByRole('region', { name: 'Event evidence' });
+    const filter = reopened.getByLabel('Filter events');
+    await logTable.waitFor();
+    assert.equal(await logTable.locator('tbody tr').count(), 23);
+    assert.match(await logTable.getAttribute('class'), /agentic-base-data-table/);
+    await filter.fill('OFF_LIMIT');
+    const secondFill = logTable.getByRole('row').filter({ hasText: 'second-fill' });
+    await secondFill.press('Enter');
+    await evidence.getByRole('heading', { name: 'Event evidence · second-fill' }).waitFor();
+    assert.equal(await evidence.locator('dl').filter({ has: reopened.getByText('price', { exact: true }) }).locator('samp').textContent(), '26');
+    await filter.fill('absent-event');
+    await reopened.getByText('0 of 23 events', { exact: true }).waitFor();
+    assert.equal(await evidence.locator('dl').count(), 0);
+    await filter.fill('');
+    await logTable.getByRole('cell', { name: 'opening', exact: true }).waitFor();
     const file = reopened.waitForEvent('download');
     await reopened.getByRole('button',{name:'Export replay'}).click();
     const bytes = await readFile(await (await file).path());
@@ -195,8 +213,29 @@ try {
     assert.equal(reference.fontSize, '12px');
     assert.equal(reference.lineHeight, '16px');
     assert.deepEqual(await route.evaluate(typography), reference);
-    await reopened.getByText('Decision and execution log (26)', {exact:true}).click();
-    await reopened.getByText('2026-11-04T15:00:00Z · opening · BUYING_POWER', {exact:true}).click();
+    const logSummary = reopened.locator('#replay-log > summary');
+    assert.equal(await logSummary.getByRole('heading', {name:'Decision and execution log (26)'}).count(), 1);
+    await logSummary.click();
+    await logTable.waitFor();
+    assert.equal(await logTable.locator('tbody tr').count(), 26);
+    assert.equal(await logSummary.getAttribute('data-agentic-annotation-target'), 'true');
+    await filter.fill('stock');
+    const fill = logTable.getByRole('cell', {name:'stock-fill', exact:true});
+    if (name === 'mobile') await fill.tap(); else await fill.click();
+    await evidence.getByRole('heading', { name:'Event evidence · stock-fill' }).waitFor();
+    assert.equal(await evidence.getByRole('img', {name:'Date and time',exact:true}).count(), 1);
+    const workbookFile = reopened.waitForEvent('download');
+    await reopened.getByRole('button', {name:'Export run to Sheets'}).click();
+    const downloaded = await workbookFile;
+    assert.equal(downloaded.suggestedFilename(), 'run-B-events.sheets.json');
+    const workbook = JSON.parse(await readFile(await downloaded.path(), 'utf8'));
+    assert.equal(workbook.contract, 'sheets/workbook/v1');
+    assert.equal(workbook.cells.A2.value, 'opening');
+    assert.deepEqual(workbook.cells.E27, {type:'number',value:100934.36445});
+    assert.equal(Object.keys(workbook.cells).length, 27 * 5);
+    await filter.fill('');
+    await logTable.getByRole('row').filter({has:reopened.getByRole('cell', {name:'opening',exact:true})}).press('Enter');
+    await evidence.getByRole('heading', { name:'Event evidence · opening' }).waitFor();
     const labelType = await grid.getByText('Net P&L vs cash', {exact:true}).evaluate(typography);
     assert.equal(labelType.fontSize, '12px');
     assert.equal(labelType.lineHeight, '16px');
@@ -206,7 +245,7 @@ try {
     const openingTime = reopened.locator('dd:visible').filter({hasText:/^2026-11-04T15:00:00Z$/});
     const drawdown = grid.getByText('0.001%', {exact:true});
     assert.deepEqual(await openingTime.evaluate(typography), await drawdown.evaluate(typography));
-    const openingLabel = reopened.locator('summary time').filter({hasText:'2026-11-04T15:00:00Z'});
+    const openingLabel = evidence.locator('time').filter({hasText:'2026-11-04T15:00:00Z'});
     assert.equal(await openingLabel.getAttribute('datetime'), await openingTime.textContent());
     assert.deepEqual(await openingLabel.evaluate(typography), reference);
     assert.equal(await reopened.locator('#schedule li time').count(), await reopened.locator('#schedule li').count());

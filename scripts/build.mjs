@@ -7,15 +7,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: '1323ed2d223ef0356293baf1c86eb4f28138150a',
-    digest: '26495bae8a77de8727b731c1886c0bfc8e8387ad38e022b0306c2d0d4af7398c',
-    paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs')] },
-  { repo: 'agentic-sheets', prefix: 'sheets', revision: '370b0698523b92ef569f27175a74c34a52c4a3f4',
+  { repo: 'agentic-base', prefix: 'base', revision: '801e7923daa87516a8c694cae535801881168ef8',
+    digest: '4ab3d0cae7c342bd4c584ceda2bdc97b64d12d5303e9e1084c4d6e791c189a88',
+    paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
+      'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
+  { repo: 'agentic-sheets', prefix: 'sheets', revision: '295b0dceb7eecf1d1502bebf444effe6237f48f2',
     digest: 'e4e22c9918554853470984847528440dedbb4f099214e867284fcf2bcd17817d',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
-  { repo: 'agentic-design-system', prefix: 'design', revision: 'cb062fec5d0923f8da74a9fae3dcabb73e608aa1',
-    digest: '75975d464ca673dec85be2209c3929981d7cbff49800b37d20212082c3a3460b',
-    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/THIRD-PARTY-NOTICES.txt'] },
+  { repo: 'agentic-design-system', prefix: 'design', revision: '2f1e14085f9eedbd006cdce40d7f8ede4462f1b1',
+    digest: 'cd3db597f4b629d2a342ebf78c28125a04db0ffbd29da3977cb33d22dd3ce931',
+    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/THIRD-PARTY-NOTICES.txt',
+      'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js'] },
 ];
 
 export function ownerRoot() {
@@ -32,7 +34,7 @@ export function verifyOwner(repo, sources) {
 
 export function verifyImports(assets) {
   for (const [path, bytes] of assets) {
-    if (!path.endsWith('.mjs')) continue;
+    if (!/\.m?js$/.test(path)) continue;
     const source = bytes.toString();
     // The sealed modules use literal ESM specifiers exclusively.
     const references = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)(['"])([^'"]+)\1/g;
@@ -60,7 +62,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   }
   const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
-    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal.json'];
+    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/replay-log.mjs', 'src/rehearsal.json'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   if (devDocumentPolicy !== undefined) {
     const template = assets.get('index.html').toString();

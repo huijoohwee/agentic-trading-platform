@@ -1,4 +1,5 @@
 import { createNativeDashboard } from '../owners/design/site/dashboard.mjs';
+import { createPanelSectionSummary, installPanelSections, PANEL_SECTION } from '../owners/design/site/panel-section.js';
 import { archive, MAX_ARCHIVE, readRehearsal, restore } from './replay.mjs';
 import { MICRO } from './competition-rules.mjs';
 
@@ -38,6 +39,7 @@ function chart(points) {
   const lo = Math.min(...values), hi = Math.max(...values);
   const times = points.map(p => Date.parse(p.at));
   const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.classList.add('equity-curve');
   svg.setAttribute('viewBox','0 0 300 60');
   svg.setAttribute('role','img');
   svg.setAttribute('aria-label', 'Equity in USD. Opening value ' + money(values[0]) + ' to ' + money(values.at(-1)) +
@@ -48,18 +50,35 @@ function chart(points) {
   line.setAttribute('fill','none'); line.setAttribute('stroke','currentColor'); svg.append(line);
   return svg;
 }
-function trace(pack) {
-  const list = node('ol');
-  for (const [i, receipt] of pack.snapshot.receipts.entries()) {
-    const e = pack.tape.events[i];
-    const item = node('li');
-    const rows = Object.entries(e).map(([key,value]) => [key, typeof value === 'object' ? JSON.stringify(value) : value]);
-    rows.push(['Equity after event',money(pack.snapshot.curve[i].equity)]);
-    const details = facts(rows);
-    item.append(disclosure(receipt.id + ' · ' + receipt.reason, details, receipt.at));
-    list.append(item);
-  }
-  return disclosure('Decision and execution log (' + list.children.length + ')', list);
+function createLog(pack) {
+  const section = node('details'), body = node('div');
+  section.id = 'replay-log';
+  section.dataset.agenticSection = '';
+  section.dataset.agenticSticky = 'false';
+  body.id = 'replay-log-content';
+  body.className = PANEL_SECTION.body;
+  const summary = createPanelSectionSummary(document, 'Decision and execution log (' + pack.snapshot.receipts.length + ')');
+  section.append(summary, body);
+  const releaseSection = installPanelSections(section);
+  let view, loading = false, disposed = false;
+  section.addEventListener('toggle', async () => {
+    if (!section.open || view || loading || disposed) return;
+    loading = true;
+    try {
+      const { mountReplayLog } = await import('./replay-log.mjs');
+      if (!disposed && section.open) view = mountReplayLog(body, pack, { money, node, timestamp, downloadJson });
+    } catch (error) {
+      body.replaceChildren(node('p', 'Could not open the decision log. ' + error.message));
+    } finally { loading = false; }
+  });
+  return { section, destroy() { disposed = true; view?.destroy(); releaseSection(); } };
+}
+
+function downloadJson(text, filename) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const anchor = node('a');
+  anchor.href = url; anchor.download = filename;
+  anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function mountRehearsal(host) {
@@ -103,8 +122,11 @@ export async function mountRehearsal(host) {
   const upload = node('input'), fileLabel = node('label', 'Restore replay file');
   upload.type = 'file'; upload.accept = '.json,application/json'; fileLabel.append(upload);
   controls.append(runLabel, run, download, fileLabel);
-  host.replaceChildren(controls, status, result, schedule);
-  let current, busy = false;
+  const panelStyle = node('link');
+  panelStyle.rel = 'stylesheet';
+  panelStyle.href = new URL('../owners/design/site/panel-section.css', import.meta.url);
+  host.replaceChildren(panelStyle, controls, status, result, schedule);
+  let current, log, busy = false;
   function render(pack) {
     const s = pack.snapshot;
     const portfolio = facts([['Equity',money(s.equity)], ['Net P&L vs cash',money(s.net)],
@@ -134,7 +156,9 @@ export async function mountRehearsal(host) {
     for (const probe of fixture.boundaries) checks.append(node('li',probe.name + ' · expected ' + probe.expected));
     const mandate = facts([...Object.entries(pack.tape.mandate), ...Object.entries(s.roles)]);
     const heading = DashboardPrimitive({kind:'heading',level:2,children:'Run ' + s.run + ' · ' + s.profile});
-    result.replaceChildren(heading, grid, trace(pack), disclosure('Strategy and review roles',mandate), disclosure(pack.verifiedBoundaries + ' verified rule boundaries',checks),
+    log?.destroy();
+    log = createLog(pack);
+    result.replaceChildren(heading, grid, log.section, disclosure('Strategy and review roles',mandate), disclosure(pack.verifiedBoundaries + ' verified rule boundaries',checks),
       disclosure('Replay SHA-256',node('code',pack.sha256)));
     select.value = s.run;
     current = pack;
@@ -166,9 +190,7 @@ export async function mountRehearsal(host) {
   };
   download.onclick = () => {
     if (!current) return;
-    const url = URL.createObjectURL(new Blob([JSON.stringify(current)],{type:'application/json'}));
-    const anchor = node('a'); anchor.href = url; anchor.download = 'rehearsal-' + current.snapshot.run + '.json';
-    anchor.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
+    downloadJson(JSON.stringify(current), 'rehearsal-' + current.snapshot.run + '.json');
   };
   download.disabled = true;
   const saved = localStorage.getItem(latestKey);

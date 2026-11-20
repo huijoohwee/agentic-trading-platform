@@ -6,7 +6,7 @@ import { mountTradingDashboard } from './dashboard.mjs';
 mountTradingDashboard(document);
 // Native toggle covers pointer, touch and keyboard, including the lazy-loaded schedule.
 document.addEventListener('toggle', ({ target }) => {
-  if (!target.matches('details#audit, details#schedule')) return;
+  if (!target.matches('details#audit, details#schedule, details#replay-log')) return;
   const summary = target.querySelector(':scope > summary');
   if (target.open) summary.dataset.agenticAnnotationTarget = 'true';
   else delete summary.dataset.agenticAnnotationTarget;

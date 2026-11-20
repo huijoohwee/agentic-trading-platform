@@ -14,11 +14,13 @@ Open [the local workspace](http://127.0.0.1:4181). Wait for **Offline ready** be
 
 The browser’s origin owns this private fixture. A different hostname or port opens a separate store. Clearing browser site data removes the record. The local runner serves loopback and the service worker caches only the sealed static assets. The app has no broker account, live market input or execution interface.
 
-Open **Private cash-policy audit** or **Offline schedule and run receipts** to outline its heading with the shared Design System annotation style. Closing the disclosure clears its outline. The loopback Dev document supports browser annotation overlays online and offline. Packaged builds retain their strict stylesheet policy.
+Open **Private cash-policy audit**, **Decision and execution log**, or **Offline schedule and run receipts** to outline its heading with the shared Design System annotation style. Closing the disclosure clears its outline. The loopback Dev document supports browser annotation overlays online and offline. Packaged builds retain their strict stylesheet policy.
 
 ## Replay the competition offline
 
-Open **Moomoo × Qoder competition rehearsal** in the journal after **Offline ready** appears. Disconnect, select **Run A · practice** and choose **Replay run**. Expand **Decision and execution log** to inspect the two five-share fills at $24 and $26 against a $25 buy limit. The second execution breaches the limit even though the average is $25. The run also exercises an independent risk veto, a repeated trigger, cancellation after a partial fill and a halt until simulator readback.
+Open **Moomoo × Qoder competition rehearsal** in the journal after **Offline ready** appears. Disconnect, select **Run A · practice** and choose **Replay run**. Open **Decision and execution log** and filter for `fill`. Select either five-share fill by click, tap, or Enter to inspect its execution price and equity. The two fills are at $24 and $26 against a $25 buy limit. The second execution breaches the limit even though the average is $25. The run also exercises an independent risk veto, a repeated trigger, cancellation after a partial fill and a halt until simulator readback.
+
+Use **Export run to Sheets** for a read-only projection of the full run, including numeric USD equity for every event. In Agentic Sheets, import the JSON snapshot and use **Replace with imported clone** to open an independent workbook. Filtering the table leaves the export complete.
 
 Choose **Export replay**, then replay **Run B · competition**. The Performance card shows the Friday mark of $99,992.93, final ranked equity of $100,835.37105 and later account equity of $100,934.36445. Final-day exercise is included in ranked equity. The later sale affects account equity. Reopen the page offline to see B, then choose A’s file under **Restore replay file** to reproduce A’s policy, evidence and decisions. An invalid archive leaves the last verified snapshot available. Each tab can select a run. The last successful selection is the default on reopen.
 
@@ -74,7 +76,9 @@ npm run check:browser
 
 The build prints the standalone static directory under `.local-build/<digest>/`. Serve its contents at one HTTP loopback or HTTPS origin for service worker support. The builder reads exact Git blobs and checks the owner inventories, licences, dependency closure and 500 kB chunk limit. Base supplies revisioned records and the table projection. Design System supplies the dashboard and control profile and the collection card stylesheet. Sheets loads when a saved observation’s calculation is opened. Its module bytes are included in the offline cache so that first use can happen disconnected.
 
-Graph’s Agent Mission view and Trading share the executable Design System dashboard renderer. Trading passes ticket fields, the live quote-age indicator and saved evidence into its native DOM adapter. Graph uses the React adapter for the same shell and cards. The offline build verifies the renderer’s source bytes and caches them with the ticket. [Shared renderer](https://github.com/huijoohwee/agentic-design-system/blob/cb062fec5d0923f8da74a9fae3dcabb73e608aa1/site/dashboard.mjs)
+The replay log uses the same Base browser table adapter that Graph consumes. Its disclosure and field inspector use Design System panel sections and key/type/value rows. The sealed offline build loads the table on first open.
+
+Graph’s Agent Mission view and Trading share the executable Design System dashboard renderer. Trading passes ticket fields, the live quote-age indicator and saved evidence into its native DOM adapter. Graph uses the React adapter for the same shell and cards. The offline build verifies the renderer’s source bytes and caches them with the ticket. [Shared renderer](https://github.com/huijoohwee/agentic-design-system/blob/2f1e14085f9eedbd006cdce40d7f8ede4462f1b1/site/dashboard.mjs)
 
 Headless tests exercise rule boundaries, evidence integrity and revision conflicts. Browser checks use Playwright with installed Chrome, two isolated contexts and two tabs per context. They stop the HTTP server and disconnect the contexts before testing persistence. Set `PLAYWRIGHT_CHANNEL` for a different installed Chromium channel. The test can reuse Playwright from the workspace Graph checkout. Automated mobile coverage uses a 360 CSS pixel touch viewport.
 

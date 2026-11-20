@@ -71,20 +71,23 @@ test('the sealed graph rejects legacy Sheets imports and modified UI projection 
   const bad = new Map(assets);
   bad.set('src/browser.mjs',Buffer.from("import '@agentic-base/views-react/sheets';"));
   assert.throws(() => verifyImports(bad),/Unowned module/);
-  const designSources = new Map([
-    ['LICENSE',assets.get('owners/design/LICENSE')],
-    ['site/favicon.svg',assets.get('owners/design/site/favicon.svg')],
-    ['site/THIRD-PARTY-NOTICES.txt',assets.get('owners/design/site/THIRD-PARTY-NOTICES.txt')],
-    ['site/vendor/shared-ui-profile.css',assets.get('owners/design/profile.css')],
-    ['site/collection-layout.css',assets.get('owners/design/site/collection-layout.css')],
-    ['site/dashboard.mjs',assets.get('owners/design/site/dashboard.mjs')],
-  ]);
+  const designSources = new Map();
+  for (const [asset, bytes] of assets) {
+    if (!asset.startsWith('owners/design/')) continue;
+    const relative = asset.slice('owners/design/'.length);
+    designSources.set(relative === 'profile.css' ? 'site/vendor/shared-ui-profile.css' : relative, bytes);
+  }
   verifyOwner('agentic-design-system',designSources);
-  for (const path of ['site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs']) {
+  for (const path of ['site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/key-type-value.js', 'site/panel-section.js']) {
     const changed = new Map(designSources);
     changed.set(path, Buffer.from('body {}'));
     assert.throws(() => verifyOwner('agentic-design-system',changed),/Owner bytes/);
   }
+  const basePrefix = 'owners/base/';
+  const baseSources = new Map([...assets].filter(([path]) => path.startsWith(basePrefix)).map(([path, bytes]) => [path.slice(basePrefix.length), bytes]));
+  verifyOwner('agentic-base', baseSources);
+  baseSources.set('packages/views-react/dist/browser-data-view.js', Buffer.from('export const mountDataView = () => {};'));
+  assert.throws(() => verifyOwner('agentic-base', baseSources), /Owner bytes/);
   assert.equal([...assets.keys()].filter(key => key.endsWith('profile.css')).length,1);
 });
 
