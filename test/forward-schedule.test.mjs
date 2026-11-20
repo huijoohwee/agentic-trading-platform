@@ -55,3 +55,49 @@ for (const policy of [interval, cron]) {
       { createdAt, after: '2027-05-01T17:55:00+08:00' }), '2027-05-01T10:00:00Z');
   });
 }
+
+test('offline API rehearsal binds acceptance, cutoff, cursor and final readback independently', async () => {
+  const { rehearseForward } = await import('../src/forward-rehearsal.mjs');
+  const report = rehearseForward();
+  assert.equal(report.authority, false);
+  assert.equal(report.providerCredits, 'UNKNOWN');
+  const rows = report.timeline;
+  assert.deepEqual(rows.map(row => row.outcome), ['configured','accepted','completed','accepted','duplicate_trigger',
+    'concurrency_limit_reached','completed','paused','paused','resumed','accepted','window_closed','completed']);
+  const create = rows[0].request;
+  assert.equal(create.method, 'POST');
+  assert.equal(create.path, '/api/v1/forward/schedules');
+  assert.equal(create.body.execution.session_mode, 'new_session');
+  assert.equal(create.body.execution.max_concurrent_runs, 1);
+  assert.equal(create.body.trigger_policy.timezone, zone);
+  assert.equal(create.body.initial_events[0].type, 'user.message');
+  assert.equal(rows[1].request.path, '/api/v1/forward/schedules/fixture-schedule/run');
+  assert.equal(rows[10].cursor, rows[6].cursor);
+  assert.equal(rows[11].run, rows[12].run);
+  assert.ok(rows[12].at > rows[11].at);
+  for (const row of rows.filter(row => row.action === 'readback'))
+    assert.deepEqual(row.request, { method: 'GET', path: '/api/v1/forward/schedule_runs/' + row.run });
+  assert.deepEqual(rehearseForward(), report);
+});
+
+test('redacted fixture qualification detects scope, account, cost, pinned versions and optional channel drift', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { inspectBindings } = await import('../src/forward-bindings.mjs');
+  const record = JSON.parse(await readFile(new URL('../src/binding-fixture.json', import.meta.url)));
+  assert.deepEqual(inspectBindings(record),{ok:true,source:'SYNTHETIC',authority:false,reasons:[]});
+  const cases = [
+    [r=>r.cloud.environment='LIVE','ACCOUNT_BINDING'], [r=>r.selected.profile='competition','ACCOUNT_BINDING'],
+    [r=>r.desktop.alias=null,'ACCOUNT_BINDING'], [r=>r.cloud.scopes.push('submit'),'READ_GRANTS'],
+    [r=>r.cloud.vaultAttached=false,'READ_GRANTS'],[r=>r.budget.remaining=0,'BUDGET_HALT'],
+    [r=>{r.budget.hardCapUsd=null; r.budget.denyAtExhaustion=false;},'BUDGET_HALT'],[r=>r.budget.expiresUtc=r.evaluatedUtc,'STALE_EVIDENCE'],
+    [r=>r.template.skills[0].version='latest','BINDING_DRIFT_SKILLS'],
+    [r=>r.template.children[0].version='fixture-v3','BINDING_DRIFT_CHILDREN'],
+    [r=>r.template.mcp=[],'BINDING_DRIFT_MCP'],[r=>r.template.tools=[],'BINDING_DRIFT_TOOLS'],
+    [r=>r.template.cloudVersion='latest','VERSION_RECORD'],[r=>r.channel={botCount:6},'CHANNEL_UNVERIFIED'],
+  ];
+  for (const [change, reason] of cases) {
+    const next=structuredClone(record); change(next);
+    const result=inspectBindings(next); assert.equal(result.ok,false); assert.ok(result.reasons.includes(reason));
+    assert.equal(result.authority,false);
+  }
+});

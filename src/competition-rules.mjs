@@ -1,11 +1,11 @@
-import { evaluateFreshness, utcMillis } from './rules.mjs';
+import { evaluateFreshness, positive, utcMillis } from './rules.mjs';
 
 // Money in the ledger is integral millionths of a USD. Prices in the tape are USD.
 export const MICRO = 1_000_000;
 export const INITIAL = 100_000 * MICRO;
 export const POLICY = 'moomoo-paper/rehearsal-1';
 export const EVALUATOR = 'trading-replay/1';
-export const positive = value => Number.isFinite(value) && value > 0;
+export { limitEvidence, positive } from './rules.mjs';
 const units = n => Number.isSafeInteger(n) && n >= 0;
 export function dollars(value) {
   if (!Number.isFinite(value) || !Number.isSafeInteger(Math.round(value * MICRO))) throw Error('Invalid USD amount');
@@ -98,10 +98,6 @@ export function feeMicros(asset, side, qty, price, charged = { contracts: 0, fil
 export function volumeEvidence(volume, qty) {
   if (!units(volume) || !units(qty) || !qty) return 'UNKNOWN_VOLUME';
   return volume * 20 < qty ? 'PARTIAL_POSSIBLE' : 'AWAIT_FILL';
-}
-export function limitEvidence(side, limit, executionPrice) {
-  if (!positive(executionPrice)) return 'UNKNOWN_FILL_PRICE';
-  return (side === 'BUY' ? executionPrice <= limit : executionPrice >= limit) ? 'AT_LIMIT_OR_BETTER' : 'OFF_LIMIT';
 }
 export function expiryOutcome(asset, mark, funded) {
   if (!positive(mark) || !['CALL','PUT'].includes(asset?.right) || !positive(asset.strike)) return 'UNKNOWN_EXPIRY';

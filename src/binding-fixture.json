@@ -1,0 +1,99 @@
+{
+  "schema": "trading-forward-review/v1",
+  "source": "SYNTHETIC",
+  "registrationAccepted": true,
+  "sameEmailVerified": true,
+  "evaluatedUtc": "2026-11-19T09:00:00Z",
+  "selected": {
+    "alias": "fixture-practice",
+    "profile": "practice",
+    "environment": "SIMULATE"
+  },
+  "desktop": {
+    "alias": "fixture-practice",
+    "profile": "practice",
+    "environment": "SIMULATE",
+    "observedUtc": "2026-11-19T08:00:00Z",
+    "expiresUtc": "2026-11-19T10:00:00Z",
+    "scopes": [
+      "market-data",
+      "paper-account-read"
+    ]
+  },
+  "cloud": {
+    "alias": "fixture-practice",
+    "profile": "practice",
+    "environment": "SIMULATE",
+    "observedUtc": "2026-11-19T08:00:00Z",
+    "expiresUtc": "2026-11-19T10:00:00Z",
+    "scopes": [
+      "market-data",
+      "paper-account-read"
+    ],
+    "vaultAttached": true,
+    "patServerSide": true,
+    "patRevocable": true
+  },
+  "budget": {
+    "observedUtc": "2026-11-19T08:00:00Z",
+    "expiresUtc": "2026-11-19T10:00:00Z",
+    "plan": "free",
+    "addOns": false,
+    "hardCapUsd": 0,
+    "denyAtExhaustion": true,
+    "remaining": 3,
+    "requested": 1
+  },
+  "template": {
+    "agentId": "fixture-coordinator",
+    "cloudVersion": "fixture-v3",
+    "skills": [
+      {
+        "id": "fixture-review",
+        "version": "fixture-v1"
+      }
+    ],
+    "children": [
+      {
+        "id": "fixture-auditor",
+        "version": "fixture-v2"
+      }
+    ],
+    "mcp": [
+      "fixture-paper-read"
+    ],
+    "tools": [
+      {
+        "id": "fixture-quote",
+        "effect": "read-only"
+      }
+    ],
+    "retrievedUtc": "2026-11-19T08:00:00Z",
+    "changeSummary": "Offline fixture for a pinned read-only review."
+  },
+  "expected": {
+    "agentId": "fixture-coordinator",
+    "cloudVersion": "fixture-v3",
+    "skills": [
+      {
+        "id": "fixture-review",
+        "version": "fixture-v1"
+      }
+    ],
+    "children": [
+      {
+        "id": "fixture-auditor",
+        "version": "fixture-v2"
+      }
+    ],
+    "mcp": [
+      "fixture-paper-read"
+    ],
+    "tools": [
+      {
+        "id": "fixture-quote",
+        "effect": "read-only"
+      }
+    ]
+  }
+}

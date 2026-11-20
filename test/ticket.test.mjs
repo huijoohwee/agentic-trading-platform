@@ -99,3 +99,29 @@ test('the journal obtains its shell and cards from the executable Design System 
   withoutRenderer.delete('owners/design/site/dashboard.mjs');
   assert.throws(() => verifyImports(withoutRenderer), /Unowned module/);
 });
+
+test('manual audit commits one complete run per identity and retains the accepted pointer on conflict', async () => {
+  const { auditStore } = await load('src/audit-view.mjs');
+  const { auditSnapshot } = await load('src/local-audit.mjs');
+  const source = JSON.parse(await readFile(join(destination,'src/audit-fixture.json')));
+  const other = structuredClone(source);
+  other.run_id = 'manual-B';
+  for (const key of ['IN_Quotes','IN_Positions','IN_Balance','IN_Orders','executions'])
+    other[key].forEach(row=>{row.run_id=other.run_id;});
+  const pack = async input => ({ input, audit:await auditSnapshot(input) });
+  const adapter = new MemoryAdapter(), tabA = auditStore(adapter), tabB = auditStore(adapter);
+  const [{revision}, second] = await Promise.all([tabA.latest(),tabB.latest()]);
+  assert.equal(second.revision,revision);
+  const a = await pack(source), b = await pack(other);
+  const both = await Promise.allSettled([tabA.accept(a,revision),tabB.accept(b,revision)]);
+  assert.equal(both.filter(r=>r.status==='fulfilled').length,1);
+  const current = await tabA.latest(), accepted = current.pack;
+  const stale = accepted.input.run_id === a.input.run_id ? b : a;
+  await assert.rejects(tabB.accept(stale,revision),/Another tab/);
+  await tabB.accept(accepted,revision);
+  assert.deepEqual(await tabB.latest(),current);
+  const invalid = structuredClone(stale.input);
+  invalid.IN_Balance[0].cash = '=1';
+  await assert.rejects(tabB.accept(await pack(invalid),current.revision),/invalid landing rows/);
+  assert.deepEqual(await tabA.latest(),current);
+});

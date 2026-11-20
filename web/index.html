@@ -61,6 +61,22 @@
     </div>
   </template>
   <template id="evidence-slot">
+    <details id="audit" data-dashboard-primitive="disclosure"><summary>Private cash-policy audit · synthetic fixture</summary>
+      <p id="audit-status" role="status">Opening the fixture…</p>
+      <dl class="facts" id="audit-results"></dl>
+      <fieldset id="audit-files" disabled class="agentic-form-controls"><legend>Manual synthetic runs</legend>
+        <label for="audit-input">Paste snapshot JSON</label><textarea id="audit-input" rows="3"></textarea>
+        <div class="agentic-dashboard-actions">
+          <button type="button" id="audit-accept">Import run</button>
+          <button type="button" id="audit-export">Export audit</button>
+          <button type="button" id="audit-witness">Save witness</button>
+        </div>
+        <label>Audit archive<input type="file" accept=".json" id="audit-archive"></label>
+        <label>Retained witness<input type="file" accept=".json" id="audit-proof"></label>
+        <button type="button" id="audit-restore">Verify and restore</button>
+      </fieldset>
+      <p id="audit-feedback" role="status"></p>
+    </details>
     <details id="rehearsal" data-dashboard-primitive="disclosure"><summary>Moomoo × Qoder competition rehearsal</summary>
       <div id="rehearsal-body"><p role="status">Opening the offline rehearsal…</p></div>
     </details>

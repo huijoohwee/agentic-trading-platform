@@ -30,6 +30,38 @@ npm run rehearsal -- --restore rehearsal-A.json
 
 The rehearsal loads on opening its disclosure. Its assets are in the same sealed offline cache as the journal. The rehearsal’s local storage key holds one verified archive independently of the original ticket’s IndexedDB schema. To recover the previous journal, serve its retained build at the same origin and reload after the service worker activates. Export the rehearsal first to retain a portable copy.
 
+## Audit a private cash-policy fixture
+
+After **Offline ready**, open **Private cash-policy audit**. The sample uses an explicitly synthetic policy and account. Each of R01–R09 passes on the draft. One fill at $26 breaches its $25 limit, and a second order has no bound ticket. The view shows the rule results, equity, reconciliation and audit head together.
+
+Choose **Import run** to save the sample. Paste a second synthetic snapshot with a new run ID on every row to compare another policy or a halt. Base appends a verified run at the expected revision. Reopening shows the most recently accepted run. Re-importing identical evidence is idempotent. A changed payload for an existing ID or a competing write leaves the previous run readable.
+
+**Export audit** saves the inputs, rule results, ordered audit events and local cost record. Keep **Save witness** separately. Select both files and choose **Verify and restore** to recompute the selected run and check its head and event count. A verified historical run can be inspected while the latest accepted run remains available on reopen. Treat every input here as synthetic. The fixture's policy amounts are examples. The cash-policy evaluator compares decimal products at the policy boundary. Its tests use a separate Python decimal reference. A derived total that cannot round-trip through a JSON number is reported as unknown. The full workbook requires independent qualification.
+
+```sh
+npm run audit:local
+npm run audit:local -- --mock
+npm run --silent audit:local -- --export > audit.json
+npm run --silent audit:local -- --witness > witness.json
+npm run audit:local -- --restore audit.json witness.json
+```
+
+## Rehearse a scheduled review
+
+Under the competition rehearsal, open **Offline schedule and run receipts**. A manual test finishes, the first scheduled event is redelivered, a concurrent trigger skips, and a paused trigger produces no run. Unpause resumes with the last completed event. The final run can finish after the exclusive cutoff. Each method and path describes a fixture observation. Provider credits are unknown.
+
+```sh
+npm run rehearsal -- --schedule
+npm run rehearsal -- --bindings
+npm run package:replay
+```
+
+The second command checks the included synthetic Desktop and Cloud records. An optional JSON file in the shape of `src/binding-fixture.json` supplies redacted observations. Fields for scopes and version bindings are local review data. The checker reports expired evidence, account drift, cost gaps or changed permissions and pins. A passing comparison grants no effect authority.
+
+For a selected upstream skill, `python3 scripts/inspect-skill.py SKILL.zip` verifies the ZIP locally and prints its digest. This optional tool uses PyYAML and markdown-it-py. It checks the single skill root, YAML identity, relative Markdown links, archive integrity and common secret or metadata files. The operator retains the upstream revision, rights decision and actual Cloud upload readback separately.
+
+The last command produces a content-addressed ZIP in `.local-build`. It contains the sealed dashboard, two headless replays, the local audit and schedule checks, a checksum inventory and instructions for a clean copy. Building the ZIP uses Python 3 and the same source-owner checkouts as the browser build. The extracted replay needs Node and Python. Runtime credentials, judge access, the entrant's presentation and competition results are separate.
+
 ## Build and verify
 
 ```sh
@@ -44,4 +76,4 @@ Graph’s Agent Mission view and Trading share the executable Design System dash
 
 Headless tests exercise rule boundaries, evidence integrity and revision conflicts. Browser checks use Playwright with installed Chrome, two isolated contexts and two tabs per context. They stop the HTTP server and disconnect the contexts before testing persistence. Set `PLAYWRIGHT_CHANNEL` for a different installed Chromium channel. The test can reuse Playwright from the workspace Graph checkout. Automated mobile coverage uses a 360 CSS pixel touch viewport.
 
-The governing [joined trading specification](/Users/huijoohwee/Documents/GitHub/.worktrees/joohwee/device-0232231d4a19--trading-platform-plan/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading.md) owns the rollout sequence, later verification criteria, cost controls and recovery gates. Source rollback retains IndexedDB. If a stored schema or evidence binding is incompatible, the journal refuses to overwrite it.
+The governing [joined trading specification](/Users/huijoohwee/Documents/GitHub/.worktrees/joohwee/device-0232231d4a19--trading-handbook-support/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading.md) owns the rollout sequence, later verification criteria, cost controls and recovery gates. Source rollback retains IndexedDB. If a stored schema or evidence binding is incompatible, the journal refuses to overwrite it.

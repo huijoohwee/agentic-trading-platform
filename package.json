@@ -9,6 +9,8 @@
     "build": "node scripts/build.mjs",
     "check": "node --test test/*.test.mjs",
     "check:browser": "node test/browser.mjs",
+    "package:replay": "python3 scripts/package-replay.py",
+    "audit:local": "node scripts/audit.mjs",
     "rehearsal": "node scripts/rehearse.mjs"
   }
 }

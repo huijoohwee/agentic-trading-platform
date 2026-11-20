@@ -1,21 +1,11 @@
-import { utcMillis } from './rules.mjs';
+import { canonical, digest, utcMillis } from './rules.mjs';
 import { capacity, dollars, eligibility, EVALUATOR, expiryOutcome, feeMicros, INITIAL, interestMicros,
   limitEvidence, margin, marketTime, MICRO, POLICY, positive, research, volumeEvidence } from './competition-rules.mjs';
 
 export const FIXTURE_SHA = '6d888fb97d5c1c39f141ff164e78d805e122040b1d5c3696204f22386c51f338';
 export const MAX_ARCHIVE = 180_000;
-const encoder = new TextEncoder();
 const verifiedFixtures = new WeakSet();
-export async function digest(text) {
-  const bytes = await crypto.subtle.digest('SHA-256', encoder.encode(text));
-  return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('');
-}
-export function canonical(value) {
-  return JSON.stringify(value, (_, item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
-    return Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]));
-  });
-}
+export { canonical, digest } from './rules.mjs';
 function requireThat(ok, msg) { if (!ok) throw Error(msg); }
 export async function readRehearsal(text) {
   requireThat(await digest(text) === FIXTURE_SHA, 'Unrecognized rehearsal source');
@@ -308,7 +298,7 @@ export async function archive(fixture, runId) {
   return { ...data, sha256: await digest(canonical(data)) };
 }
 export async function restore(fixture, text) {
-  requireThat(typeof text === 'string' && encoder.encode(text).length <= MAX_ARCHIVE, 'Archive exceeds limit');
+  requireThat(typeof text === 'string' && new TextEncoder().encode(text).length <= MAX_ARCHIVE, 'Archive exceeds limit');
   const candidate = JSON.parse(text);
   const expected = await archive(fixture, candidate?.snapshot?.run);
   requireThat(canonical(candidate) === canonical(expected), 'Archive integrity or binding mismatch');

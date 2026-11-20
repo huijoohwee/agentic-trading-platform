@@ -197,3 +197,12 @@ rehearsal.addEventListener('toggle', async () => {
     byId('rehearsal-body').textContent = error.message;
   }
 });
+
+byId('audit').addEventListener('toggle', async function openAudit() {
+  if (!this.open) return;
+  this.removeEventListener('toggle', openAudit);
+  try {
+    const { mountAudit } = await import('./audit-view.mjs');
+    await mountAudit(this);
+  } catch (error) { byId('audit-status').textContent = error.message; }
+});

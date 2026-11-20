@@ -59,6 +59,21 @@ export async function mountRehearsal(host) {
   const response = await fetch('./src/rehearsal.json');
   if (!response.ok) throw Error('Rehearsal fixture unavailable');
   const fixture = await readRehearsal(await response.text());
+  const scheduleLog = node('ol');
+  const schedule = disclosure('Offline schedule and run receipts', scheduleLog);
+  schedule.addEventListener('toggle', async () => {
+    if (!schedule.open || scheduleLog.childElementCount) return;
+    try {
+      const { rehearseForward } = await import('./forward-rehearsal.mjs');
+      const { timeline } = rehearseForward();
+      scheduleLog.replaceChildren(...timeline.map(row => {
+        const item = node('li', row.at.slice(11) + ' · ' + row.action + ' · ' + row.outcome);
+        if (row.request) item.append(node('code', row.request.method + ' ' + row.request.path));
+        if (row.cursor) item.append(node('small', 'Last completed event · ' + row.cursor));
+        return item;
+      }));
+    } catch (error) { scheduleLog.replaceChildren(node('li', error.message)); }
+  });
   const { DashboardCardGrid, DashboardPrimitive } = createNativeDashboard(document);
   const controls = node('div'), status = node('p'), result = node('div');
   controls.className = 'agentic-dashboard-actions agentic-form-controls';
@@ -75,7 +90,7 @@ export async function mountRehearsal(host) {
   const upload = node('input'), fileLabel = node('label', 'Restore replay file');
   upload.type = 'file'; upload.accept = '.json,application/json'; fileLabel.append(upload);
   controls.append(runLabel, run, download, fileLabel);
-  host.replaceChildren(controls, status, result);
+  host.replaceChildren(controls, status, result, schedule);
   let current, busy = false;
   function render(pack) {
     const s = pack.snapshot;

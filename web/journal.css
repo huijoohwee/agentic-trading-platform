@@ -33,3 +33,4 @@ input, select { width: 100%; min-width: 0; }
 #rehearsal-body .agentic-dashboard-actions label { display: grid; gap: .25rem; max-width: 100%; }
 #rehearsal-body svg { display: block; inline-size: 100%; block-size: 4rem; }
 #rehearsal-body details > ol { padding-inline-start: 1.5rem; }
+#rehearsal li > code, #rehearsal li > small { display: block; overflow-wrap: anywhere; }

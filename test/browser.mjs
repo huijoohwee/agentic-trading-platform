@@ -137,6 +137,47 @@ try {
     assert.match(await grid.innerText(),/fixture-practice/);
     assert.equal(await reopened.getByRole('heading',{name:'Run A · practice'}).count(),1);
     await expectText(reopened,'revision','Revision 1');
+    await reopened.getByText('Offline schedule and run receipts', {exact:true}).click();
+    await reopened.getByText(/01:21:00Z · readback · completed/).waitFor();
+    await reopened.locator('#audit summary').click();
+    await expectText(reopened,'audit-status','T-20261119-001 · PASS · PRICE_OUT_OF_LIMIT');
+    assert.match(await reopened.locator('#audit-results').innerText(),/order-unbound/);
+    const paste = reopened.getByLabel('Paste snapshot JSON');
+    const synthetic = JSON.parse(await paste.inputValue());
+    const importRun = reopened.getByRole('button',{name:'Import run'});
+    await importRun.click();
+    await expectText(reopened,'audit-feedback','Verified run manual-A');
+    const downloadJSON = async name => {
+      const ready = reopened.waitForEvent('download');
+      await reopened.getByRole('button',{name,exact:true}).click();
+      return readFile(await (await ready).path());
+    };
+    const auditFile = await downloadJSON('Export audit');
+    const witnessFile = await downloadJSON('Save witness');
+    await paste.fill(JSON.stringify({ ...synthetic, halt:'HALT' }));
+    await importRun.click();
+    await expectText(reopened,'audit-feedback','Run ID already has different evidence');
+    const runB = structuredClone(synthetic);
+    runB.run_id = 'manual-B'; runB.halt = 'HALT';
+    for (const group of ['IN_Quotes','IN_Positions','IN_Balance','IN_Orders','executions'])
+      for (const row of runB[group]) row.run_id = runB.run_id;
+    await paste.fill(JSON.stringify(runB)); await importRun.click();
+    await expectText(reopened,'audit-feedback','Verified run manual-B');
+    await reopened.reload();
+    await reopened.locator('#audit summary').click();
+    await expectText(reopened,'audit-status','T-20261119-001 · HALT · PRICE_OUT_OF_LIMIT');
+    const upload = (name, file, bytes) => reopened.getByLabel(name, {exact:true}).setInputFiles({
+      name:file,mimeType:'application/json',buffer:bytes });
+    await upload('Audit archive','manual-A.json',auditFile);
+    await upload('Retained witness','invalid.json',Buffer.from('{}'));
+    await reopened.getByRole('button',{name:'Verify and restore'}).click();
+    await expectText(reopened,'audit-feedback','Audit evidence differs from the retained witness');
+    await upload('Retained witness','witness.json',witnessFile);
+    await reopened.getByRole('button',{name:'Verify and restore'}).click();
+    await expectText(reopened,'audit-feedback','Verified run manual-A');
+    await expectText(reopened,'audit-status','T-20261119-001 · PASS · PRICE_OUT_OF_LIMIT');
+    assert.deepEqual(JSON.parse(await paste.inputValue()), synthetic);
+    console.log(name + ': manual A/B imports, same-ID conflict, persisted halt, witness rejection and archive restore passed.');
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     console.log(name + ': first offline replay, drill-down, export A, reopen B, tamper rejection and exact restore A passed.');
     if (process.env.TRADING_SCREENSHOT_DIR) {
