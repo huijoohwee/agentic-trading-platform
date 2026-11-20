@@ -4,7 +4,7 @@ A device-local decision journal and Moomoo × Qoder competition rehearsal. Enter
 
 ## Run
 
-Use Node 22.22 or later with the local Git checkouts of Agentic Base, Sheets and Design System available. The default owner directory is the parent of the primary trading checkout. Use `TRADING_OWNER_ROOT` for a different location.
+Use Node 22.22 or later with the local Git checkouts of Agentic Base, Sheets and Design System available. The Dev server also reads the pinned browser annotation policy from the local `agentic-commerce-os` checkout. The default owner directory is the parent of the primary trading checkout. Use `TRADING_OWNER_ROOT` for a different location.
 
 ```sh
 npm run dev
@@ -13,6 +13,8 @@ npm run dev
 Open [the local workspace](http://127.0.0.1:4181). Wait for **Offline ready** before disconnecting. The TEST quote is realtime at 09:00:00 UTC on 19 November 2026. At 09:05:00, R01 passes. Choose **Advance 1 s** and it fails. Save the draft, close the tab and reopen the same URL offline. The **Saved observation** section shows the recorded result. Open **Source evidence and calculation** for the input digest and an on-demand Sheets calculation.
 
 The browser’s origin owns this private fixture. A different hostname or port opens a separate store. Clearing browser site data removes the record. The local runner serves loopback and the service worker caches only the sealed static assets. The app has no broker account, live market input or execution interface.
+
+Open **Private cash-policy audit** or **Offline schedule and run receipts** to outline its heading with the shared Design System annotation style. Closing the disclosure clears its outline. The loopback Dev document supports browser annotation overlays online and offline. Packaged builds retain their strict stylesheet policy.
 
 ## Replay the competition offline
 

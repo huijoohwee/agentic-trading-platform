@@ -27,6 +27,11 @@ input, select { width: 100%; min-width: 0; }
 .sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 [hidden] { display: none !important; }
 
+:is(#audit, #schedule) > summary {
+  min-block-size: var(--agentic-control-height);
+  padding-block: calc((var(--agentic-control-height) - var(--agentic-line-height-body)) / 2);
+  cursor: pointer;
+}
 #rehearsal-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; }
 #rehearsal-body :is(li, summary, code) { overflow-wrap: anywhere; }
 #rehearsal-body .agentic-dashboard-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }

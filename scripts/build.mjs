@@ -46,7 +46,7 @@ export function verifyImports(assets) {
   }
 }
 
-export async function assemble() {
+export async function assemble({ devDocumentPolicy } = {}) {
   const assets = new Map();
   const workspace = ownerRoot();
   for (const pin of pins) {
@@ -62,6 +62,14 @@ export async function assemble() {
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
     'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal.json'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
+  if (devDocumentPolicy !== undefined) {
+    const template = assets.get('index.html').toString();
+    const policyTag = /(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/g;
+    if ([...template.matchAll(policyTag)].length !== 1) throw new Error('Expected one document policy');
+    // frame-ancestors is HTTP-only. Seal the effective Dev meta policy into the offline build ID.
+    const metaPolicy = devDocumentPolicy.split('; ').filter(rule => !rule.startsWith('frame-ancestors ')).join('; ');
+    assets.set('index.html', Buffer.from(template.replace(policyTag, (_, open, close) => open + metaPolicy + close)));
+  }
   verifyImports(assets);
   const template = await readFile(join(root, 'web/sw.js'), 'utf8');
   const digests = Object.fromEntries([...assets].map(([path, bytes]) => [path, sha(bytes)]));

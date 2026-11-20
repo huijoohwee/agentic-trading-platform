@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import { ownerRoot } from '../scripts/build.mjs';
+import { assemble, ownerRoot } from '../scripts/build.mjs';
 import { serve } from '../scripts/serve.mjs';
 
 let chromium;
@@ -38,12 +38,61 @@ async function checkDashboard(page, columns) {
 const expectText = (page, id, value) => page.waitForFunction(([id, value]) =>
   document.getElementById(id)?.textContent === value,[id,value],{timeout:8000});
 
+async function checkOverlayStyle(page) {
+  const color = await page.evaluate(() => {
+    const host = document.body.appendChild(document.createElement('div'));
+    try {
+      const shadow = host.attachShadow({ mode: 'open' });
+      const style = document.createElement('style');
+      style.textContent = 'span { color: rgb(13, 57, 91) }';
+      const label = document.createElement('span');
+      shadow.append(style, label);
+      return getComputedStyle(label).color;
+    } finally { host.remove(); }
+  });
+  assert.equal(color, 'rgb(13, 57, 91)');
+}
+
+async function openAnnotationTarget(page, id, mobile) {
+  const summary = page.locator('#' + id + ' > summary');
+  const selected = page.locator('#' + id + ' > summary[data-agentic-annotation-target="true"]');
+  assert.equal(await selected.count(), 0);
+  await summary.evaluate(el => el.scrollIntoView({ block: 'center' }));
+  const point = await summary.evaluate(el => {
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    return { x, y, height: rect.height, hit: el.contains(document.elementFromPoint(x, y)),
+      edgeHit: el.contains(document.elementFromPoint(x, rect.bottom - 1)) };
+  });
+  assert.equal(point.hit, true);
+  assert.equal(point.edgeHit, true);
+  assert.ok(point.height >= (mobile ? 48 : 28));
+  if (mobile) await page.touchscreen.tap(point.x, point.y);
+  else await page.mouse.click(point.x, point.y);
+  await selected.waitFor();
+  assert.equal(await selected.evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
+  await summary.press('Enter');
+  await selected.waitFor({ state: 'detached' });
+  assert.equal(await summary.evaluate(el => el.parentElement.open), false);
+  await summary.press('Enter');
+  await selected.waitFor();
+}
+
 try {
+  const { id: releaseId, assets } = await assemble();
+  assert.doesNotMatch(assets.get('index.html').toString(), /unsafe-inline/);
+  const devManifest = await (await fetch(origin + '/asset-manifest.json')).json();
+  assert.notEqual(devManifest.id, releaseId);
+  const policy = (await fetch(origin)).headers.get('content-security-policy');
+  const strict = (await fetch(origin + '/src/browser.mjs')).headers.get('content-security-policy');
+  assert.equal(policy, strict + "; style-src-elem 'self' 'unsafe-inline'");
+  assert.doesNotMatch(strict, /unsafe-inline/);
   for (const [name,viewport,mobile] of [['desktop',{width:1240,height:900},false],['mobile',{width:360,height:780},true]]) {
     const context = await browser.newContext({ viewport,isMobile:mobile,hasTouch:mobile });
     watch(context);
     const page = await context.newPage();
     await page.goto(origin);
+    await checkOverlayStyle(page);
     await expectText(page,'offline-status','Offline ready');
     await expectText(page,'state','PASS');
     await page.waitForFunction(() => !document.querySelector('#fields').disabled);
@@ -97,6 +146,7 @@ try {
     await page.close(); await second.close();
     const reopened = await context.newPage();
     await reopened.goto(origin); await expectText(reopened,'revision','Revision 1');
+    await checkOverlayStyle(reopened);
     assert.equal(await reopened.getByLabel('Quantity').inputValue(),'4');
     assert.equal(await reopened.getByLabel('Evaluation time (UTC)').inputValue(),'09:05:01');
     await expectText(reopened,'state','FAIL');
@@ -137,9 +187,9 @@ try {
     assert.match(await grid.innerText(),/fixture-practice/);
     assert.equal(await reopened.getByRole('heading',{name:'Run A · practice'}).count(),1);
     await expectText(reopened,'revision','Revision 1');
-    await reopened.getByText('Offline schedule and run receipts', {exact:true}).click();
+    await openAnnotationTarget(reopened, 'schedule', name === 'mobile');
     await reopened.getByText(/01:21:00Z · readback · completed/).waitFor();
-    await reopened.locator('#audit summary').click();
+    await openAnnotationTarget(reopened, 'audit', name === 'mobile');
     await expectText(reopened,'audit-status','T-20261119-001 · PASS · PRICE_OUT_OF_LIMIT');
     assert.match(await reopened.locator('#audit-results').innerText(),/order-unbound/);
     const paste = reopened.getByLabel('Paste snapshot JSON');

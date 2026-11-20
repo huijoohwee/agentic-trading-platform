@@ -61,6 +61,7 @@ export async function mountRehearsal(host) {
   const fixture = await readRehearsal(await response.text());
   const scheduleLog = node('ol');
   const schedule = disclosure('Offline schedule and run receipts', scheduleLog);
+  schedule.id = 'schedule';
   schedule.addEventListener('toggle', async () => {
     if (!schedule.open || scheduleLog.childElementCount) return;
     try {
