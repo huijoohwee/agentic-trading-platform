@@ -73,6 +73,7 @@ export async function mountAudit(panel) {
     facts.push(['Audit head',audit.witness.head]);
     el('results').replaceChildren(...facts.map(([label,value]) => {
       const row=document.createElement('div'), term=document.createElement('dt'), result=document.createElement('dd');
+      result.className = 'agentic-mono';
       term.textContent=label; result.textContent=value; row.append(term,result); return row;
     }));
   }

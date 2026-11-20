@@ -10,7 +10,6 @@ p { margin: 0; }
 #state { display: block; font-size: 2rem; line-height: 1.2; }
 #state, #fatal { color: var(--freshness-color); }
 #verdict, .measure, #fields, .facts { margin-block: var(--agentic-control-padding-inline); }
-#age, .scale, dd { font-family: var(--agentic-font-mono); font-variant-numeric: tabular-nums; }
 progress { accent-color: var(--freshness-color); display: block; width: 100%; height: .6rem; margin-block: var(--agentic-control-padding-block); }
 .facts { margin-inline: 0; }
 .facts > div { padding-block: var(--agentic-control-padding-block); border-block-start: var(--agentic-panel-border); }

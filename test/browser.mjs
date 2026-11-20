@@ -178,6 +178,19 @@ try {
     await reopened.reload();
     await reopened.locator('#rehearsal summary').first().click();
     await expectText(reopened,'replay-status','Verified run B · 26 synthetic events');
+    await openAnnotationTarget(reopened, 'schedule', name === 'mobile');
+    await reopened.getByText(/01:21:00Z · readback · completed/).waitFor();
+    const equity = grid.getByText('$100,934.36445', {exact:true});
+    const route = reopened.locator('#schedule').getByText('POST /api/v1/forward/schedules/fixture-schedule/run', {exact:true});
+    const typography = el => {
+      const { fontFamily, fontSize, lineHeight, fontWeight, fontVariantNumeric } = getComputedStyle(el);
+      return { fontFamily, fontSize, lineHeight, fontWeight, fontVariantNumeric };
+    };
+    const reference = await equity.evaluate(typography);
+    assert.equal(reference.fontVariantNumeric, 'tabular-nums');
+    assert.equal(reference.fontSize, '12px');
+    assert.equal(reference.lineHeight, '16px');
+    assert.deepEqual(await route.evaluate(typography), reference);
     const input = reopened.getByLabel('Restore replay file');
     await input.setInputFiles({name:'tampered.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...A,sha256:'changed'}))});
     await expectText(reopened,'replay-status','Archive integrity or binding mismatch');
@@ -187,8 +200,6 @@ try {
     assert.match(await grid.innerText(),/fixture-practice/);
     assert.equal(await reopened.getByRole('heading',{name:'Run A · practice'}).count(),1);
     await expectText(reopened,'revision','Revision 1');
-    await openAnnotationTarget(reopened, 'schedule', name === 'mobile');
-    await reopened.getByText(/01:21:00Z · readback · completed/).waitFor();
     await openAnnotationTarget(reopened, 'audit', name === 'mobile');
     await expectText(reopened,'audit-status','T-20261119-001 · PASS · PRICE_OUT_OF_LIMIT');
     assert.match(await reopened.locator('#audit-results').innerText(),/order-unbound/);

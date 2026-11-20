@@ -13,8 +13,8 @@ const pins = [
   { repo: 'agentic-sheets', prefix: 'sheets', revision: '370b0698523b92ef569f27175a74c34a52c4a3f4',
     digest: 'e4e22c9918554853470984847528440dedbb4f099214e867284fcf2bcd17817d',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
-  { repo: 'agentic-design-system', prefix: 'design', revision: '55af790e365915fe1bde17ea8d4d887f80365f1a',
-    digest: '7e25628d3c6bac670bdc5efd262b80a6053f5fe392fa86ebf5f9bab83235bec2',
+  { repo: 'agentic-design-system', prefix: 'design', revision: '140fbabaa773df419ff5e6bd4738bd95ac5e933b',
+    digest: '013cf26b70e8cf8390f7f48d85c370f2e137e8a7cf33efae4fed5e3597154afa',
     paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/THIRD-PARTY-NOTICES.txt'] },
 ];
 
