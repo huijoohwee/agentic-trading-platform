@@ -197,6 +197,12 @@ try {
     assert.deepEqual(await route.evaluate(typography), reference);
     await reopened.getByText('Decision and execution log (26)', {exact:true}).click();
     await reopened.getByText('2026-11-04T15:00:00Z · opening · BUYING_POWER', {exact:true}).click();
+    const labelType = await grid.getByText('Net P&L vs cash', {exact:true}).evaluate(typography);
+    assert.equal(labelType.fontSize, '12px');
+    assert.equal(labelType.lineHeight, '16px');
+    assert.equal(labelType.fontWeight, '400');
+    assert.notEqual(labelType.fontFamily, reference.fontFamily);
+    assert.deepEqual(await reopened.locator('dt:visible').filter({hasText:/^account$/}).evaluate(typography), labelType);
     const openingTime = reopened.locator('dd:visible').filter({hasText:/^2026-11-04T15:00:00Z$/});
     const drawdown = grid.getByText('0.001%', {exact:true});
     assert.deepEqual(await openingTime.evaluate(typography), await drawdown.evaluate(typography));
@@ -219,6 +225,10 @@ try {
     await openAnnotationTarget(reopened, 'audit', name === 'mobile');
     await expectText(reopened,'audit-status','T-20261119-001 · PASS · PRICE_OUT_OF_LIMIT');
     assert.match(await reopened.locator('#audit-results').innerText(),/order-unbound/);
+    assert.deepEqual(await reopened.locator('#audit-results').getByText('Equity in base currency', {exact:true}).evaluate(typography), labelType);
+    for (const term of await reopened.locator('dt').all()) {
+      assert.deepEqual(await term.evaluate(typography), labelType, await term.textContent());
+    }
     const paste = reopened.getByLabel('Paste snapshot JSON');
     const synthetic = JSON.parse(await paste.inputValue());
     const importRun = reopened.getByRole('button',{name:'Import run'});
