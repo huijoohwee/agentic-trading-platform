@@ -12,27 +12,27 @@
   <link rel="stylesheet" href="./journal.css">
   <script type="module" src="./src/browser.mjs"></script>
 </head>
-<body>
+<body data-agentic-typography>
   <main id="journal" aria-label="Decision journal">
     <noscript>Enable JavaScript to open the offline trading journal.</noscript>
   </main>
   <template id="session-slot">
-    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" role="status">Opening local workspace…</span></div>
+    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" class="agentic-text-detail" role="status">Opening local workspace…</span></div>
   </template>
   <template id="age-slot">
-    <div class="measure"><div><span>Quote age</span><strong id="age" class="agentic-mono">—</strong></div>
+    <div class="measure"><div><span>Quote age</span><strong id="age" class="agentic-mono-detail">—</strong></div>
     <progress id="window" aria-label="Quote age within the five-minute policy window" value="0" max="300"></progress>
-    <div class="scale agentic-mono"><span>0 s</span><span>5 min threshold</span></div></div>
+    <div class="scale agentic-mono-detail"><span>0 s</span><span>5 min threshold</span></div></div>
   </template>
   <template id="quote-slot">
     <section id="quote" aria-labelledby="check-heading">
       <div id="verdict" aria-live="polite" aria-atomic="true"><strong id="state">Checking…</strong>
         <p id="reason"></p></div>
 
-      <dl class="facts"><div><dt>Symbol</dt><dd class="agentic-mono" id="quote-symbol">—</dd></div>
-        <div><dt>Synthetic quote</dt><dd class="agentic-mono" id="quote-price">—</dd></div>
-        <div><dt>Observed at</dt><dd class="agentic-mono" id="observed">—</dd></div>
-        <div><dt>Policy revision</dt><dd class="agentic-mono" id="policy">—</dd></div></dl>
+      <dl class="facts"><div><dt>Symbol</dt><dd id="quote-symbol">—</dd></div>
+        <div><dt>Synthetic quote</dt><dd id="quote-price">—</dd></div>
+        <div><dt>Observed at</dt><dd id="observed">—</dd></div>
+        <div><dt>Policy revision</dt><dd id="policy">—</dd></div></dl>
       <p>R01 checks the quote timestamp. The ticket stays a draft.</p>
     </section>
   </template>
@@ -55,9 +55,9 @@
   </template>
   <template id="saved-slot">
     <p id="empty">Save a draft to keep its inputs and source revision on this device.</p>
-    <div id="record" role="region" aria-labelledby="saved-heading" hidden><dl class="facts"><div><dt>Ticket</dt><dd class="agentic-mono" id="saved-ticket"></dd></div>
-      <div><dt>Limit price</dt><dd class="agentic-mono" id="saved-price"></dd></div><div><dt>Evaluation (UTC)</dt><dd class="agentic-mono" id="saved-time"></dd></div>
-      <div><dt>R01 result</dt><dd class="agentic-mono" id="saved-result"></dd></div></dl>
+    <div id="record" role="region" aria-labelledby="saved-heading" hidden><dl class="facts"><div><dt>Ticket</dt><dd id="saved-ticket"></dd></div>
+      <div><dt>Limit price</dt><dd id="saved-price"></dd></div><div><dt>Evaluation (UTC)</dt><dd id="saved-time"></dd></div>
+      <div><dt>R01 result</dt><dd id="saved-result"></dd></div></dl>
     </div>
   </template>
   <template id="evidence-slot">
@@ -81,8 +81,8 @@
       <div id="rehearsal-body"><p role="status">Opening the offline rehearsal…</p></div>
     </details>
     <details id="evidence" hidden data-dashboard-primitive="disclosure"><summary>Source evidence and calculation</summary>
-      <dl class="facts"><div><dt>Fixture ID</dt><dd class="agentic-mono" id="fixture-id"></dd></div>
-      <div><dt>Policy</dt><dd class="agentic-mono" id="saved-policy"></dd></div><div><dt>Fixture SHA-256</dt><dd class="agentic-mono" id="digest"></dd></div></dl>
+      <dl class="facts"><div><dt>Fixture ID</dt><dd id="fixture-id"></dd></div>
+      <div><dt>Policy</dt><dd id="saved-policy"></dd></div><div><dt>Fixture SHA-256</dt><dd id="digest"></dd></div></dl>
       <p id="notional" role="status"></p>
     </details>
   </template>

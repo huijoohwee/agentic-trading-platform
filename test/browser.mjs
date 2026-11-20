@@ -6,6 +6,10 @@ import { join } from 'node:path';
 import { assemble, ownerRoot } from '../scripts/build.mjs';
 import { serve } from '../scripts/serve.mjs';
 
+const journalCss = await readFile(new URL('../web/journal.css', import.meta.url), 'utf8');
+assert.doesNotMatch(journalCss, /(?:--agentic-font-[\w-]+|font-family|font)\s*:|\.agentic-(?:mono(?:-detail)?|text-detail)\b/u,
+  'Trading must inherit font families and data roles from the pinned Design System');
+
 let chromium;
 try { ({ chromium } = await import('playwright')); }
 catch { ({ chromium } = createRequire(join(ownerRoot(),'agentic-graph','package.json'))('playwright')); }
@@ -191,6 +195,14 @@ try {
     assert.equal(reference.fontSize, '12px');
     assert.equal(reference.lineHeight, '16px');
     assert.deepEqual(await route.evaluate(typography), reference);
+    await reopened.getByText('Decision and execution log (26)', {exact:true}).click();
+    await reopened.getByText('2026-11-04T15:00:00Z · opening · BUYING_POWER', {exact:true}).click();
+    const openingTime = reopened.locator('dd:visible').filter({hasText:/^2026-11-04T15:00:00Z$/});
+    const drawdown = grid.getByText('0.001%', {exact:true});
+    assert.deepEqual(await openingTime.evaluate(typography), await drawdown.evaluate(typography));
+    for (const value of await reopened.locator('dd, code, pre, kbd, samp, time').all()) {
+      assert.deepEqual(await value.evaluate(typography), reference, await value.textContent());
+    }
     const input = reopened.getByLabel('Restore replay file');
     await input.setInputFiles({name:'tampered.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...A,sha256:'changed'}))});
     await expectText(reopened,'replay-status','Archive integrity or binding mismatch');

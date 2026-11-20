@@ -11,14 +11,12 @@ const node = (tag, text) => {
   if (text !== undefined) el.textContent = text;
   return el;
 };
-function facts(rows, valueClass = 'agentic-mono-detail') {
+function facts(rows) {
   const list = node('dl');
   list.className = 'facts';
   for (const [term, value] of rows) {
     const row = node('div');
-    const detail = node('dd', value);
-    detail.className = valueClass;
-    row.append(node('dt', term), detail);
+    row.append(node('dt', term), node('dd', value));
     list.append(row);
   }
   return list;
@@ -50,7 +48,7 @@ function trace(pack) {
     const item = node('li');
     const rows = Object.entries(e).map(([key,value]) => [key, typeof value === 'object' ? JSON.stringify(value) : value]);
     rows.push(['Equity after event',money(pack.snapshot.curve[i].equity)]);
-    const details = facts(rows, 'agentic-mono');
+    const details = facts(rows);
     item.append(disclosure(receipt.at + ' · ' + receipt.id + ' · ' + receipt.reason, details));
     list.append(item);
   }
@@ -71,11 +69,7 @@ export async function mountRehearsal(host) {
       const { timeline } = rehearseForward();
       scheduleLog.replaceChildren(...timeline.map(row => {
         const item = node('li', row.at.slice(11) + ' · ' + row.action + ' · ' + row.outcome);
-        if (row.request) {
-          const route = node('code', row.request.method + ' ' + row.request.path);
-          route.className = 'agentic-mono-detail';
-          item.append(route);
-        }
+        if (row.request) item.append(node('code', row.request.method + ' ' + row.request.path));
         if (row.cursor) item.append(node('small', 'Last completed event · ' + row.cursor));
         return item;
       }));
@@ -126,7 +120,7 @@ export async function mountRehearsal(host) {
       {id:'source',title:'Run evidence',accent:'success',content:provenance}] });
     const checks = node('ul');
     for (const probe of fixture.boundaries) checks.append(node('li',probe.name + ' · expected ' + probe.expected));
-    const mandate = facts([...Object.entries(pack.tape.mandate), ...Object.entries(s.roles)], 'agentic-mono');
+    const mandate = facts([...Object.entries(pack.tape.mandate), ...Object.entries(s.roles)]);
     const heading = DashboardPrimitive({kind:'heading',level:2,children:'Run ' + s.run + ' · ' + s.profile});
     result.replaceChildren(heading, grid, trace(pack), disclosure('Strategy and review roles',mandate), disclosure(pack.verifiedBoundaries + ' verified rule boundaries',checks),
       disclosure('Replay SHA-256',node('code',pack.sha256)));

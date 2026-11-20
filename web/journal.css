@@ -1,7 +1,6 @@
 * { box-sizing: border-box; }
-body { margin: 0; color: CanvasText; background: Canvas; font: var(--agentic-font-size-body)/var(--agentic-line-height-body) var(--agentic-font-sans); }
+body { margin: 0; color: CanvasText; background: Canvas; }
 .session, .measure > div, .facts > div { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--agentic-control-padding-inline); }
-#offline-status, .scale { font-size: .75rem; }
 h2 { margin: 0; font-size: 1.125rem; }
 p { margin: 0; }
 #journal:has([data-state="PASS"]) { --freshness-color: var(--agentic-dashboard-success); }
@@ -14,7 +13,6 @@ progress { accent-color: var(--freshness-color); display: block; width: 100%; he
 .facts { margin-inline: 0; }
 .facts > div { padding-block: var(--agentic-control-padding-block); border-block-start: var(--agentic-panel-border); }
 dd { margin: 0; overflow-wrap: anywhere; }
-#digest { font-size: .75rem; }
 fieldset { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: var(--agentic-control-padding-inline); }
 .field { display: grid; gap: var(--agentic-control-padding-block); }
 label { font-weight: 600; }
