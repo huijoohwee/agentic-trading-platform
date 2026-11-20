@@ -151,6 +151,12 @@ try {
     await expectText(second,'state','UNKNOWN');
     assert.match(await second.locator('#reason').textContent(), /class/);
     await page.close(); await second.close();
+    const preview = await context.newPage();
+    await preview.goto(origin + '/#replay-dashboard');
+    await preview.getByRole('region', {name:'Replay dashboard'}).waitFor();
+    await expectText(preview, 'replay-status', 'Verified run B · 26 synthetic events');
+    assert.equal(await preview.evaluate(() => localStorage.getItem('trading-rehearsal/1/last-verified')), null);
+    await preview.close();
     const reopened = await context.newPage();
     await reopened.goto(origin); await expectText(reopened,'revision','Revision 1');
     await checkOverlayStyle(reopened);
@@ -167,15 +173,21 @@ try {
     const grid = reopened.getByRole('list',{name:'Competition rehearsal snapshot'});
     assert.equal(await grid.locator(':scope > li.agentic-dashboard-card').count(),3);
     assert.equal(await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length),name==='mobile' ? 1 : 3);
-    assert.match(await grid.innerText(),/99985|99,985/);
+    const dashboard = reopened.getByRole('region', { name:'Replay dashboard', exact:true });
+    const indicators = dashboard.getByRole('list', {name:'Run performance indicators'});
+    const intervals = dashboard.getByRole('toolbar', {name:'Select an observed UTC day'}).getByRole('button');
+    assert.equal(await dashboard.getAttribute('data-agentic-base-dashboard-layout'), 'true');
+    assert.equal(await intervals.count(), 1);
+    assert.match(await indicators.innerText(),/99985|99,985/);
     assert.match(await grid.innerText(),/BUY 1 TEST remaining/);
     assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource')
       .some(entry => entry.name.endsWith('/browser-data-view.js'))), false);
-    await reopened.getByText('Decision and execution log (23)',{exact:true}).click();
+    await dashboard.getByRole('button', {name:'Inspect 23 source events'}).click();
     const logTable = reopened.getByRole('table', { name: 'Replay events' });
     const evidence = reopened.getByRole('region', { name: 'Event evidence' });
     const filter = reopened.getByLabel('Filter events');
     await logTable.waitFor();
+    assert.equal(await filter.inputValue(), '2026-11-04');
     assert.equal(await logTable.locator('tbody tr').count(), 23);
     assert.match(await logTable.getAttribute('class'), /agentic-base-data-table/);
     await filter.fill('OFF_LIMIT');
@@ -196,7 +208,24 @@ try {
     await reopened.getByRole('button',{name:'Replay run'}).click();
     await expectText(reopened,'replay-status','Verified run B · 26 synthetic events');
     assert.match(await grid.innerText(),/100,835\.37105/);
-    assert.match(await grid.innerText(),/100,934\.36445/);
+    assert.match(await indicators.innerText(),/100,934\.36445/);
+    assert.equal(await intervals.count(), 6);
+    await intervals.last().evaluate(button => button.closest('[aria-label="Daily account equity"]').scrollIntoView());
+    assert.equal(await intervals.last().evaluate(button => {
+      const rect = button.getBoundingClientRect();
+      return button.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+    }), true, 'Closing interval is visible in the responsive plot');
+    await intervals.last().press('Home');
+    assert.equal(await intervals.first().getAttribute('aria-pressed'), 'true');
+    if (name === 'mobile') await intervals.nth(2).tap(); else await intervals.nth(1).press('ArrowRight');
+    await dashboard.getByRole('button', {name:'Inspect 2 source events'}).click();
+    await reopened.getByText('2 of 26 events', {exact:true}).waitFor();
+    assert.equal(await filter.inputValue(), '2026-11-06');
+    assert.equal(await filter.evaluate(el => el === el.ownerDocument.activeElement), true);
+    await intervals.last().click();
+    await dashboard.getByRole('button', {name:'Inspect 14 source events'}).click();
+    await reopened.getByText('14 of 26 events', {exact:true}).waitFor();
+    assert.equal(await filter.inputValue(), '2026-11-13');
     await reopened.reload();
     await reopened.locator('#rehearsal summary').first().click();
     await expectText(reopened,'replay-status','Verified run B · 26 synthetic events');
@@ -240,13 +269,23 @@ try {
     await reopened.getByRole('searchbox', {name:'Filter boundaries'}).fill('missing-boundary');
     await reopened.getByText('0 of 59 boundaries', {exact:true}).waitFor();
     assert.equal(await boundaryEvidence.locator('dl').count(), 0);
-    const equity = grid.getByText('$100,934.36445', {exact:true});
+    const daily = await exportTable('Export daily equity to Sheets');
+    assert.deepEqual([daily.rows, daily.columns], [7, 6]);
+    const replay = JSON.parse(await reopened.evaluate(() => localStorage.getItem('trading-rehearsal/1/last-verified')));
+    const observations = Map.groupBy(replay.snapshot.curve, point => point.at.slice(0, 10));
+    for (const [i, [date, points]] of [...observations].entries()) {
+      const values = points.map(point => point.equity / 1e6);
+      const cells = Array.from('ABCDEF', column => daily.cells[column + (i + 2)]);
+      assert.deepEqual(cells.map(cell => cell.type), ['text', 'number', 'number', 'number', 'number', 'number']);
+      assert.deepEqual(cells.map(cell => cell.value), [date, values[0], Math.max(...values), Math.min(...values), values.at(-1), points.length]);
+    }
+    const cash = grid.getByText('$94,934.36445', {exact:true});
     const route = receiptEvidence.getByText('POST /api/v1/forward/schedules/fixture-schedule/run', {exact:true});
     const typography = el => {
       const { fontFamily, fontSize, lineHeight, fontWeight, fontVariantNumeric } = getComputedStyle(el);
       return { fontFamily, fontSize, lineHeight, fontWeight, fontVariantNumeric };
     };
-    const reference = await equity.evaluate(typography);
+    const reference = await cash.evaluate(typography);
     assert.equal(reference.fontVariantNumeric, 'tabular-nums');
     assert.equal(reference.fontSize, '12px');
     assert.equal(reference.lineHeight, '16px');
@@ -275,7 +314,7 @@ try {
     await filter.fill('');
     await logTable.getByRole('row').filter({has:reopened.getByRole('cell', {name:'opening',exact:true})}).press('Enter');
     await evidence.getByRole('heading', { name:'Event evidence · opening' }).waitFor();
-    const labelType = await grid.getByText('Net P&L vs cash', {exact:true}).evaluate(typography);
+    const labelType = await grid.getByText('Cash', {exact:true}).evaluate(typography);
     assert.equal(labelType.fontSize, '12px');
     assert.equal(labelType.lineHeight, '16px');
     assert.equal(labelType.fontWeight, '400');
@@ -298,6 +337,10 @@ try {
     await input.setInputFiles({name:'practice.json',mimeType:'application/json',buffer:bytes});
     await expectText(reopened,'replay-status','Verified run A · 23 synthetic events');
     assert.match(await grid.innerText(),/fixture-practice/);
+    const savedDashboard = await context.newPage();
+    await savedDashboard.goto(origin + '/#replay-dashboard');
+    await expectText(savedDashboard, 'replay-status', 'Verified run A · 23 synthetic events');
+    await savedDashboard.close();
     assert.equal(await reopened.getByRole('heading',{name:'Run A · practice'}).count(),1);
     await expectText(reopened,'revision','Revision 1');
     await openAnnotationTarget(reopened, 'audit', name === 'mobile');

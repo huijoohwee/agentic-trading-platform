@@ -1,5 +1,6 @@
 import { createNativeDashboard } from '../owners/design/site/dashboard.mjs';
 import { createPanelSectionSummary, installPanelSections, PANEL_SECTION } from '../owners/design/site/panel-section.js';
+import { replayDashboard } from './rehearsal-dashboard.mjs';
 import { archive, MAX_ARCHIVE, readRehearsal, restore } from './replay.mjs';
 import { MICRO } from './competition-rules.mjs';
 
@@ -28,22 +29,6 @@ function disclosure(title, content) {
   section.append(summary, content);
   return section;
 }
-function chart(points) {
-  const values = points.map(p => p.equity);
-  const lo = Math.min(...values), hi = Math.max(...values);
-  const times = points.map(p => Date.parse(p.at));
-  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.classList.add('equity-curve');
-  svg.setAttribute('viewBox','0 0 300 60');
-  svg.setAttribute('role','img');
-  svg.setAttribute('aria-label', 'Equity in USD. Opening value ' + money(values[0]) + ' to ' + money(values.at(-1)) +
-    '. Minimum ' + money(lo) + ', maximum ' + money(hi));
-  const line = document.createElementNS(svg.namespaceURI,'polyline');
-  line.setAttribute('points',values.map((v,i) => [2 + 296 * (times[i]-times[0]) / (times.at(-1)-times[0] || 1),
-    58 - 56 * (v-lo)/(hi-lo || 1)].join(',')).join(' '));
-  line.setAttribute('fill','none'); line.setAttribute('stroke','currentColor'); svg.append(line);
-  return svg;
-}
 function tableSection(id, title, mount, loadData) {
   const section = node('details'), body = node('div');
   section.id = id;
@@ -53,13 +38,17 @@ function tableSection(id, title, mount, loadData) {
   body.className = PANEL_SECTION.body + ' rehearsal-table-content';
   section.append(createPanelSectionSummary(document, title), body);
   const releaseSection = installPanelSections(section);
-  let view, loading = false, disposed = false;
+  let view, onOpen, loading = false, disposed = false;
   section.addEventListener('toggle', async () => {
     if (!section.open || view || loading || disposed) return;
     loading = true;
     try {
       const [tables, data] = await Promise.all([import('./rehearsal-tables.mjs'), loadData?.()]);
-      if (!disposed && section.open) view = mount(tables, body, data);
+      if (!disposed && section.open) {
+        view = mount(tables, body, data);
+        onOpen?.(view);
+        onOpen = undefined;
+      }
     } catch (error) {
       if (!disposed) {
         const message = node('p', title + ' could not be opened. ' + error.message);
@@ -68,7 +57,14 @@ function tableSection(id, title, mount, loadData) {
       }
     } finally { loading = false; }
   });
-  return { section, destroy() { disposed = true; view?.destroy(); releaseSection(); } };
+  return { section,
+    openWith(callback) {
+      section.open = true;
+      if (view) callback(view);
+      else onOpen = callback;
+    },
+    destroy() { disposed = true; onOpen = undefined; view?.destroy(); releaseSection(); },
+  };
 }
 
 function downloadJson(text, filename) {
@@ -82,11 +78,11 @@ export async function mountRehearsal(host) {
   const response = await fetch('./src/rehearsal.json');
   if (!response.ok) throw Error('Rehearsal fixture unavailable');
   const fixture = await readRehearsal(await response.text());
-  const ui = { money, node, downloadJson };
+  const ui = { money, percent, node, downloadJson };
   const schedule = tableSection('schedule', 'Offline schedule and run receipts',
     (tables, body, timeline) => tables.mountSchedule(body, timeline, ui),
     async () => (await import('./forward-rehearsal.mjs')).rehearseForward().timeline);
-  const { DashboardCardGrid, DashboardPrimitive } = createNativeDashboard(document);
+  const { DashboardCardGrid } = createNativeDashboard(document);
   const controls = node('div'), status = node('p'), result = node('div');
   controls.className = 'agentic-dashboard-actions agentic-form-controls';
   status.setAttribute('role','status'); status.id = 'replay-status';
@@ -109,11 +105,8 @@ export async function mountRehearsal(host) {
   let current, log, boundaries, busy = false;
   function render(pack) {
     const s = pack.snapshot;
-    const portfolio = facts([['Equity',money(s.equity)], ['Net P&L vs cash',money(s.net)],
-      ['Cash',money(s.cash)], ['Recorded fees',money(s.fees)], ['Interest', money(s.interest)],
-      ['Drawdown',percent(s.drawdown)], ['Maximum drawdown',percent(s.maxDrawdown)]]);
-    const performance = node('div');
-    performance.append(portfolio, chart(s.curve));
+    const portfolio = facts([['Cash',money(s.cash)], ['Recorded fees',money(s.fees)], ['Interest', money(s.interest)],
+      ['Drawdown',percent(s.drawdown)]]);
     const working = s.orders.filter(o => o.status === 'WORKING');
     const inventory = facts([
       ...Object.entries(s.positions).map(([symbol,p]) => [symbol, p.qty + ' held · basis ' + money(p.basis)]),
@@ -129,19 +122,21 @@ export async function mountRehearsal(host) {
       portfolio.append(...facts([['Friday mark',money(s.weekly)],['Final ranked equity',money(s.ranked)]]).children);
     }
     const grid = DashboardCardGrid({ ariaLabel:'Competition rehearsal snapshot', cards:[
-      {id:'returns',title:'Performance',accent:'primary',content:performance},
+      {id:'returns',title:'Account detail',accent:'primary',content:portfolio},
       {id:'inventory',title:'Positions and open orders',accent:'secondary',content:inventory},
       {id:'source',title:'Run evidence',accent:'success',content:provenance}] });
     const mandate = facts([...Object.entries(pack.tape.mandate), ...Object.entries(s.roles)]);
-    const heading = DashboardPrimitive({kind:'heading',level:2,children:'Run ' + s.run + ' · ' + s.profile});
     log?.destroy();
     boundaries?.destroy();
     log = tableSection('replay-log', 'Decision and execution log (' + s.receipts.length + ')',
       (tables, body) => tables.mountReplayLog(body, pack, ui));
     boundaries = tableSection('rule-boundaries', pack.verifiedBoundaries + ' verified rule boundaries',
       (tables, body) => tables.mountBoundaries(body, fixture, pack, ui));
-    result.replaceChildren(heading, grid, log.section, disclosure('Strategy and review roles',mandate), boundaries.section,
+    const evidence = node('section');
+    evidence.setAttribute('aria-label', 'Replay evidence');
+    evidence.append(grid, log.section, disclosure('Strategy and review roles',mandate), boundaries.section,
       disclosure('Replay SHA-256',node('code',pack.sha256)));
+    result.replaceChildren(replayDashboard(pack, ui, evidence, date => log.openWith(view => view.filter(date))));
     select.value = s.run;
     current = pack;
   }
@@ -178,4 +173,9 @@ export async function mountRehearsal(host) {
   const saved = localStorage.getItem(latestKey);
   if (saved !== null) await update(() => restore(fixture,saved),false);
   else status.textContent = 'Choose a synthetic run to replay on this device.';
+  return { async showDashboard() {
+    if (!current && saved === null) await update(() => archive(fixture, 'B'), false);
+    if (location.hash !== '#replay-dashboard' || !host.closest('details')?.open) return;
+    (result.querySelector('#replay-dashboard') ?? status).scrollIntoView({ block: 'start' });
+  } };
 }

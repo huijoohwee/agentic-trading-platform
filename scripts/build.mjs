@@ -14,9 +14,9 @@ const pins = [
   { repo: 'agentic-sheets', prefix: 'sheets', revision: '349b43ccadbec4edf107cfef9f0c09fc1715f9f2',
     digest: '067f22546a65190f7010830ba6b9d9d66b70dd1a67b1c9a32c504c128fb95c69',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
-  { repo: 'agentic-design-system', prefix: 'design', revision: '2f1e14085f9eedbd006cdce40d7f8ede4462f1b1',
-    digest: 'cd3db597f4b629d2a342ebf78c28125a04db0ffbd29da3977cb33d22dd3ce931',
-    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/THIRD-PARTY-NOTICES.txt',
+  { repo: 'agentic-design-system', prefix: 'design', revision: 'd0c891861650dea6a28a803691395cc895b74314',
+    digest: 'a36e8eeebced8e5b3b06b184125cecb634785897d6dfb80253a66f47196c469e',
+    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/dashboard-range.mjs', 'site/dashboard-range.css', 'site/THIRD-PARTY-NOTICES.txt',
       'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js'] },
 ];
 
@@ -62,7 +62,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   }
   const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
-    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json'];
+    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   if (devDocumentPolicy !== undefined) {
     const template = assets.get('index.html').toString();

@@ -193,17 +193,21 @@ start().catch(error => {
 
 const rehearsal = byId('rehearsal');
 let opening;
-rehearsal.addEventListener('toggle', async () => {
-  if (!rehearsal.open || opening) return;
-  try {
-    opening = import('./rehearsal-view.mjs');
-    const { mountRehearsal } = await opening;
-    await mountRehearsal(byId('rehearsal-body'));
-  } catch (error) {
-    opening = null;
-    byId('rehearsal-body').textContent = error.message;
-  }
-});
+function loadRehearsal() {
+  opening ??= import('./rehearsal-view.mjs')
+    .then(module => module.mountRehearsal(byId('rehearsal-body')))
+    .catch(error => { opening = null; byId('rehearsal-body').textContent = error.message; });
+  return opening;
+}
+rehearsal.addEventListener('toggle', () => { if (rehearsal.open) void loadRehearsal(); });
+async function openLinkedDashboard() {
+  if (location.hash !== '#replay-dashboard') return;
+  rehearsal.open = true;
+  const view = await loadRehearsal();
+  if (location.hash === '#replay-dashboard' && rehearsal.open) await view?.showDashboard();
+}
+window.addEventListener('hashchange', openLinkedDashboard);
+void openLinkedDashboard();
 
 byId('audit').addEventListener('toggle', async function openAudit() {
   if (!this.open) return;

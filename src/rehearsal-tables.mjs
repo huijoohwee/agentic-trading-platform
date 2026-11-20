@@ -1,33 +1,7 @@
+import { asText, bindWorkbookExport } from './rehearsal-workbook.mjs';
 import { mountDataView } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 import { createFieldTypeIcon, createKeyTypeValueRows } from '../owners/design/site/key-type-value.js';
 import { MICRO } from './competition-rules.mjs';
-
-function asText(value) {
-  if (value === undefined) return '';
-  return typeof value === 'object' ? JSON.stringify(value) : String(value);
-}
-
-// The Base table and Sheets snapshot project the same ordered records.
-// Keep numeric data native in Sheets and leave missing observations blank.
-async function workbookSnapshot({ workbookId, sheetId, name, headers, records }) {
-  const { CONTRACT, executeWorkbook, encodeSnapshot } = await import('../owners/sheets/sheets/core.mjs');
-  const { addressOf } = await import('../owners/sheets/sheets/schema.mjs');
-  const cells = {};
-  function write(row, values) {
-    values.forEach((value, column) => {
-      if (value === undefined) return;
-      cells[addressOf(row, column)] = typeof value === 'number'
-        ? { type: 'number', value } : { type: 'text', value: asText(value) };
-    });
-  }
-  write(0, headers);
-  records.forEach((record, index) => write(index + 1, record.values));
-  const { workbook } = await executeWorkbook(null, {
-    contract: CONTRACT, operationId: 'export-' + sheetId, operation: 'create', expectedRevision: 0,
-    payload: { workbookId, sheetId, name, fitToCells: true, cells },
-  });
-  return encodeSnapshot(workbook);
-}
 
 function evidenceRow(node, [label, value, kind]) {
   const text = asText(value);
@@ -65,7 +39,7 @@ function mountTable(body, spec, { node, downloadJson }) {
   const inspector = node('section');
   inspector.setAttribute('aria-label', spec.inspector);
   body.replaceChildren(controls, error, viewport, inspector);
-  let visible = rows, selected, table, active = true;
+  let visible = rows, selected, table;
   function select(row) {
     selected = row;
     if (!row) { inspector.replaceChildren(); return; }
@@ -89,16 +63,12 @@ function mountTable(body, spec, { node, downloadJson }) {
     else table = mountDataView(mount, state());
   }
   search.addEventListener('input', filter);
-  save.onclick = async () => {
-    save.disabled = true; error.textContent = '';
-    try {
-      const text = await workbookSnapshot(spec);
-      if (active) downloadJson(text, spec.filename);
-    } catch (failure) { error.textContent = failure.message; }
-    finally { save.disabled = false; }
-  };
+  bindWorkbookExport(save, error, spec, downloadJson);
   filter();
-  return { destroy() { active = false; table.destroy(); } };
+  return {
+    filter(query) { search.value = query; filter(); search.focus(); },
+    destroy() { table.destroy(); },
+  };
 }
 
 export function mountReplayLog(body, pack, ui) {
