@@ -7,17 +7,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: 'cfff499bb01bd22b36fd553607565b5e74eec81c',
-    digest: '4ab3d0cae7c342bd4c584ceda2bdc97b64d12d5303e9e1084c4d6e791c189a88',
+  { repo: 'agentic-base', prefix: 'base', revision: '2f891a6193b2f937275bd04f6b28dd8e67a98454',
+    digest: 'd34cad984f1eb00fdfd2730d5be836f92368aabea4ec87f6510d53edc75a7614',
     paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
   { repo: 'agentic-sheets', prefix: 'sheets', revision: '349b43ccadbec4edf107cfef9f0c09fc1715f9f2',
     digest: '067f22546a65190f7010830ba6b9d9d66b70dd1a67b1c9a32c504c128fb95c69',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
-  { repo: 'agentic-design-system', prefix: 'design', revision: 'd0c891861650dea6a28a803691395cc895b74314',
-    digest: 'a36e8eeebced8e5b3b06b184125cecb634785897d6dfb80253a66f47196c469e',
+  { repo: 'agentic-design-system', prefix: 'design', revision: '83de261f8f3ddf66ed41e5370b6811f498788b40',
+    digest: '56eeb9eaf7d2c543a5f7644335116e67842350be5ce99a11aa0228e8caa4f924',
     paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/dashboard-range.mjs', 'site/dashboard-range.css', 'site/THIRD-PARTY-NOTICES.txt',
-      'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js'] },
+      'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js', 'site/floating-panel.js', 'site/floating-panel.css', 'site/hover.css'] },
 ];
 
 export function ownerRoot() {
@@ -62,7 +62,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   }
   const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
-    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json'];
+    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   if (devDocumentPolicy !== undefined) {
     const template = assets.get('index.html').toString();

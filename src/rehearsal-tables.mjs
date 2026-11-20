@@ -15,6 +15,26 @@ function evidenceRow(node, [label, value, kind]) {
   return { id: label, keyNode: label, typeNode: createFieldTypeIcon(type), valueNode };
 }
 
+function tableViewport(node) {
+  const viewport = node('div'), mount = node('div'), stylesheet = node('link');
+  viewport.className = 'rehearsal-table';
+  mount.setAttribute('part', 'mount');
+  stylesheet.rel = 'stylesheet';
+  stylesheet.href = new URL('../owners/base/packages/views-react/dist/browser-data-view.css', import.meta.url);
+  viewport.attachShadow({ mode: 'open' }).append(stylesheet, mount);
+  return { viewport, mount };
+}
+
+export function mountPivotTable(host, { headers, records }, node, format) {
+  const { mount, viewport } = tableViewport(node);
+  host.replaceChildren(viewport);
+  return mountDataView(mount, { ariaLabel: 'Replay pivot results', layout: 'multiDimensional',
+    columns: headers.map((name, index) => ({ id: 'field-' + index, name })),
+    rows: records.map(({ id, values }) => ({ id, cells: values.map((cell, index) =>
+      cell === undefined ? '—' : index ? format(cell) : String(cell)) })),
+  });
+}
+
 function mountTable(body, spec, { node, downloadJson }) {
   const columns = spec.headers.map(name => ({ id: name, name }));
   const rows = spec.records.map(record => ({
@@ -30,12 +50,7 @@ function mountTable(body, spec, { node, downloadJson }) {
   error.setAttribute('role', 'alert');
   controls.append(label, save, count);
 
-  const viewport = node('div'), mount = node('div'), stylesheet = node('link');
-  viewport.className = 'rehearsal-table';
-  mount.setAttribute('part', 'mount');
-  stylesheet.rel = 'stylesheet';
-  stylesheet.href = new URL('../owners/base/packages/views-react/dist/browser-data-view.css', import.meta.url);
-  viewport.attachShadow({ mode: 'open' }).append(stylesheet, mount);
+  const { viewport, mount } = tableViewport(node);
   const inspector = node('section');
   inspector.setAttribute('aria-label', spec.inspector);
   body.replaceChildren(controls, error, viewport, inspector);
@@ -66,7 +81,7 @@ function mountTable(body, spec, { node, downloadJson }) {
   bindWorkbookExport(save, error, spec, downloadJson);
   filter();
   return {
-    filter(query) { search.value = query; filter(); search.focus(); },
+    filter(query, focus = true) { search.value = query; filter(); if (focus) search.focus(); },
     destroy() { table.destroy(); },
   };
 }

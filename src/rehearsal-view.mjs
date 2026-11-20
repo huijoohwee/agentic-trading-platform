@@ -102,7 +102,7 @@ export async function mountRehearsal(host) {
   panelStyle.rel = 'stylesheet';
   panelStyle.href = new URL('../owners/design/site/panel-section.css', import.meta.url);
   host.replaceChildren(panelStyle, controls, status, result, schedule.section);
-  let current, log, boundaries, busy = false;
+  let current, dashboard, log, boundaries, busy = false;
   function render(pack) {
     const s = pack.snapshot;
     const portfolio = facts([['Cash',money(s.cash)], ['Recorded fees',money(s.fees)], ['Interest', money(s.interest)],
@@ -126,6 +126,7 @@ export async function mountRehearsal(host) {
       {id:'inventory',title:'Positions and open orders',accent:'secondary',content:inventory},
       {id:'source',title:'Run evidence',accent:'success',content:provenance}] });
     const mandate = facts([...Object.entries(pack.tape.mandate), ...Object.entries(s.roles)]);
+    dashboard?.destroy();
     log?.destroy();
     boundaries?.destroy();
     log = tableSection('replay-log', 'Decision and execution log (' + s.receipts.length + ')',
@@ -136,7 +137,8 @@ export async function mountRehearsal(host) {
     evidence.setAttribute('aria-label', 'Replay evidence');
     evidence.append(grid, log.section, disclosure('Strategy and review roles',mandate), boundaries.section,
       disclosure('Replay SHA-256',node('code',pack.sha256)));
-    result.replaceChildren(replayDashboard(pack, ui, evidence, date => log.openWith(view => view.filter(date))));
+    dashboard = replayDashboard(pack, ui, evidence, log);
+    result.replaceChildren(dashboard.element);
     select.value = s.run;
     current = pack;
   }

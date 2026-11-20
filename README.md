@@ -24,6 +24,10 @@ Open the replay dashboard in the running journal using the fragment `/#replay-da
 
 The **Replay dashboard** uses the same Design System layout and cards as Graph’s Agent Mission dashboard. Its chart groups verified account equity observations by UTC date. Choose a day by touch, click or arrow keys to read the opening, high, low and closing equity. **Inspect source events** opens the Base decision log filtered to the selected date. **Export daily equity to Sheets** saves all observed dates, their four USD values and event counts. The chart measures synthetic account equity after replay events. Days without observations are omitted.
 
+Switch worksheets with **Source records**, **Daily equity**, and **Event activity**. Source records opens the same filterable decision log. In either analysis worksheet, choose **Chart → Setup** to select a line, area, or column chart and group a measure by UTC date, event type, or decision. Daily equity also offers the equity range. **Customize** controls the series color, gridlines and value readout where applicable.
+
+Choose **Pivot table → Fields** to select rows, an optional column dimension, a measure, and an event-type filter. **Options** controls descending row order and the grand total. First and last equity use replay sequence. Missing equity observations are blank in Sheets. Chart and pivot exports fit the current projection and retain numeric cells. Each tab remembers its settings separately for each run and worksheet.
+
 Use **Export run to Sheets** for a read-only projection of the full run, including numeric USD equity for every event. In Agentic Sheets, import the JSON snapshot and use **Replace with imported clone** to open an independent workbook. Filtering the table leaves the export complete.
 
 Open **59 verified rule boundaries** to filter by rule, expected result, or input. Select a boundary to inspect its original input and expected value. **Export boundaries to Sheets** includes all 59 cases in fixture order. The workbook sizes itself to the data, with one header row and one row per case. Numeric expectations stay numeric.
@@ -84,7 +88,7 @@ The build prints the standalone static directory under `.local-build/<digest>/`.
 
 The replay log uses the same Base browser table adapter that Graph consumes. Its disclosure and field inspector use Design System panel sections and key/type/value rows. The sealed offline build loads the table on first open.
 
-Graph’s Agent Mission view and Trading share the executable Design System dashboard renderer. Trading passes ticket fields, the live quote-age indicator and saved evidence into its native DOM adapter. Graph uses the React adapter for the same shell and cards. The offline build verifies the renderer’s source bytes and caches them with the ticket. [Shared renderer](https://github.com/huijoohwee/agentic-design-system/blob/d0c891861650dea6a28a803691395cc895b74314/site/dashboard.mjs)
+Graph’s Agent Mission view and Trading share the executable Design System dashboard renderer. Trading passes ticket fields, the live quote-age indicator and saved evidence into its native DOM adapter. Graph uses the React adapter for the same shell and cards. The offline build verifies the renderer’s source bytes and caches them with the ticket. [Shared renderer](https://github.com/huijoohwee/agentic-design-system/blob/83de261f8f3ddf66ed41e5370b6811f498788b40/site/dashboard.mjs)
 
 Headless tests exercise rule boundaries, evidence integrity and revision conflicts. Browser checks use Playwright with installed Chrome, two isolated contexts and two tabs per context. They stop the HTTP server and disconnect the contexts before testing persistence. Set `PLAYWRIGHT_CHANNEL` for a different installed Chromium channel. The test can reuse Playwright from the workspace Graph checkout. Automated mobile coverage uses a 360 CSS pixel touch viewport.
 

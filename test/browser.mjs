@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { verifyWorksheets } from './worksheets-browser.mjs';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -392,6 +393,10 @@ try {
       await reopened.screenshot({path:join(process.env.TRADING_SCREENSHOT_DIR,name+'.png'),fullPage:true});
     }
     console.log(name + ': exact threshold, offline save, stale tab, evidence gaps, closed-tab reopen and lazy Sheets passed.');
+    const worksheets = await context.newPage();
+    await worksheets.goto(origin + '/#replay-dashboard');
+    await verifyWorksheets(worksheets);
+    console.log(name + ': worksheet tabs, chart setup and customization, pivot fields and options, typed exports and offline reload passed.');
     await context.close();
   }
   assert.deepEqual(errors,[]);
