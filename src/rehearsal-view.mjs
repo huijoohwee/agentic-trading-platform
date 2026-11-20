@@ -22,15 +22,9 @@ function facts(rows) {
   }
   return list;
 }
-function timestamp(at, label = at) {
-  const time = node('time', label);
-  time.dateTime = at;
-  return time;
-}
-function disclosure(title, content, at) {
+function disclosure(title, content) {
   const section = node('details');
   const summary = node('summary', title);
-  if (at) summary.prepend(timestamp(at), ' · ');
   section.append(summary, content);
   return section;
 }
@@ -50,25 +44,28 @@ function chart(points) {
   line.setAttribute('fill','none'); line.setAttribute('stroke','currentColor'); svg.append(line);
   return svg;
 }
-function createLog(pack) {
+function tableSection(id, title, mount, loadData) {
   const section = node('details'), body = node('div');
-  section.id = 'replay-log';
+  section.id = id;
   section.dataset.agenticSection = '';
   section.dataset.agenticSticky = 'false';
-  body.id = 'replay-log-content';
-  body.className = PANEL_SECTION.body;
-  const summary = createPanelSectionSummary(document, 'Decision and execution log (' + pack.snapshot.receipts.length + ')');
-  section.append(summary, body);
+  body.id = id + '-content';
+  body.className = PANEL_SECTION.body + ' rehearsal-table-content';
+  section.append(createPanelSectionSummary(document, title), body);
   const releaseSection = installPanelSections(section);
   let view, loading = false, disposed = false;
   section.addEventListener('toggle', async () => {
     if (!section.open || view || loading || disposed) return;
     loading = true;
     try {
-      const { mountReplayLog } = await import('./replay-log.mjs');
-      if (!disposed && section.open) view = mountReplayLog(body, pack, { money, node, timestamp, downloadJson });
+      const [tables, data] = await Promise.all([import('./rehearsal-tables.mjs'), loadData?.()]);
+      if (!disposed && section.open) view = mount(tables, body, data);
     } catch (error) {
-      body.replaceChildren(node('p', 'Could not open the decision log. ' + error.message));
+      if (!disposed) {
+        const message = node('p', title + ' could not be opened. ' + error.message);
+        message.setAttribute('role', 'alert');
+        body.replaceChildren(message);
+      }
     } finally { loading = false; }
   });
   return { section, destroy() { disposed = true; view?.destroy(); releaseSection(); } };
@@ -85,27 +82,10 @@ export async function mountRehearsal(host) {
   const response = await fetch('./src/rehearsal.json');
   if (!response.ok) throw Error('Rehearsal fixture unavailable');
   const fixture = await readRehearsal(await response.text());
-  const scheduleLog = node('ol');
-  const schedule = disclosure('Offline schedule and run receipts', scheduleLog);
-  schedule.id = 'schedule';
-  schedule.addEventListener('toggle', async () => {
-    if (!schedule.open || scheduleLog.childElementCount) return;
-    try {
-      const { rehearseForward } = await import('./forward-rehearsal.mjs');
-      const { timeline } = rehearseForward();
-      scheduleLog.replaceChildren(...timeline.map(row => {
-        const item = node('li');
-        item.append(timestamp(row.at, row.at.slice(11)), ' · ' + row.action + ' · ' + row.outcome);
-        if (row.request) item.append(node('code', row.request.method + ' ' + row.request.path));
-        if (row.cursor) {
-          const cursor = node('small', 'Last completed event · ');
-          cursor.append(node('samp', row.cursor));
-          item.append(cursor);
-        }
-        return item;
-      }));
-    } catch (error) { scheduleLog.replaceChildren(node('li', error.message)); }
-  });
+  const ui = { money, node, downloadJson };
+  const schedule = tableSection('schedule', 'Offline schedule and run receipts',
+    (tables, body, timeline) => tables.mountSchedule(body, timeline, ui),
+    async () => (await import('./forward-rehearsal.mjs')).rehearseForward().timeline);
   const { DashboardCardGrid, DashboardPrimitive } = createNativeDashboard(document);
   const controls = node('div'), status = node('p'), result = node('div');
   controls.className = 'agentic-dashboard-actions agentic-form-controls';
@@ -125,8 +105,8 @@ export async function mountRehearsal(host) {
   const panelStyle = node('link');
   panelStyle.rel = 'stylesheet';
   panelStyle.href = new URL('../owners/design/site/panel-section.css', import.meta.url);
-  host.replaceChildren(panelStyle, controls, status, result, schedule);
-  let current, log, busy = false;
+  host.replaceChildren(panelStyle, controls, status, result, schedule.section);
+  let current, log, boundaries, busy = false;
   function render(pack) {
     const s = pack.snapshot;
     const portfolio = facts([['Equity',money(s.equity)], ['Net P&L vs cash',money(s.net)],
@@ -152,13 +132,15 @@ export async function mountRehearsal(host) {
       {id:'returns',title:'Performance',accent:'primary',content:performance},
       {id:'inventory',title:'Positions and open orders',accent:'secondary',content:inventory},
       {id:'source',title:'Run evidence',accent:'success',content:provenance}] });
-    const checks = node('ul');
-    for (const probe of fixture.boundaries) checks.append(node('li',probe.name + ' · expected ' + probe.expected));
     const mandate = facts([...Object.entries(pack.tape.mandate), ...Object.entries(s.roles)]);
     const heading = DashboardPrimitive({kind:'heading',level:2,children:'Run ' + s.run + ' · ' + s.profile});
     log?.destroy();
-    log = createLog(pack);
-    result.replaceChildren(heading, grid, log.section, disclosure('Strategy and review roles',mandate), disclosure(pack.verifiedBoundaries + ' verified rule boundaries',checks),
+    boundaries?.destroy();
+    log = tableSection('replay-log', 'Decision and execution log (' + s.receipts.length + ')',
+      (tables, body) => tables.mountReplayLog(body, pack, ui));
+    boundaries = tableSection('rule-boundaries', pack.verifiedBoundaries + ' verified rule boundaries',
+      (tables, body) => tables.mountBoundaries(body, fixture, pack, ui));
+    result.replaceChildren(heading, grid, log.section, disclosure('Strategy and review roles',mandate), boundaries.section,
       disclosure('Replay SHA-256',node('code',pack.sha256)));
     select.value = s.run;
     current = pack;

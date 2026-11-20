@@ -7,12 +7,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: '801e7923daa87516a8c694cae535801881168ef8',
+  { repo: 'agentic-base', prefix: 'base', revision: 'cfff499bb01bd22b36fd553607565b5e74eec81c',
     digest: '4ab3d0cae7c342bd4c584ceda2bdc97b64d12d5303e9e1084c4d6e791c189a88',
     paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
-  { repo: 'agentic-sheets', prefix: 'sheets', revision: '295b0dceb7eecf1d1502bebf444effe6237f48f2',
-    digest: 'e4e22c9918554853470984847528440dedbb4f099214e867284fcf2bcd17817d',
+  { repo: 'agentic-sheets', prefix: 'sheets', revision: '349b43ccadbec4edf107cfef9f0c09fc1715f9f2',
+    digest: '067f22546a65190f7010830ba6b9d9d66b70dd1a67b1c9a32c504c128fb95c69',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
   { repo: 'agentic-design-system', prefix: 'design', revision: '2f1e14085f9eedbd006cdce40d7f8ede4462f1b1',
     digest: 'cd3db597f4b629d2a342ebf78c28125a04db0ffbd29da3977cb33d22dd3ce931',
@@ -62,7 +62,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   }
   const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
-    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/replay-log.mjs', 'src/rehearsal.json'];
+    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   if (devDocumentPolicy !== undefined) {
     const template = assets.get('index.html').toString();

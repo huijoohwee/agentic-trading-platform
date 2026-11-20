@@ -201,9 +201,47 @@ try {
     await reopened.locator('#rehearsal summary').first().click();
     await expectText(reopened,'replay-status','Verified run B · 26 synthetic events');
     await openAnnotationTarget(reopened, 'schedule', name === 'mobile');
-    await reopened.getByText(/01:21:00Z · readback · completed/).waitFor();
+    const scheduleTable = reopened.getByRole('table', {name:'Schedule receipts'});
+    const receiptEvidence = reopened.getByRole('region', {name:'Receipt evidence'});
+    await scheduleTable.waitFor();
+    assert.equal(await scheduleTable.locator('tbody tr').count(), 13);
+    assert.equal(await scheduleTable.getByRole('cell', {name:'2027-05-01T01:00:00Z',exact:true}).count(), 2);
+    const receiptFilter = reopened.getByRole('searchbox', {name:'Filter receipts'});
+    await receiptFilter.fill('fixture-schedule/run');
+    await reopened.getByText('1 of 13 receipts', {exact:true}).waitFor();
+    await receiptEvidence.getByRole('heading', {name:'Receipt evidence · manual · 00:59:00Z'}).waitFor();
+    const exportTable = async label => {
+      const ready = reopened.waitForEvent('download');
+      await reopened.getByRole('button', {name:label, exact:true}).click();
+      return JSON.parse(await readFile(await (await ready).path(), 'utf8'));
+    };
+    const receipts = await exportTable('Export receipts to Sheets');
+    assert.deepEqual([receipts.rows, receipts.columns], [14, 7]);
+    assert.equal(receipts.cells.E14.value, 'fixture-event-3');
+    assert.equal(receipts.cells.B6.value, 'duplicate_trigger');
+    assert.equal(receipts.cells.E2, undefined);
+    assert.equal(JSON.parse(receipts.cells.G2.value).execution.max_concurrent_runs, 1);
+    await openAnnotationTarget(reopened, 'rule-boundaries', name === 'mobile');
+    const boundaries = reopened.getByRole('table', {name:'Verified rule boundaries'});
+    const boundaryEvidence = reopened.getByRole('region', {name:'Boundary evidence'});
+    await boundaries.waitFor();
+    assert.equal(await boundaries.locator('tbody tr').count(), 59);
+    await reopened.getByRole('searchbox', {name:'Filter boundaries'}).fill('4.8% daily, 365');
+    await reopened.getByText('1 of 59 boundaries', {exact:true}).waitFor();
+    const match = boundaries.getByRole('row').filter({hasText:'4800000'});
+    if (name === 'mobile') await match.getByRole('cell').first().tap(); else await match.press('Enter');
+    await boundaryEvidence.getByRole('heading', {name:'Boundary evidence · 4.8% daily, 365 convention'}).waitFor();
+    assert.equal(await boundaryEvidence.locator('samp').filter({hasText:'[36500,0,365]'}).count(), 1);
+    const rules = await exportTable('Export boundaries to Sheets');
+    assert.deepEqual([rules.rows, rules.columns, Object.keys(rules.cells).length], [60, 4, 240]);
+    assert.equal(rules.cells.A60.value, 'Worthless put');
+    assert.deepEqual(rules.cells.B44, {type:'text', value:'null'});
+    assert.deepEqual(rules.cells.B42, {type:'number', value:4800000});
+    await reopened.getByRole('searchbox', {name:'Filter boundaries'}).fill('missing-boundary');
+    await reopened.getByText('0 of 59 boundaries', {exact:true}).waitFor();
+    assert.equal(await boundaryEvidence.locator('dl').count(), 0);
     const equity = grid.getByText('$100,934.36445', {exact:true});
-    const route = reopened.locator('#schedule').getByText('POST /api/v1/forward/schedules/fixture-schedule/run', {exact:true});
+    const route = receiptEvidence.getByText('POST /api/v1/forward/schedules/fixture-schedule/run', {exact:true});
     const typography = el => {
       const { fontFamily, fontSize, lineHeight, fontWeight, fontVariantNumeric } = getComputedStyle(el);
       return { fontFamily, fontSize, lineHeight, fontWeight, fontVariantNumeric };
@@ -230,6 +268,7 @@ try {
     assert.equal(downloaded.suggestedFilename(), 'run-B-events.sheets.json');
     const workbook = JSON.parse(await readFile(await downloaded.path(), 'utf8'));
     assert.equal(workbook.contract, 'sheets/workbook/v1');
+    assert.deepEqual([workbook.rows, workbook.columns], [27, 5]);
     assert.equal(workbook.cells.A2.value, 'opening');
     assert.deepEqual(workbook.cells.E27, {type:'number',value:100934.36445});
     assert.equal(Object.keys(workbook.cells).length, 27 * 5);
@@ -248,7 +287,7 @@ try {
     const openingLabel = evidence.locator('time').filter({hasText:'2026-11-04T15:00:00Z'});
     assert.equal(await openingLabel.getAttribute('datetime'), await openingTime.textContent());
     assert.deepEqual(await openingLabel.evaluate(typography), reference);
-    assert.equal(await reopened.locator('#schedule li time').count(), await reopened.locator('#schedule li').count());
+    assert.equal(await receiptEvidence.locator('time').getAttribute('datetime'), '2027-05-01T00:59:00Z');
     for (const value of await reopened.locator('dd, code, pre, kbd, samp, time').all()) {
       assert.deepEqual(await value.evaluate(typography), reference, await value.textContent());
     }

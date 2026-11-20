@@ -4,9 +4,9 @@ import { createTicketStore } from './tickets.mjs';
 import { mountTradingDashboard } from './dashboard.mjs';
 
 mountTradingDashboard(document);
-// Native toggle covers pointer, touch and keyboard, including the lazy-loaded schedule.
+// Native toggle covers pointer, touch and keyboard, including rehearsal tables added after startup.
 document.addEventListener('toggle', ({ target }) => {
-  if (!target.matches('details#audit, details#schedule, details#replay-log')) return;
+  if (!target.matches('details#audit, details[data-agentic-section]')) return;
   const summary = target.querySelector(':scope > summary');
   if (target.open) summary.dataset.agenticAnnotationTarget = 'true';
   else delete summary.dataset.agenticAnnotationTarget;
