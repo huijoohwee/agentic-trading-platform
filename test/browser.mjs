@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { verifyWorksheets } from './worksheets-browser.mjs';
+import { verifyTradingSkills } from './skills-browser.mjs';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -105,6 +106,8 @@ try {
     await expectText(page,'state','PASS');
     await page.waitForFunction(() => !document.querySelector('#fields').disabled);
     await checkDashboard(page, mobile ? 1 : 3);
+    await verifyTradingSkills(page, mobile);
+    console.log(name + ': online lazy Skills & Commands reference, controls, source digest and focus passed.');
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource')
       .some(e => e.name.endsWith('/src/rehearsal-view.mjs'))),false);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
@@ -165,6 +168,10 @@ try {
     assert.equal(await reopened.getByLabel('Evaluation time (UTC)').inputValue(),'09:05:01');
     await expectText(reopened,'state','FAIL');
     await checkDashboard(reopened, name === 'mobile' ? 1 : 3);
+    assert.equal(server.listening, false);
+    assert.equal(await reopened.evaluate(() => navigator.onLine), false);
+    await verifyTradingSkills(reopened, name === 'mobile');
+    console.log(name + ': first offline Skills & Commands load after server shutdown, controls and verified instructions passed.');
     await reopened.locator('#evidence summary').click();
     await reopened.waitForFunction(() => document.querySelector('#notional').textContent.includes('$100.00'));
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);

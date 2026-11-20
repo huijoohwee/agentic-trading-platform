@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -78,7 +79,8 @@ test('the sealed graph rejects legacy Sheets imports and modified UI projection 
     designSources.set(relative === 'profile.css' ? 'site/vendor/shared-ui-profile.css' : relative, bytes);
   }
   verifyOwner('agentic-design-system',designSources);
-  for (const path of ['site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/key-type-value.js', 'site/panel-section.js']) {
+  for (const path of ['site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/key-type-value.js', 'site/panel-section.js',
+    'site/floating-panel.js', 'site/floating-panel.css', 'site/skills-commands.js', 'site/skills-commands.css', 'site/collection-layout.js', 'site/toolbar.css']) {
     const changed = new Map(designSources);
     changed.set(path, Buffer.from('body {}'));
     assert.throws(() => verifyOwner('agentic-design-system',changed),/Owner bytes/);
@@ -101,6 +103,37 @@ test('the journal obtains its shell and cards from the executable Design System 
   const withoutRenderer = new Map(assets);
   withoutRenderer.delete('owners/design/site/dashboard.mjs');
   assert.throws(() => verifyImports(withoutRenderer), /Unowned module/);
+});
+
+test('Trading Skills project the pinned OS catalog through the shared FloatingPanel', async () => {
+  const { tradingSkill, tradingSkillEntries } = await load('src/skills-panel.mjs');
+  const catalog = JSON.parse(assets.get('owners/os/catalog/invocation.json'));
+  assert.deepEqual(tradingSkill, catalog.entries.find(entry => entry.token === '@skill:').descriptor);
+  assert.deepEqual(tradingSkillEntries.map(entry => entry.token).sort(), ['#read-only', '/skill.discover', '/skill.load', '@skill:trading']);
+  assert.equal(tradingSkill.digest, 'sha256:' + createHash('sha256').update(assets.get('owners/os/skills/trading/SKILL.md')).digest('hex'));
+  for (const entry of tradingSkillEntries.filter(entry => entry.token.startsWith('/'))) {
+    const source = catalog.entries.find(item => item.token === entry.token);
+    assert.equal(source.semantic, 'read-only');
+    assert.equal(entry.summary, source.summary);
+  }
+  const prefix = 'owners/os/';
+  const sources = new Map([...assets].filter(([path]) => path.startsWith(prefix)).map(([path, bytes]) => [path.slice(prefix.length), bytes]));
+  verifyOwner('agentic-os', sources);
+  for (const name of ['catalog/invocation.json', 'skills/trading/SKILL.md']) {
+    const changed = new Map(sources); changed.set(name, Buffer.from('changed'));
+    assert.throws(() => verifyOwner('agentic-os', changed), /Owner bytes/);
+  }
+  for (const name of ['toolbar', 'floating-panel', 'panel-section', 'skills-commands', 'collection-layout']) {
+    assert.ok(assets.get('index.html').toString().includes(`href="./owners/design/site/${name}.css"`));
+  }
+  const view = assets.get('src/skills-panel.mjs').toString();
+  assert.match(view, /import \{ mountFloatingPanel \} from '\.\.\/owners\/design\/site\/floating-panel\.js'/);
+  assert.match(view, /import \{ mountSkillsCommandsReference \} from '\.\.\/owners\/design\/site\/skills-commands\.js'/);
+  assert.doesNotMatch(view, /innerHTML|localStorage|sessionStorage|fetch\(|\.invoke\(|\.execute\(/);
+  for (const path of ['owners/design/site/skills-commands.js', 'owners/design/site/collection-layout.js', 'owners/os/catalog/invocation.json']) {
+    const missing = new Map(assets); missing.delete(path);
+    assert.throws(() => verifyImports(missing), /Unowned module/);
+  }
 });
 
 test('manual audit commits one complete run per identity and retains the accepted pointer on conflict', async () => {

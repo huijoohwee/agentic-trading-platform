@@ -20,7 +20,8 @@ const schemas = {
 };
 
 // Per-sheet uniqueness is scoped to one fixture run and account. All copies of a duplicate are invalid.
-export function readLanding(snapshot) {
+export function readLanding(snapshot, { quoteSource = 'MANUAL' } = {}) {
+  if (!['MANUAL', 'PROVIDER'].includes(quoteSource)) throw Error('Invalid quote source contract');
   if (!text(snapshot?.run_id) || !text(snapshot.account_alias)) throw Error('Missing run or account alias');
   const accepted = {}, invalid = [];
   for (const [sheet, { key, max, fields }] of Object.entries(schemas)) {
@@ -34,7 +35,7 @@ export function readLanding(snapshot) {
       if (!row || row.run_id !== snapshot.run_id || ('account_alias' in fields && row.account_alias !== snapshot.account_alias))
         reason = 'WRONG_SCOPE';
       else if (Object.keys(row).some(field => field !== 'run_id' && !Object.hasOwn(fields, field)) ||
-          Object.entries(fields).some(([field, valid]) => !valid(row[field]))) reason = 'INVALID_FIELD';
+          Object.entries(fields).some(([field, valid]) => field === 'source_id' ? row[field] !== quoteSource : !valid(row[field]))) reason = 'INVALID_FIELD';
       else if (counts.get(row[key]) !== 1) reason = 'DUPLICATE_KEY';
       else if ((row.as_of_utc ?? row.updated_utc ?? row.quote_ts_utc) > snapshot.evaluated_utc) reason = 'FUTURE_INPUT';
       else if (sheet === 'IN_Orders' && (row.created_utc > row.updated_utc ||

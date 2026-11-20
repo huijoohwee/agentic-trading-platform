@@ -12,7 +12,7 @@ const fields = [
   ['fixtureDigest', 'Fixture digest', 'text'], ['policyRevision', 'Policy revision', 'text'],
 ].map(([id, name, type]) => ({ id, name, type, required: true }));
 
-export function localFixtureTable(adapter, { baseId, tableId, title, fields, permitRecord }) {
+export function localFixtureTable(adapter, { baseId, tableId, title, fields, permitRecord, baseName = 'Synthetic trading workspace' }) {
   const engine = createBaseEngine({ adapter, authorize: request =>
     request.actorId === 'local-owner' && request.baseId === baseId &&
     [null, tableId].includes(request.tableId) && permitRecord(request.recordId, request.operation) });
@@ -32,7 +32,7 @@ export function localFixtureTable(adapter, { baseId, tableId, title, fields, per
     try { base = await run('base.get', { baseId }); }
     catch (error) {
       if (error.code !== 'NOT_FOUND') throw error;
-      await initialize(() => run('base.create', { id: baseId, name: 'Synthetic trading workspace' }));
+      await initialize(() => run('base.create', { id: baseId, name: baseName }));
       base = await run('base.get', { baseId });
     }
     let tables = await run('table.list', { baseId });

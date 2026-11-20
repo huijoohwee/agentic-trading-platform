@@ -1,0 +1,94 @@
+{
+  "schema": "trading-forward-configuration/v1",
+  "mode": "LOCAL_TEMPLATE",
+  "origin": "https://api.qoder.com",
+  "bindings": {
+    "identity_ref": null,
+    "template_ref": null,
+    "template_version": null
+  },
+  "snapshot": {
+    "effective_hash": null,
+    "agent_effective_hash": null,
+    "session_effective_hash": null,
+    "resource_digest": null,
+    "initial_events_version": null
+  },
+  "roles": [
+    {
+      "name": "coordinator",
+      "agent_ref": null,
+      "version": null,
+      "principal_ref": null,
+      "runtime_ref": null,
+      "tools": ["artifact.read", "config.read", "telemetry.read"],
+      "skills": [{"ref": null, "version": null, "digest": null}],
+      "children": [
+        {"role": "research", "agent_ref": null, "version": null},
+        {"role": "risk", "agent_ref": null, "version": null},
+        {"role": "executor", "agent_ref": null, "version": null},
+        {"role": "advisor", "agent_ref": null, "version": null}
+      ],
+      "mcp": [],
+      "resources": [{"ref": null, "digest": null, "access": "read-only"}],
+      "constraints": {"read_only": true, "can_dispatch": false, "can_submit_orders": false, "can_schedule": false}
+    },
+    {
+      "name": "research",
+      "agent_ref": null,
+      "version": null,
+      "principal_ref": null,
+      "runtime_ref": null,
+      "tools": ["market.read", "news.read", "artifact.read"],
+      "skills": [{"ref": null, "version": null, "digest": null}],
+      "children": [],
+      "mcp": [],
+      "resources": [{"ref": null, "digest": null, "access": "read-only"}],
+      "constraints": {"read_only": true, "can_dispatch": false, "can_submit_orders": false, "can_schedule": false}
+    },
+    {
+      "name": "risk",
+      "agent_ref": null,
+      "version": null,
+      "principal_ref": null,
+      "runtime_ref": null,
+      "tools": ["portfolio.read", "risk.read", "artifact.read", "config.read"],
+      "skills": [{"ref": null, "version": null, "digest": null}],
+      "children": [],
+      "mcp": [],
+      "resources": [{"ref": null, "digest": null, "access": "read-only"}],
+      "constraints": {"read_only": true, "can_dispatch": false, "can_submit_orders": false, "can_schedule": false}
+    },
+    {
+      "name": "executor",
+      "agent_ref": null,
+      "version": null,
+      "principal_ref": null,
+      "runtime_ref": null,
+      "tools": ["artifact.read", "decision.read"],
+      "skills": [{"ref": null, "version": null, "digest": null}],
+      "children": [],
+      "mcp": [],
+      "resources": [{"ref": null, "digest": null, "access": "read-only"}],
+      "constraints": {"read_only": true, "can_dispatch": false, "can_submit_orders": false, "can_schedule": false}
+    },
+    {
+      "name": "advisor",
+      "agent_ref": null,
+      "version": null,
+      "principal_ref": null,
+      "runtime_ref": null,
+      "tools": ["artifact.read", "telemetry.read"],
+      "skills": [{"ref": null, "version": null, "digest": null}],
+      "children": [],
+      "mcp": [],
+      "resources": [{"ref": null, "digest": null, "access": "read-only"}],
+      "constraints": {"read_only": true, "can_dispatch": false, "can_submit_orders": false, "can_schedule": false}
+    }
+  ],
+  "reviewer_isolation": {
+    "required": true,
+    "reviewer_role": "risk",
+    "evidence_ref": null
+  }
+}

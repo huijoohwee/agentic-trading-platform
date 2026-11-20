@@ -31,8 +31,9 @@ input, select { width: 100%; min-width: 0; }
 }
 #rehearsal-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; }
 #rehearsal-body :is(li, summary, code) { overflow-wrap: anywhere; }
-#rehearsal-body .agentic-dashboard-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
-#rehearsal-body .agentic-dashboard-actions label { display: grid; gap: .25rem; max-width: 100%; }
+#runtime-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; overflow-wrap: anywhere; }
+:is(#rehearsal-body, #runtime-body) .agentic-dashboard-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
+:is(#rehearsal-body, #runtime-body) .agentic-dashboard-actions label { display: grid; gap: .25rem; max-width: 100%; }
 #replay-worksheets { min-width: 0; container: worksheets / inline-size; }
 #replay-worksheets [role="tablist"] { border-block-end: var(--agentic-panel-border); padding-block: var(--agentic-control-padding-block); }
 #replay-worksheets [role="tabpanel"] { min-width: 0; }

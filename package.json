@@ -9,6 +9,10 @@
     "build": "node scripts/build.mjs",
     "check": "node --test test/*.test.mjs",
     "check:browser": "node test/browser.mjs",
+    "check:runtime-browser": "node test/runtime-browser.mjs",
+    "check:runtime": "node --test test/runtime-*.test.mjs test/paper-guard.test.mjs test/forward-runtime.test.mjs test/skill-package.test.mjs",
+    "runtime": "node scripts/runtime.mjs",
+    "package:skill": "python3 scripts/package-skill.py",
     "package:replay": "python3 scripts/package-replay.py",
     "audit:local": "node scripts/audit.mjs",
     "rehearsal": "node scripts/rehearse.mjs"
