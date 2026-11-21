@@ -23,7 +23,7 @@ const only = (value, keys) => value && typeof value === 'object' && !Array.isArr
 // One admission boundary shared by every frontend. Readers map semantic reads to reviewed provider
 // adapters; the single injected guard owns approved writes. The gateway never proxies raw tools or
 // endpoints, never forwards incoming credentials downstream and never falls back across accounts.
-export function createGateway({ store, scope, candidate, capabilities, readers = {}, guard = null, keys = null, audienceToken, now = Date.now }) {
+export function createGateway({ store, scope, candidate, capabilities, readers = {}, guard = null, keys = null, audienceToken, now = Date.now, practice = null }) {
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
   requireThat(hash(candidate) && typeof now === 'function', 'CANDIDATE_BINDING');
@@ -39,6 +39,9 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
       body.qualification && id(body.qualification.status) && hash(body.qualification.receipt_digest), 'INVALID_CAPABILITY');
     return Object.freeze({ ...body, capability_digest: sha(body) });
   });
+  if (practice) requireThat(/^desk\/[0-9a-f]{64}$/.test(scope.account_alias) && scope.profile==='practice' && records.length===1 &&
+    records[0].capability_digest===practice.capability_digest && records[0].source==='MOCK' && records[0].provider==='local-practice' &&
+    !records[0].operations.some(op=>WRITE_OPERATIONS.has(op)) && !keys && !guard && typeof practice.invoke==='function','ACCOUNT_BINDING');
   const byDigest = new Map(records.map(record => [record.capability_digest, record]));
   const authenticate = authorization => timingSafeEqual(expectedAudience, digest(typeof authorization === 'string' ? authorization : ''));
   const provenance = (record, operation) => ({ capability_digest: record.capability_digest, provider: record.provider,
@@ -59,7 +62,7 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
     requireThat(record.operations.includes(body.operation), 'UNSUPPORTED');
     requireThat(record.qualification.status === 'QUALIFIED', 'UNQUALIFIED');
     requireThat(utcMillis(record.qualification.expires_utc) !== null && now() < utcMillis(record.qualification.expires_utc), 'STALE');
-    requireThat(WRITE_OPERATIONS.has(body.operation) ? guard : typeof readers[body.operation] === 'function', 'UNSUPPORTED');
+    requireThat(practice || (WRITE_OPERATIONS.has(body.operation) ? guard : typeof readers[body.operation] === 'function'), 'UNSUPPORTED');
     return record;
   }
 
@@ -79,6 +82,16 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
     let body;
     try { body = boundedJson(request); } catch { return refused(null, 'UNQUALIFIED'); }
     if (!wellFormed(body)) return refused(id(body?.request_id) ? body.request_id : null, 'UNQUALIFIED');
+    if (practice) {
+      try {
+        const record=resolveCapability(body);
+        const {data,revision}=await practice.invoke(body);
+        return {request_id:body.request_id,status:'OK',data,ledger_revision:revision,provenance:provenance(record,body.operation)};
+      } catch(error) {
+        const code=error.code??error.message;
+        return refused(body.request_id,/^[A-Z][A-Z0-9_]{1,50}$/.test(code)?code:'UNQUALIFIED');
+      }
+    }
     const binding = sha(body), checkpointKey = key(body), request_id = body.request_id;
     try {
       const reserved = store.transaction(scope, state => {

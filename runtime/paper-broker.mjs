@@ -1,4 +1,5 @@
 import { createPrivateKey, sign } from 'node:crypto';
+import { settleFill } from '../src/practice-account.mjs';
 import { appendEvent } from './store.mjs';
 import { boundedJson, canonical, hash, id, requireThat, sameScope, scopeKey, sha, utcMillis } from './core.mjs';
 
@@ -77,15 +78,7 @@ export function createPaperBroker({ store, scope, candidate, keys, attestation, 
         const fill = { id: 'paper-fill-' + sha(order_id), qty: ticket.qty, price: ticket.limit_price, ccy: 'USD', at };
         const order = { source, provider, observed_utc: at, intent_id, order_id, symbol_key: ticket.symbol_key, side: ticket.side,
           qty: ticket.qty, limit_price: ticket.limit_price, status: 'FILLED', filled_qty: ticket.qty, fills: [fill] };
-        const position = sim.positions[ticket.symbol_key] ?? { qty: 0, avg_cost: 0 };
-        if (ticket.side === 'BUY') {
-          sim.cash -= cost + fee; sim.realized -= fee;
-          sim.positions[ticket.symbol_key] = { qty: position.qty + ticket.qty,
-            avg_cost: (position.qty * position.avg_cost + cost) / (position.qty + ticket.qty) };
-        } else {
-          sim.cash += cost - fee; sim.realized += ticket.qty * (ticket.limit_price - position.avg_cost) - fee;
-          sim.positions[ticket.symbol_key] = { qty: position.qty - ticket.qty, avg_cost: position.avg_cost };
-        }
+        settleFill(sim, ticket.symbol_key, ticket.side, ticket.qty, ticket.limit_price, fee);
         sim.orders[order_id] = order;
         sim.account_state = null;
         state.configs.paperSim = sim;

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { verifyDesk } from './desk-browser.mjs';
 import { verifyWorksheets } from './worksheets-browser.mjs';
 import { verifyTradingSkills } from './skills-browser.mjs';
 import { once } from 'node:events';
@@ -407,4 +408,5 @@ try {
     await context.close();
   }
   assert.deepEqual(errors,[]);
+  await verifyDesk(browser);
 } finally { if (server.listening) server.close(); await browser.close(); }

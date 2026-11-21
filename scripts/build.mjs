@@ -19,8 +19,8 @@ const pins = [
     paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/dashboard-range.mjs', 'site/dashboard-range.css', 'site/THIRD-PARTY-NOTICES.txt',
       'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js', 'site/floating-panel.js', 'site/floating-panel.css', 'site/hover.css',
       'site/skills-commands.js', 'site/skills-commands.css', 'site/collection-layout.js', 'site/toolbar.css'] },
-  { repo: 'agentic-os', prefix: 'os', revision: '11c8fde490e1af2622d465ff2b98e7e1930095c3',
-    digest: '18632317fcede344ee147a2dd1e02412359e9832dd91c9bd8714b229d292e7fd',
+  { repo: 'agentic-os', prefix: 'os', revision: 'a5d8f7afca3d1a3109d5d7f3ec9869685d1c235d',
+    digest: '66010573b89efc77b336fef08ed861399dffc8a9a1567e60566038969842c6ea',
     paths: ['LICENSE', 'catalog/invocation.json', 'skills/trading/SKILL.md'] },
 ];
 
@@ -64,17 +64,20 @@ export async function assemble({ devDocumentPolicy } = {}) {
       assets.set('owners/' + pin.prefix + '/' + output, body);
     }
   }
-  const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
+  const files = ['web/desk.html', 'web/desk.css', ...['market','market-reads','indicators','chart','experiment','strategy-language','strategy-example','experiment-worker',
+    'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
     'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/skills-panel.mjs'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   if (devDocumentPolicy !== undefined) {
-    const template = assets.get('index.html').toString();
-    const policyTag = /(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/g;
-    if ([...template.matchAll(policyTag)].length !== 1) throw new Error('Expected one document policy');
-    // frame-ancestors is HTTP-only. Seal the effective Dev meta policy into the offline build ID.
-    const metaPolicy = devDocumentPolicy.split('; ').filter(rule => !rule.startsWith('frame-ancestors ')).join('; ');
-    assets.set('index.html', Buffer.from(template.replace(policyTag, (_, open, close) => open + metaPolicy + close)));
+    for (const document of ['index.html','desk.html']) {
+      const template = assets.get(document).toString();
+      const policyTag = /(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/g;
+      if ([...template.matchAll(policyTag)].length !== 1) throw new Error('Expected one document policy');
+      // frame-ancestors is HTTP-only. Seal the effective Dev meta policy into the offline build ID.
+      const metaPolicy = devDocumentPolicy.split('; ').filter(rule => !rule.startsWith('frame-ancestors ')).join('; ');
+      assets.set(document, Buffer.from(template.replace(policyTag, (_, open, close) => open + metaPolicy + close)));
+    }
   }
   verifyImports(assets);
   const template = await readFile(join(root, 'web/sw.js'), 'utf8');

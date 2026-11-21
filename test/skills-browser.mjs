@@ -5,7 +5,7 @@ const summaries = [
   'No authored or shared-state mutation is requested.',
   'Read pinned portable skill metadata offline.',
   'Read the verified portable skill instructions offline.',
-  'Discover read-only trading capabilities and rehearse a paper workflow against documented market data or a local fixture.',
+  'Set up provider-neutral API/MCP trading workflows for research, paper-account review, packaging, schedules, dashboards and independent risk review. Use for read-only gateway checks or guarded paper rehearsal, never live orders.',
 ];
 
 export async function verifyTradingSkills(page, mobile) {
@@ -101,8 +101,8 @@ export async function verifyTradingSkills(page, mobile) {
     assert.equal(proof.descriptor.source, 'agentic-os/skills/trading/SKILL.md');
     assert.equal(proof.digest, proof.descriptor.digest, 'Linked instruction bytes match the sealed catalog digest');
     assert.match(proof.text, /^---\nname: trading\n/);
-    assert.match(proof.text, /This skill grants no order authority\./);
-    assert.match(proof.text, /Live order placement is outside this skill\./);
+    assert.match(proof.text, /no\s+dispatch authority/i);
+    assert.match(proof.text, /No live orders\./);
     await panel.getByText(`Read verified trading skill instructions · ${proof.descriptor.source} · ${proof.digest}`, { exact: true }).waitFor();
     assert.equal(await panel.getByRole('link').count(), 1);
 

@@ -1,3 +1,4 @@
+import { practiceReplay } from './practice-replay.mjs';
 import { createPublicKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { auditSnapshot } from '../src/local-audit.mjs';
@@ -29,7 +30,12 @@ const exact = (n, step) => {
   return (a * 10n ** BigInt(x - e)) % (b * 10n ** BigInt(y - e)) === 0n;
 };
 
-export function createPaperGuard({ store, scope, candidate, keys, broker, now = Date.now }) {
+export function createPaperGuard({ store, scope, candidate, keys, broker, now = Date.now, mode }) {
+  if (mode === 'synthetic-replay') {
+    need(!broker && !keys && !candidate, 'REPLAY_ISOLATION');
+    return practiceReplay({ store, scope, now });
+  }
+  need(mode === undefined && !scope?.account_alias?.startsWith('desk/'), 'ACCOUNT_BINDING');
   scope = boundedJson(scope); scopeKey(scope);
   need(hash(candidate) && typeof now === 'function', 'CANDIDATE_BINDING');
   need(store?.read && store?.transaction && ['readAccount', 'readOrder', 'submit'].every(k => typeof broker?.[k] === 'function'), 'HOST_TRANSPORT_REQUIRED');

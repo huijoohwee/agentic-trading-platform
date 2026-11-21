@@ -1,3 +1,4 @@
+import { marketOperations, marketRead } from '../src/market-reads.mjs';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -61,7 +62,10 @@ export async function runtimeCommand(args) {
         'GATEWAY_CONFIGURATION_REQUIRED');
       const port = Number(rest[0] ?? 4182);
       requireThat(port > 0 && port <= 65535, 'INVALID_PORT');
-      const readers = {};
+      const readers = Object.fromEntries(marketOperations.map(operation=>[operation,({capability,inputs})=>{
+        requireThat(capability.source==='MOCK','UNSUPPORTED');
+        return marketRead(operation,inputs,Date.now());
+      }]));
       if (config.gateway.capabilities.some(cap => cap.source === 'MOCK' && cap.operations?.includes('read.fixture'))) {
         readers['read.fixture'] = async () => ({ source: 'MOCK', fixture: true,
           rows: [{ symbol_key: 'US.AAPL', last: '100.25', prev_close: '99.50', ccy: 'USD', delay_class: 'realtime' }],

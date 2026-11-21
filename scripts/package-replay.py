@@ -22,8 +22,15 @@ for name, digest in manifest['files'].items():
     files[name] = body
 files['asset-manifest.json'] = (build / 'asset-manifest.json').read_bytes()
 for name in ['scripts/local-file.mjs', 'scripts/rehearse.mjs', 'scripts/audit.mjs', 'test/rehearsal.test.mjs', 'test/forward-schedule.test.mjs',
-             'test/local-audit.test.mjs', 'test/cash-oracle.py', 'src/forward-bindings.mjs', 'src/binding-fixture.json']:
+             'test/local-audit.test.mjs', 'test/cash-oracle.py', 'src/forward-bindings.mjs', 'src/binding-fixture.json',
+             'scripts/local-server.mjs', 'scripts/serve-package.mjs', 'runtime/practice-http.mjs',
+             'runtime/practice-domain.mjs', 'runtime/practice-replay.mjs', 'runtime/strategy-worker.mjs',
+             'runtime/gateway.mjs', 'runtime/gateway-mcp.mjs', 'runtime/paper-guard.mjs', 'runtime/store.mjs', 'runtime/core.mjs']:
     files[name] = (root / name).read_bytes()
+files['server-policy.json'] = subprocess.check_output([
+    'node', '--input-type=module', '-e',
+    "import {loadCommercePolicies} from './scripts/serve.mjs'; console.log(JSON.stringify((await loadCommercePolicies()).LOCAL_FIRST_CSP))",
+], cwd=root)
 files['README.md'] = b'''# Offline trading replay
 
 Use Node 22.22+ and Python 3. The samples use synthetic paper observations.
@@ -41,7 +48,11 @@ Run A records 23 practice events. Run B records 26 competition-fixture events an
 For the dashboard, run the following local server and open http://127.0.0.1:4181.
 After Offline ready, disconnect and open the two rehearsal disclosures.
 
-    python3 -m http.server 4181 --bind 127.0.0.1
+    node scripts/serve-package.mjs
+
+Open /desk.html for the paper trading desk. The loopback process saves anonymous
+practice sessions in .runtime-private/desk. Its price path, market events, strategy
+worker and journal run locally. Keep the folder private when backing up a session.
 
 The sealed site includes its source-owner manifest and notices. SHA256SUMS covers
 every file except the checksum list itself. Verify with shasum -a 256 -c SHA256SUMS.
