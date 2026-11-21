@@ -6,6 +6,7 @@ const covariance = (a, b) => {
     y = avg(b);
   return avg(a.map((n, i) => (n - x) * (b[i] - y)));
 };
+const annualFunding = (row) => row.rate * (365 * 24 / row.settlementHours);
 const returns = (prices) => prices.slice(1).map((v, i) => Math.log(v / prices[i]));
 function hedge(x, y) {
   const beta = covariance(x, y) / covariance(x, x),
@@ -23,6 +24,7 @@ export function portfolioSignals(id, markets, bars, frameMs, aux) {
   for (const n of names) byName[n] = new Map(markets[n].map((b) => [b.time, b]));
   const state = Object.fromEntries(names.map((n) => [n, []])),
     plans = [];
+  let fundingStart = 0, fundingEnd = 0;
   let held = {},
     entered = 0;
   for (let i = 0; i < bars.length; i++) {
@@ -38,19 +40,21 @@ export function portfolioSignals(id, markets, bars, frameMs, aux) {
       continue;
     }
     if (id === 12) {
-      const spot = state.spot.at(-1),
-        rate = asOf(aux.funding, t, 8 * 3600000),
-        liquid = asOf(aux.liquidity, t, frameMs),
-        rates = (aux.funding ?? []).filter((r) => r.time <= t && r.time > t - 7 * DAY).map((r) => r.rate);
-      if (
-        rate &&
-        liquid?.liquid === true &&
-        b.close > spot &&
-        rate.rate * 1095 > 0.2 &&
-        (!held.spot || day !== Math.floor((prior.time + frameMs) / DAY))
-      )
+      const spot = state.spot.at(-1), liquid = asOf(aux.liquidity, t, frameMs);
+      const funding = aux.funding ?? [];
+      while (fundingEnd < funding.length && funding[fundingEnd].time <= t) fundingEnd++;
+      while (fundingStart < fundingEnd && funding[fundingStart].time <= t - 7 * DAY) fundingStart++;
+      const rate = funding[fundingEnd - 1];
+      if (rate && t - rate.time <= rate.settlementHours * 3600000 && liquid?.liquid === true &&
+          b.close > spot && annualFunding(rate) > 0.2 &&
+          (!held.spot || day !== Math.floor((prior.time + frameMs) / DAY)))
         weights = { spot: 1, [base]: -1 };
-      if (held.spot && (b.close < spot || (rates.length >= 20 && quantile(rates, 0.5) * 1095 < 0.05))) weights = {};
+      if (held.spot) {
+        const week = funding.slice(fundingStart, fundingEnd);
+        const hours = week.reduce((n, event) => n + event.settlementHours, 0);
+        if (b.close < spot || (hours >= 7 * 24 && quantile(week.map(annualFunding), 0.5) < 0.05))
+          weights = {};
+      }
     }
     if (id === 13 && i >= 360) {
       const btc = state.BTC.slice(-361, -1).map(Math.log),

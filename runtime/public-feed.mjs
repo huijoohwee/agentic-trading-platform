@@ -60,6 +60,7 @@ export function publicFeed(directory, clock = Date.now) {
           a.symbol.split('.')[1] === a.currency &&
           ['spot', 'perpetual'].includes(a.marketType) &&
           (a.marketType !== 'perpetual' || ['USD', 'USDC', 'USDT'].includes(a.settlement)) &&
+          (a.coverage === undefined || a.coverage === 'depth') &&
           a.hardCapUsd === 0 &&
           a.allowPublicDisplay === true &&
           typeof a.creator === 'string' &&
@@ -84,9 +85,10 @@ export function publicFeed(directory, clock = Date.now) {
     const d = JSON.parse(bytes);
     need(
       d.schema === 'public-market-snapshot/v1' &&
+        d.coverage === a.coverage &&
         binding(a, d) &&
         Number.isSafeInteger(d.at) &&
-        d.at <= clock() &&
+        d.at >= 0 && d.at <= clock() &&
         Number.isSafeInteger(d.sequence) &&
         d.sequence >= 0 &&
         d.timeUnits === 'UTC_ms' &&
@@ -97,7 +99,10 @@ export function publicFeed(directory, clock = Date.now) {
       if (Object.hasOwn(d, field))
         need(Number.isSafeInteger(d[field]) && d[field] >= 0 && d[field] <= d.at, 'FEED_OBSERVATION_TIME');
     }
-    need(
+    if (a.coverage === 'depth') {
+      need(d.bookAt === d.at && d.rightsDigest === a.rightsDigest && /^[a-f0-9]{64}$/.test(d.upstreamSha256), 'FEED_PROVENANCE');
+      need(['ticker', 'tickerAt', 'candles', 'tape', 'funding'].every((k) => !Object.hasOwn(d, k)), 'FEED_COVERAGE');
+    } else need(
       d.ticker &&
         [d.ticker.last, d.ticker.high, d.ticker.low].every(price) &&
         d.ticker.high >= d.ticker.low &&
@@ -118,9 +123,9 @@ export function publicFeed(directory, clock = Date.now) {
           ),
         'FEED_DEPTH'
       );
-    need(
-      d.asks[0].price > d.bids[0].price &&
-        Array.isArray(d.tape) &&
+    need(d.asks[0].price > d.bids[0].price, 'FEED_DEPTH');
+    if (a.coverage !== 'depth') need(
+      Array.isArray(d.tape) &&
         d.tape.length <= 500 &&
         d.tape.every(
           (t) =>
@@ -158,6 +163,7 @@ export function publicFeed(directory, clock = Date.now) {
       source: {
         id: a.source,
         creator: a.creator,
+        ...(a.coverage === 'depth' ? { upstreamSha256: d.upstreamSha256, timestampSource: 'publisher' } : {}),
         license: a.license,
         rightsDigest: a.rightsDigest,
         sha256: index.sha256,
@@ -182,6 +188,12 @@ export function publicFeed(directory, clock = Date.now) {
     if (clock() - at > 15000 && header.quality !== 'stale') {
       header.quality = 'stale';
       header.warnings.push('Stale public observation');
+    }
+    if (a.coverage === 'depth' && operation !== 'read.depth') {
+      need(operation !== 'read.ticker', 'FEED_TICKER_UNAVAILABLE');
+      const missing = { ...header, quality: 'missing', warnings: ['Source supplies order book only'] };
+      if (operation === 'read.tape') return { ...missing, rows: [], volumes: null, total: null };
+      return { ...missing, bars: [], forming: null, nextBefore: null, frame: input.frame ?? '1m' };
     }
     if (operation === 'read.ticker')
       return { ...header, rows: { ...d.ticker, at, symbol: a.symbol }, funding: d.funding ?? null };
@@ -251,11 +263,13 @@ export function publicFeed(directory, clock = Date.now) {
     need(Buffer.isBuffer(bytes) && bytes.length < 500000, 'FEED_BUDGET');
     const binding = JSON.parse(bytes),
       { d, a, source } = snapshot(binding, bytes);
-    need(
-      d.candles && typeof d.candles === 'object' && !Array.isArray(d.candles) && Object.keys(d.candles).length > 0,
-      'FEED_CANDLES'
-    );
-    for (const [frame, series] of Object.entries(d.candles)) verifySeries(frame, series, d.at);
+    if (a.coverage !== 'depth') {
+      need(
+        d.candles && typeof d.candles === 'object' && !Array.isArray(d.candles) && Object.keys(d.candles).length > 0,
+        'FEED_CANDLES'
+      );
+      for (const [frame, series] of Object.entries(d.candles)) verifySeries(frame, series, d.at);
+    }
     const path = join(dir, source.sha256 + '.json'),
       tmp = path + '.' + randomUUID();
     writeFileSync(tmp, bytes, { mode: 0o600, flag: 'wx' });
@@ -285,7 +299,7 @@ export function publicFeed(directory, clock = Date.now) {
     },
     close: () => db?.close(),
     catalog: () =>
-      sources().map(({ venue, symbol, currency, marketType, source, license, creator }) => ({
+      sources().map(({ venue, symbol, currency, marketType, source, license, creator, coverage }) => ({
         venue,
         symbol,
         base: symbol.split('.')[0],
@@ -294,6 +308,7 @@ export function publicFeed(directory, clock = Date.now) {
         source,
         license,
         creator,
+        ...(coverage ? { coverage } : {}),
         live: true
       })),
     query

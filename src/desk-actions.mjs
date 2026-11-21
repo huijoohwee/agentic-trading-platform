@@ -144,8 +144,8 @@ export const deskActions = [
   ),
   action(
     'research.suite',
-    'Queue all 20 hypotheses with an optional explicit spot basket for rows 8 and 19',
-    { ...parameters, basket },
+    'Queue all 20 hypotheses with an optional spot venue and basket for rows 8 and 19',
+    { ...parameters, basket, spotVenue: venue },
     [],
     false
   ),

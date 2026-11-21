@@ -39,6 +39,9 @@ async function openDesk() {
     hasForming = true,
     overlayBefore;
   const external = () => Boolean(saved.venue && saved.venue !== 'synthetic');
+  const selectedFeed = () => publicMarkets.find(
+    (m) => m.live && m.venue === saved.venue && m.symbol === saved.symbol && m.marketType === saved.marketType
+  );
   const marketKey = () => [saved.venue ?? 'synthetic', saved.marketType ?? 'spot', symbol, frame].join('/');
   const effective = () => (symbol === saved.symbol ? saved : { ...saved, symbol });
   function series(at) {
@@ -108,7 +111,8 @@ async function openDesk() {
     act,
     readFlow: async (input) => {
       const [b, t] = await Promise.all([lab.human('read.depth', input), lab.human('read.tape', input)]);
-      return { ...b.rows, tape: t.rows, volumes: t.volumes };
+      return { ...b.rows, quality: b.quality, source: b.source, at: b.at,
+        tape: t.quality === 'missing' ? null : t.rows, volumes: t.volumes };
     },
     onError: error,
     getBars: () => (external() && !hasForming ? [...bars] : bars.slice(0, -1)),
@@ -275,9 +279,7 @@ async function openDesk() {
       el('venue').value = saved.venue ?? 'synthetic';
       el('place').disabled =
         external() &&
-        !publicMarkets.some(
-          (m) => m.venue === saved.venue && m.symbol === saved.symbol && m.live && m.currency === 'USD'
-        );
+        (selectedFeed()?.currency !== 'USD' || selectedFeed()?.coverage === 'depth');
       el('prediction').querySelector('button').disabled = el('place').disabled;
       el('market-type').value = saved.marketType ?? 'spot';
       el('contract-options').hidden = saved.marketType !== 'perpetual';
@@ -401,7 +403,14 @@ async function openDesk() {
           (last ? new Date(data.asOf ?? last.lastObservation ?? last.time).toISOString() : 'no observations');
         series(last?.time ?? Date.now());
         panels.refresh(effective(), Date.now(), last?.close ?? 0);
-        if (publicMarkets.some((m) => m.venue === saved.venue && m.live)) {
+        const feed = selectedFeed();
+        if (feed?.coverage === 'depth' && data.quality === 'missing') {
+          el('ticker').textContent = 'Order book only · ticker, candles and trade tape unavailable';
+          const credit = document.createElement('a');
+          credit.textContent = feed.creator;
+          if (/^https:\/\//.test(feed.source)) credit.href = feed.source;
+          el('stream').replaceChildren(Date.now() - data.at > 15000 ? 'Stale order book · ' : 'Order book · ', credit, ' · ' + feed.license + ' · ' + new Date(data.at).toISOString());
+        } else if (feed && feed.coverage !== 'depth') {
           const tick = await lab.human('read.ticker', {
             symbol,
             venue: saved.venue,
@@ -429,7 +438,7 @@ async function openDesk() {
       } catch (e) {
         error(e.message);
       }
-      if (!closed && seq === sequence && publicMarkets.some((m) => m.venue === saved.venue && m.live))
+      if (!closed && seq === sequence && selectedFeed())
         marketTimer = setTimeout(poll, 2500);
       return;
     }
@@ -509,6 +518,18 @@ async function openDesk() {
     publicMarkets = catalog.rows.filter((m) => m.venue !== 'synthetic');
     for (const venue of new Set(publicMarkets.map((m) => m.venue)))
       el('venue').add(new Option(venue + ' · market data', venue));
+    const archives = publicMarkets.filter((m) => !m.live);
+    for (const venue of new Set(archives.map((m) => m.venue)))
+      el('research-venues').append(new Option(venue, venue));
+    const research = el('historical').elements;
+    if (research.venue.value === research.venue.defaultValue &&
+        archives.some((m) => m.venue === 'hyperliquid' && m.symbol === 'BTC.USDT' && m.marketType === 'perpetual')) {
+      research.venue.value = 'hyperliquid';
+      const hasSpot = (venue, symbol) => archives.some((m) => m.venue === venue && m.symbol === symbol && m.marketType === 'spot');
+      if (!research.spotVenue.value && !hasSpot('hyperliquid', 'BTC.USDT') &&
+          ['BTC.USDT', 'ETH.USDT', 'SOL.USDT'].every((s) => hasSpot('bitmex', s)))
+        research.spotVenue.value = 'bitmex';
+    }
     el('venue').value = saved.venue ?? 'synthetic';
     options();
     recent();

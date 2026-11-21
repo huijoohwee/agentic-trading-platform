@@ -21,7 +21,7 @@
     <div><span class="agentic-text-detail">Recent markets</span><div id="watch" class="actions"></div></div>
   </section>
   <nav class="actions sections" aria-label="Desk sections">
-    <a href="#market">Market</a><a href="#portfolio">Portfolio</a><a href="#research">Strategy</a><a href="#predictions">Predictions</a>
+    <a href="#market">Market</a><a href="#portfolio">Portfolio</a><a href="#research">Strategy</a><a href="#historical-research">Historical research</a><a href="#predictions">Predictions</a>
   </nav>
   <div class="workspace">
     <section id="market" class="agentic-collection-item">
@@ -58,15 +58,17 @@
     <details><summary>Language and report assumptions</summary><p>Define strategy(candles). The sealed offline scientific subset supports named functions, module-level imports from math, statistics and numpy, including mean, std, diff and vector arithmetic. Use lists, dictionaries, comprehensions, for loops, conditions, print, sma, ema, crossed_above and crossed_below. Return a list of signals with a candle time in Unix seconds and a side of buy, sell, short or cover. Price and label are optional. The isolated worker limits each run to five seconds. The estimate pairs closing signals at candle closes, one unit per trade, before fees. Return compounds closed trades. Drawdown uses their closing equity.</p></details>
     <div class="actions"><label>Strategy name<input id="strategy-name" maxlength="64"></label><button class="agentic-form-control" id="save-source">Save version</button><label>Saved source<select id="saved-source"></select></label></div>
     <output id="report" role="status"></output><pre id="logs"></pre></section>
-  <section class="agentic-collection-item"><h2>Historical research</h2>
+  <section id="historical-research" class="agentic-collection-item"><h2>Historical research</h2>
     <form id="historical"><div class="pair"><label>Hypothesis<select id="hypothesis"></select></label><label>Research capital (quote units)<input name="capital" type="number" value="100000" min="1" max="1000000000" required></label>
     <label>Start UTC<input name="start" type="date" required></label><label>End UTC (inclusive)<input name="end" type="date" required></label>
-    <label>Venue<input name="venue" maxlength="45" value="uniswap-v3-500" required></label><label>Instrument or spot basket leader<input name="symbol" placeholder="Catalog default"></label>
+    <label>Venue<input name="venue" list="research-venues" maxlength="45" value="uniswap-v3-500" required></label><label>Instrument or spot basket leader<input name="symbol" placeholder="Catalog default"></label>
+    <label>Spot venue for hypotheses 8 and 19<input name="spotVenue" maxlength="45" placeholder="Same as venue" list="research-venues"></label>
     <label>Spot rotation peers (optional)<input name="basket" placeholder="Two symbols with the same quote"></label><label>Single-run interval<select name="frame"><option value="">Catalog default</option></select></label></div>
-    <div class="actions"><button class="agentic-form-control" value="single">Queue hypothesis</button><button class="agentic-form-control" value="suite">Queue all 20</button></div></form>
-    <div class="actions"><button id="cancel-run" class="agentic-form-control" disabled>Cancel run</button><button id="overlay-run" class="agentic-form-control">Overlay selected hypothesis</button></div>
+    <div class="actions"><button class="agentic-form-control" value="single">Queue hypothesis</button><button class="agentic-form-control" value="suite">Queue all 20</button></div><datalist id="research-venues"></datalist></form>
+    <label>Run history<select id="run-history" disabled><option value="">No runs in this session</option></select></label>
+    <div class="actions"><button disabled id="cancel-run" class="agentic-form-control" disabled>Cancel run</button><button disabled id="overlay-run" class="agentic-form-control">Overlay selected hypothesis</button></div>
     <output id="lab-status" role="status"></output><pre id="run-trace"></pre><div id="run-results"></div><details><summary>Metrics and calendar windows</summary><pre id="run-detail"></pre></details>
-    <div class="actions"><button id="research-sheets" class="agentic-form-control">Export results to Sheets</button><button id="export-run" class="agentic-form-control">Export run summary</button><a id="export-artifact" hidden download>Download verified research artifact</a></div></section>
+    <div class="actions"><button disabled id="research-sheets" class="agentic-form-control">Export results to Sheets</button><button disabled id="export-run" class="agentic-form-control">Export run summary</button><a id="export-artifact" hidden download>Download verified research artifact</a></div></section>
   <section class="agentic-collection-item"><h2>Shared observation</h2><button id="observer-open" class="agentic-form-control">Get 24-hour observer link</button> <a id="observer-link" rel="noreferrer" hidden></a>
     <details id="console"><summary>Activity console</summary><ol id="activity-log"></ol></details></section>
   <section id="predictions" class="agentic-collection-item"><h2>Prediction journal</h2>

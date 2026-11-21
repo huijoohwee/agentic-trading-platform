@@ -1,9 +1,9 @@
-"""Collect one admitted public market using the optional read-only CCXT interface."""
+"""Publish one observation from a reviewed read-only market data source."""
 import argparse
 import json
 import subprocess
 from pathlib import Path
-from time import time
+from time import sleep, time
 from urllib.parse import urlsplit
 
 PUBLISH = Path(__file__).with_name('publish-market-snapshot.mjs')
@@ -62,11 +62,36 @@ def collect(exchange, market, policy, clock):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('directory', type=Path)
-    ap.add_argument('venue')
-    ap.add_argument('symbol')
-    ap.add_argument('market_type', choices=['spot','perpetual'])
+    ap.add_argument('--admit-costdepth', action='store_true', help='Install the reviewed Bybit ETH/USDT depth bindings')
+    ap.add_argument('--samples', type=int, choices=range(1, 7), default=1,
+                    help='Collect up to six depth samples, five minutes apart')
+    ap.add_argument('--capture', type=Path, help='Save the original depth response in a new file')
+    ap.add_argument('venue', nargs='?')
+    ap.add_argument('symbol', nargs='?')
+    ap.add_argument('market_type', nargs='?', choices=['spot','perpetual'])
     args = ap.parse_args()
+    if args.admit_costdepth:
+        if any((args.venue, args.symbol, args.market_type, args.capture)) or args.samples != 1:
+            ap.error('--admit-costdepth takes only a desk directory')
+        from costdepth_feed import admit
+        print(json.dumps({'rightsDigest': admit(args.directory), 'hardCapUsd': 0}))
+        return
+    if not all((args.venue, args.symbol, args.market_type)):
+        ap.error('expected venue, symbol and market type')
+    if args.capture and args.samples != 1:
+        ap.error('--capture accepts one sample per file')
     market = admission(args.directory,args.venue,args.symbol,args.market_type)
+    if market.get('coverage') == 'depth':
+        from costdepth_feed import collect as collect_depth
+        for index in range(args.samples):
+            if index:
+                sleep(300)
+                market = admission(args.directory, args.venue, args.symbol, args.market_type)
+            snap = collect_depth(market, args.capture)
+            publish(args.directory, snap, 1)
+        return
+    if args.capture or args.samples != 1:
+        ap.error('--capture and repeated sampling require a depth-only source')
     policy = market.get('collector', {})
     if (not policy.get('hosts') or policy.get('tradeSide') not in ('maker','taker')
         or policy.get('amountUnit') not in ('contracts','base') or policy.get('candleVolumeUnit')!='base'
@@ -89,9 +114,13 @@ def main():
         return original(url,method,headers,body)
     exchange.fetch=bounded
     snap=collect(exchange,market,policy,lambda:int(time()*1000))
-    receipt = subprocess.check_output(['node',str(PUBLISH),str(args.directory),'-'],
+    publish(args.directory, snap, count)
+
+
+def publish(directory, snap, count):
+    receipt = subprocess.check_output(['node',str(PUBLISH),str(directory),'-'],
                                       input=json.dumps(snap, allow_nan=False),text=True)
-    print(json.dumps({'calls':count,'hardCapUsd':0,'at':snap['at'],'receipt':json.loads(receipt)}))
+    print(json.dumps({'calls':count,'hardCapUsd':0,'at':snap['at'],'receipt':json.loads(receipt)}), flush=True)
 
 
 if __name__=='__main__':

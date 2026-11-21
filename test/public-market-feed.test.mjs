@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -164,6 +164,23 @@ test('UTC feed aggregation, signed contract marks, trigger re-admission, funding
   publish(snap(501, [{ time: time - 20000, price: 500, rate: 0.001 }]));
   assert.equal(order('SELL', 500, { reduceOnly: true }).notice, 'FILLED');
   assert.equal(guard.read().session.fundingTotal, -250);
+  const admissionFile = join(dir, 'admission.json');
+  const admission = JSON.parse(readFileSync(admissionFile));
+  admission.markets.find((m) => m.marketType === 'perpetual').coverage = 'depth';
+  writeFileSync(admissionFile, JSON.stringify(admission));
+  const observation = snap(300);
+  const depthOnly = { ...observation, coverage: 'depth', bookAt: time, rightsDigest, upstreamSha256: sha('raw depth') };
+  for (const key of ['ticker', 'candles', 'tape', 'funding']) delete depthOnly[key];
+  const head = publish(depthOnly);
+  assert.throws(() => publish({ ...depthOnly, tape: [] }), /FEED_COVERAGE/);
+  assert.throws(() => publish({ ...depthOnly, bookAt: time - 1 }), /FEED_PROVENANCE/);
+  assert.throws(() => publish({ ...depthOnly, upstreamSha256: '' }), /FEED_PROVENANCE/);
+  assert.throws(() => publish({ ...depthOnly, rightsDigest: sha('other grant') }), /FEED_PROVENANCE/);
+  assert.throws(() => query('read.ticker'), /FEED_TICKER_UNAVAILABLE/);
+  assert.equal(query('read.depth').sequence, head.sequence);
+  assert.equal(query('read.tape').total, null);
+  assert.equal(query('desk.chart').quality, 'missing');
+
 });
 
 test('public reader binds its market and normalizes contract amount, aggressor, observation time and stale refusal', () => {

@@ -112,6 +112,7 @@ function verifyRow(row, part) {
   if (part.kind === 'funding')
     need(
       finite(row.rate) &&
+        (row.settlementHours === undefined || (finite(row.settlementHours) && row.settlementHours > 0 && row.settlementHours <= 24)) &&
         (row.price === undefined || (finite(row.price) && row.price > 0)) &&
         row.settled === true,
       'ARCHIVE_FUNDING'
@@ -180,7 +181,11 @@ export function loadData(directory, range, { parts = partitionInventory(director
     const key = [part.venue, part.symbol, part.marketType, part.kind, part.frame ?? ''].join('/');
     let lane = series.get(key);
     if (!lane) series.set(key, (lane = { ...part, rows: [], gaps: 0, duplicates: 0 }));
+    // The archived Ironflow funding vintage documents hourly settlements after June 8, 2023.
+    const hourlyFunding = part.kind === 'funding' && part.venue === 'hyperliquid' &&
+      part.source === 'https://huggingface.co/datasets/ironflow/hyperliquid-funding/tree/b2153cf3aed73b6b200a378064538a2263923e9d';
     for (const row of rows) {
+      if (hourlyFunding && row.time >= Date.UTC(2023, 5, 9)) row.settlementHours ??= 1;
       verifyRow(row, part);
       if (row.time >= range.start - warmup && row.time < range.end) lane.rows.push(row);
     }

@@ -64,6 +64,15 @@ const call = async (name, input = {}) => {
   return out;
 };
 const change = (op, input) => call(op, { ...input, requestId: randomUUID() });
+async function submitResearch(form, suite) {
+  const operation = suite ? 'research.suite' : 'research.start';
+  const response = page.waitForResponse((r) => r.url() === origin + '/api/practice/ui' &&
+    r.request().method() === 'POST' && r.request().postDataJSON()?.operation === operation);
+  await form.getByRole('button', { name: suite ? 'Queue all 20' : 'Queue hypothesis', exact: true }).click();
+  const envelope = await (await response).json();
+  assert.equal(envelope.status, 'OK', JSON.stringify(envelope.error));
+  return finish(envelope.data.id);
+}
 async function finish(id) {
   for (let i = 0; i < 1250; i++) {
     const { data } = await call('research_get', { id });
@@ -167,7 +176,19 @@ try {
   let nativeSpot;
   if (process.argv.includes('--native-spot')) {
     const venue = 'bitmex';
-    const run = await finish((await change('research_suite', { ...input, venue })).data.id);
+    const form = page.locator('#historical');
+    assert.equal(await form.locator('#hypothesis option').count(), 20);
+    await page.getByRole('link', { name: 'Historical research', exact: true }).click();
+    assert.equal(new URL(page.url()).hash, '#historical-research');
+    assert.equal(await form.locator('[name=venue]').inputValue(), input.venue);
+    assert.equal(await form.locator('[name=spotVenue]').inputValue(), venue);
+    const run = await submitResearch(form, true);
+    assert.deepEqual(run.rows.filter((r) => r.status === 'blocked').map((r) => r.id), [12, 20]);
+    for (const row of run.rows.filter((r) => ![8, 19].includes(r.id))) {
+      assert.equal(row.market.venue, input.venue);
+      assert.equal(row.status, cold.rows[row.id - 1].status);
+      assert.equal(row.return, cold.rows[row.id - 1].return);
+    }
     const previews = run.rows.filter((r) => [8, 19].includes(r.id));
     assert.equal(previews.length, 2);
     for (const row of previews) {
@@ -184,7 +205,9 @@ try {
       assert.equal(data.bars.length, count);
       days[symbol] = count;
     }
-    nativeSpot = { venue, days, id: run.id, rows: previews, receipt: run.receipt };
+    nativeSpot = { venue, days, id: run.id, rows: previews, receipt: run.receipt,
+      suiteOutcomes: run.rows.map(({ id, market, status, actual, return: result, reason, profitability }) =>
+        ({ id, market, status, actual, result, reason, profitability })) };
   }
   const changed = await finish((await change('research_suite', { ...input, capital: input.capital / 2 })).data.id);
   assert.equal(changed.receipt.cached, false);
@@ -231,10 +254,45 @@ try {
   assert.equal(quota.accepted, 30 - beforeQuota);
   assert.equal(quota.accepted + quota.refused, 31);
   assert.equal((await call('practice_portfolio')).ledger_revision, revision);
+  const catalogRuns = [];
+  if (nativeSpot && process.argv.includes('--catalog')) {
+    alter(manifestPath, JSON.stringify(manifest));
+    await page.close();
+    await ctx.clearCookies();
+    await enter();
+    const form = page.locator('#historical');
+    await form.locator('[name=venue]').fill(input.venue);
+    await form.locator('[name=spotVenue]').fill(nativeSpot.venue);
+    for (const expected of nativeSpot.suiteOutcomes) {
+      await form.locator('#hypothesis').selectOption(String(expected.id));
+      const run = await submitResearch(form, false);
+      assert.equal(run.rows.length, 1);
+      const [row] = run.rows;
+      assert.equal(row.id, expected.id);
+      assert.deepEqual(row.market, expected.market);
+      assert.equal(row.status, expected.status);
+      assert.equal(row.return, expected.result);
+      assert.deepEqual(row.actual, expected.actual);
+      assert.equal(row.reason, expected.reason);
+      catalogRuns.push({ hypothesis: row.id, runId: run.id, market: row.market,
+        status: row.status, actual: row.actual, result: row.return, reason: row.reason,
+        scientificHash: run.receipt.scientificHash });
+    }
+    await page.reload();
+    const reopened = catalogRuns.find((row) => row.hypothesis === 18);
+    const history = page.getByLabel('Run history');
+    await history.locator('option').filter({ hasText: 'Aggressor-volume divergence' }).waitFor({ state: 'attached' });
+    assert.equal(await history.locator('option').count(), 20);
+    await history.selectOption(reopened.runId);
+    await page.locator('#lab-status').filter({ hasText: reopened.scientificHash }).waitFor();
+    assert.equal(await form.locator('#hypothesis').inputValue(), '18');
+    assert.equal(await page.locator('#export-artifact').getAttribute('href'), '/api/practice/artifact?id=' + reopened.runId);
+  }
   assert.deepEqual(external, []);
   const evidence = {
     strategyHash: saved.hash,
     nativeSpot,
+    catalogRuns,
     revision,
     overlayMarkers: overlay.markers.length,
     source: chart.source,

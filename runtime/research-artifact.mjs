@@ -65,7 +65,9 @@ export function readArtifact(dir, receipt) {
 }
 export function runArtifact({ directory, artifactDir, input, range, id }) {
   const venue = input.venue ?? 'uniswap-v3-500';
-  const parts = partitionInventory(directory).filter((p) => p.venue === venue);
+  const parts = partitionInventory(directory).filter(
+    (p) => p.venue === venue || (p.venue === input.spotVenue && p.marketType === 'spot' && p.kind === 'ohlcv')
+  );
   const data = loadData(directory, range, { parts }),
     inputHash = sha({ engine, input, range, sources: data.sources });
   mkdirSync(artifactDir, { recursive: true, mode: 0o700 });

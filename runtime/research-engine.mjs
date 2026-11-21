@@ -133,16 +133,16 @@ export function executeDirectional(bars, signals, capital, range, cost = assumpt
 const warmup = [0, 200, 180, 200, 200, 3, 3, 2, 201, 30, 180, 365, 7, 60, 180, 30, 30, 1, 2, 200, 365];
 export function historicalReport({ input, range, data, engine }) {
   const capital = input.capital ?? 100000,
-    venue = input.venue ?? 'uniswap-v3-500',
+    primaryVenue = input.venue ?? 'uniswap-v3-500',
     rows = [];
   const lanes = [...data.series.values()];
   const seriesCache = new Map();
-  function find(symbol, type, kind, frame) {
+  function find(venue, symbol, type, kind, frame) {
     const candidates = lanes.filter(
       (p) => p.venue === venue && p.symbol === symbol && p.marketType === type && p.kind === kind
     );
     if (kind !== 'ohlcv') return candidates[0];
-    const key = [symbol, type, frame].join('/');
+    const key = [venue, symbol, type, frame].join('/');
     if (seriesCache.has(key)) return seriesCache.get(key);
     const series = composeBars(candidates, frame);
     seriesCache.set(key, series);
@@ -150,6 +150,7 @@ export function historicalReport({ input, range, data, engine }) {
   }
   for (const strategy of hypotheses.filter((h) => !input.hypothesis || input.hypothesis === h.id)) {
     const { id, requires, base } = strategy,
+      venue = [8, 19].includes(id) ? input.spotVenue ?? primaryVenue : primaryVenue,
       symbol =
         input.hypothesis && input.symbol
           ? input.symbol
@@ -160,7 +161,7 @@ export function historicalReport({ input, range, data, engine }) {
       frame = input.hypothesis && input.frame ? input.frame : strategy.frame,
       quote = symbol.split('.')[1],
       market = { venue, symbol, marketType: type, frame },
-      source = find(symbol, type, 'ohlcv', frame);
+      source = find(venue, symbol, type, 'ohlcv', frame);
     const missing = [],
       aux = {},
       markets = {},
@@ -174,7 +175,7 @@ export function historicalReport({ input, range, data, engine }) {
     for (const kind of dependencies) {
       if (['BTC', 'ETH', 'SOL', 'spot'].includes(kind) || id === 19) {
         const field =
-          kind === 'spot' ? find(symbol, 'spot', 'ohlcv', frame) : find(kind + '.' + quote, type, 'ohlcv', frame);
+          kind === 'spot' ? find(venue, symbol, 'spot', 'ohlcv', frame) : find(venue, kind + '.' + quote, type, 'ohlcv', frame);
         if (field?.rows.length) markets[kind] = field.rows;
         else missing.push(kind + ' matched candles');
       } else if (kind.startsWith('universe')) {
@@ -191,15 +192,15 @@ export function historicalReport({ input, range, data, engine }) {
               .map((l) => l.symbol)
           );
         for (const s of universe) {
-          const series = find(s, type, 'ohlcv', frame);
+          const series = find(venue, s, type, 'ohlcv', frame);
           if (series?.rows.length) markets[s.split('.')[0]] = series.rows;
         }
         if (Object.keys(markets).length < size) missing.push('verified ' + size + '-contract universe');
       } else {
         const lane =
           kind === 'options'
-            ? (find(symbol, 'option', kind, frame) ?? find(symbol, type, kind, frame))
-            : find(symbol, type, kind, frame);
+            ? (find(venue, symbol, 'option', kind, frame) ?? find(venue, symbol, type, kind, frame))
+            : find(venue, symbol, type, kind, frame);
         if (lane?.rows.length) aux[kind] = lane.rows;
         else missing.push(kind);
       }
@@ -207,8 +208,8 @@ export function historicalReport({ input, range, data, engine }) {
     if (id === 15) {
       for (const n of Object.keys(markets)) {
         const symbol = n + '.' + quote;
-        const oi = find(symbol, type, 'openInterest', frame),
-          liq = find(symbol, type, 'liquidations', frame);
+        const oi = find(venue, symbol, type, 'openInterest', frame),
+          liq = find(venue, symbol, type, 'liquidations', frame);
         if (
           !oi?.rows.some((r) => r.time >= range.start && r.time < range.end) ||
           !liq?.rows.some(
@@ -219,6 +220,8 @@ export function historicalReport({ input, range, data, engine }) {
         else cross[n] = { openInterest: oi.rows, liquidations: liq.rows };
       }
     }
+    if (id === 12 && aux.funding?.some((v) => !v.settlementHours))
+      missing.push('documented funding settlement interval');
     let incompleteInputs = false;
     for (const [name, observations] of [
       ...Object.entries(aux),
@@ -264,7 +267,7 @@ export function historicalReport({ input, range, data, engine }) {
     if (id === 19 && Object.values(markets).some((bs) => bs.some((b, i) => i && b.time - bs[i - 1].time !== DAY)))
       warnings.push('Rotation skips incomplete calendar lookbacks');
     if (type === 'perpetual' && !aux.funding) {
-      const funding = find(symbol, type, 'funding', frame);
+      const funding = find(venue, symbol, type, 'funding', frame);
       if (funding) aux.funding = funding.rows;
       else warnings.push('Unobserved funding modeled at zero');
     }
@@ -274,7 +277,7 @@ export function historicalReport({ input, range, data, engine }) {
       aux.fundingByAsset = {};
       for (const name of Object.keys(markets).filter((n) => n !== 'spot')) {
         const observations =
-          name === primary ? aux.funding : find(name + '.' + quote, type, 'funding', frame)?.rows;
+          name === primary ? aux.funding : find(venue, name + '.' + quote, type, 'funding', frame)?.rows;
         if (observations) aux.fundingByAsset[name] = observations;
         else if (name !== primary) warnings.push('Unobserved ' + name + ' funding modeled at zero');
       }

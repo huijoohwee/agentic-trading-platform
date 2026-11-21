@@ -48,8 +48,8 @@ test('carry hedges equal notionals, credits shorts at observed funding, and flat
     px = (v, i) => ({ time: start + i * step, open: v, high: v + 1, low: v - 1, close: v, volume: 8 });
   const markets = { BTC: [101, 101, 102, 99, 98, 98].map(px), spot: [100, 100, 100, 100, 100, 100].map(px) };
   const funding = [
-    { time: start, rate: 0.001 },
-    { time: start + 3 * step, rate: 0.002, price: 102 }
+    { time: start, rate: 0.001, settlementHours: 8 },
+    { time: start + 3 * step, rate: 0.002, price: 102, settlementHours: 8 }
   ];
   const aux = {
     funding,
@@ -57,6 +57,11 @@ test('carry hedges equal notionals, credits shorts at observed funding, and flat
     fundingByAsset: { BTC: funding }
   };
   const plans = portfolioSignals(12, markets, markets.BTC, step, aux);
+  const withInterval = (settlementHours) => portfolioSignals(12, markets, markets.BTC, step,
+    { ...aux, funding: [{ time: start, rate: 0.0001, settlementHours }] });
+  assert.deepEqual(withInterval(1)[0], { spot: 1, BTC: -1 });
+  assert.equal(withInterval(8)[0], null);
+  assert.equal(withInterval(undefined)[0], null);
   assert.deepEqual(plans[0], { spot: 1, BTC: -1 });
   assert.deepEqual(plans[3], {});
   const result = executePortfolio(

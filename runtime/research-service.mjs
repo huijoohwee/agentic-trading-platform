@@ -108,9 +108,9 @@ export function researchService({ store, directory, now }) {
         packages: packageInventory,
         saved: Object.values(current.strategies ?? {}),
         runs: Object.values(current.runs ?? {})
-          .slice(-30)
-          .reverse()
-          .map(({ id, status, created }) => ({ id, status, created }))
+          .sort((a, b) => b.created - a.created)
+          .slice(0, 30)
+          .map(({ id, status, created, input }) => ({ id, status, created, hypothesis: input.hypothesis, venue: input.venue }))
       };
     if (op === 'research.get') {
       const run = view(scope, inputs.id);

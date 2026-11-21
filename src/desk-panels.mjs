@@ -232,6 +232,7 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
       }
     } else book = microstructure(s.symbol, at);
     el('spread').textContent =
+      (book.quality === 'stale' ? 'Stale book · ' : '') +
       'Best bid ' +
       f(book.bids[0].price) +
       ' · ask ' +
@@ -242,15 +243,24 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
       pct(book.bidFraction) +
       ' / ' +
       pct(1 - book.bidFraction);
+    if (book.source?.timestampSource === 'publisher') {
+      const link = document.createElement('a');
+      link.textContent = book.source.creator;
+      if (/^https:\/\//.test(book.source.id)) link.href = book.source.id;
+      el('spread').append(' · ', link, ' · ' + book.source.license + ' · ' + utc(book.at) + ' UTC');
+    }
     for (const side of ['bids', 'asks'])
       table(
         side,
-        ['Price', 'Amount', 'USD', 'Cum. qty'],
+        ['Price', 'Amount', s.symbol.split('.')[1], 'Cum. qty'],
         book[side].map((v) => [v.price, v.amount, v.notional, v.cumulative].map(f))
       );
-    table(
+    if (book.tape === null) {
+      el('tape').replaceChildren('Trade tape unavailable from this source');
+      delete el('tape')._table;
+    } else table(
       'tape',
-      ['UTC', 'Price', 'Amount', 'USD', 'Aggressor'],
+      ['UTC', 'Price', 'Amount', s.symbol.split('.')[1], 'Aggressor'],
       book.tape.map((v) => [utc(v.time), f(v.price), f(v.amount), f(v.notional), v.aggressor])
     );
   }

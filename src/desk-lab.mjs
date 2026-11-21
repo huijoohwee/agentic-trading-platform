@@ -12,8 +12,7 @@ export function bindLab(client, onOverlay) {
       if (r.data?.session) await client.reload();
       if (op === 'research.overlay') onOverlay(r.data);
       if (op === 'research.start' || op === 'research.suite') {
-        active = r.data.id;
-        watch();
+        selectRun(r.data.id);
       }
     }
     return r;
@@ -37,9 +36,9 @@ export function bindLab(client, onOverlay) {
     if (out.status !== 'OK') throw Error(out.error.code);
     return out.data;
   }
-  const h = el('hypothesis'),
+  const history = el('run-history'), h = el('hypothesis'),
     form = el('historical').elements;
-  for (const s of hypotheses) h.add(new Option(s.id + '. ' + s.name, s.id));
+  for (const s of hypotheses) h.add(new Option(s.id + '. ' + s.name + ' · ' + s.base + ' ' + s.marketType + ' · ' + s.frame + ' · v' + s.version, s.id));
   const date = new Date();
   form.start.value = '2021-01-01';
   form.end.value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 0)).toISOString().slice(0, 10);
@@ -56,6 +55,40 @@ export function bindLab(client, onOverlay) {
       err(e);
     }
   };
+  function updateRunOption({ id, status, created, hypothesis, venue }) {
+    const name = hypotheses.find((row) => row.id === hypothesis)?.name ?? 'All 20 hypotheses';
+    const label = [new Date(created).toISOString().slice(0, 19).replace('T', ' ') + ' UTC',
+      name, venue, status, id.slice(0, 8)].join(' · ');
+    let option = Array.from(history.options).find((row) => row.value === id);
+    if (!option) {
+      if (!history.options[0]?.value) history.replaceChildren();
+      option = new Option(label, id);
+      option.dataset.created = created;
+      option.dataset.hypothesis = hypothesis ?? '';
+      const before = Array.from(history.options).find((row) => Number(row.dataset.created) < created);
+      history.add(option, before ?? null);
+      if (history.length > 30) history.remove(history.length - 1);
+    } else if (option.textContent !== label) option.textContent = label;
+    history.disabled = false;
+    history.value = active ?? '';
+  }
+  function selectRun(id) {
+    active = id;
+    reference = null;
+    history.value = id;
+    for (const key of ['cancel-run', 'overlay-run', 'research-sheets', 'export-run']) el(key).disabled = true;
+    el('export-artifact').hidden = true;
+    el('lab-status').textContent = 'Loading run…';
+    el('run-trace').textContent = '';
+    el('run-detail').textContent = '';
+    renderTable('run-results', [], []);
+    watch();
+  }
+  history.onchange = () => {
+    const selected = history.selectedOptions[0];
+    if (selected?.dataset.hypothesis) h.value = selected.dataset.hypothesis;
+    if (selected) selectRun(selected.value);
+  };
   async function listSaved() {
     const list = await human('research.strategies');
     el('saved-source').replaceChildren(
@@ -69,10 +102,8 @@ export function bindLab(client, onOverlay) {
         el('code').dispatchEvent(new Event('input'));
       }
     };
-    if (!active && list.runs.length) {
-      active = list.runs[0].id;
-      watch();
-    }
+    for (const run of list.runs) updateRunOption(run);
+    if (!active && list.runs.length) selectRun(list.runs[0].id);
   }
   function download(text, name) {
     const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })),
@@ -87,6 +118,7 @@ export function bindLab(client, onOverlay) {
     const id = active,
       run = await human('research.get', { id });
     if (id !== active) return;
+    updateRunOption({ ...run.input, id, status: run.status, created: run.created });
     el('lab-status').textContent =
       run.status +
       ' · ' +
@@ -103,6 +135,7 @@ export function bindLab(client, onOverlay) {
     if (run.rows) {
       el('export-artifact').href = '/api/practice/artifact?id=' + encodeURIComponent(run.id);
       reference = run;
+      for (const key of ['research-sheets', 'export-run', 'overlay-run']) el(key).disabled = false;
       const headers = [
         'Hypothesis',
         'Quality',
@@ -193,12 +226,15 @@ export function bindLab(client, onOverlay) {
         capital: Number(form.capital.value),
         venue: form.venue.value
       };
+    const spotVenue = form.spotVenue.value.trim();
+    if (suite && spotVenue) input.spotVenue = spotVenue;
     if (!suite) {
       input.hypothesis = Number(h.value);
       const chosen = hypotheses[input.hypothesis - 1];
       input.symbol = form.symbol.value.trim() || chosen.base + '.USDT';
       input.frame = form.frame.value || chosen.frame;
       input.marketType = chosen.marketType;
+      if ([8, 19].includes(chosen.id) && spotVenue) input.venue = spotVenue;
     }
     if ((suite || input.hypothesis === 19) && form.basket.value.trim())
       input.basket = [
@@ -265,7 +301,7 @@ export function bindLab(client, onOverlay) {
   }
   el('console').ontoggle = activity;
   const tab = () => {
-    const key = location.hash.slice(1);
+    const key = location.hash === '#historical-research' ? 'research' : location.hash.slice(1);
     if (['market', 'portfolio', 'research', 'predictions'].includes(key))
       void human('desk.tab', { tab: key }).catch(err);
   };

@@ -57,20 +57,13 @@ export function marketLibrary(directory) {
       const entry = inventory().get([input.venue, input.marketType, input.symbol].join('/'));
       const current = live
         .catalog()
-        .some((m) => m.venue === input.venue && m.marketType === input.marketType && m.symbol === input.symbol);
-      if (
-        current &&
-        !(
-          input.before &&
-          entry?.parts.some(
-            (p) =>
-              compatible(p.frame, input.frame) &&
-              p.first < input.before &&
-              input.before <= bucket(p.last, p.frame, 1)
-          )
-        )
-      )
-        return live.query('desk.chart', input);
+        .find((m) => m.venue === input.venue && m.marketType === input.marketType && m.symbol === input.symbol);
+      const frameRequested = input.frame ?? entry?.market.frame ?? '1m';
+      const hasArchive = entry?.parts.some((p) =>
+        compatible(p.frame, frameRequested) && (current?.coverage === 'depth' ||
+          (input.before && p.first < input.before && input.before <= bucket(p.last, p.frame, 1)))
+      );
+      if (current && !hasArchive) return live.query('desk.chart', input);
       need(entry, 'MARKET_BINDING_UNAVAILABLE');
       const { market, parts } = entry,
         frame = input.frame ?? market.frame,
