@@ -86,10 +86,12 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
       try {
         const record=resolveCapability(body);
         const {data,revision}=await practice.invoke(body);
-        return {request_id:body.request_id,status:'OK',data,ledger_revision:revision,provenance:provenance(record,body.operation)};
+        return {request_id:body.request_id,status:'OK',data,ledger_revision:revision,warnings:data?.warnings??[],provenance:{...provenance(record,body.operation),...(data?.market?{market:data.market}:{}),...(data?.source?{data_source:data.source}:{})}};
       } catch(error) {
         const code=error.code??error.message;
-        return refused(body.request_id,/^[A-Z][A-Z0-9_]{1,50}$/.test(code)?code:'UNQUALIFIED');
+        const result=refused(body.request_id,/^[A-Z][A-Z0-9_]{1,50}$/.test(code)?code:'UNQUALIFIED');
+        result.error.retryable=['RESEARCH_QUOTA','RUN_NOT_READY','CONFLICT'].includes(code);
+        result.missing=[result.error.code];return result;
       }
     }
     const binding = sha(body), checkpointKey = key(body), request_id = body.request_id;

@@ -1,7 +1,10 @@
 import http from 'node:http';
 import { extname } from 'node:path';
 
-export async function serveAssets(port, { assets, documentPolicy, resourcePolicy, practiceDirectory, runtimeApi }) {
+export async function serveAssets(
+  port,
+  { assets, documentPolicy, resourcePolicy, practiceDirectory, runtimeApi, observerConfig }
+) {
   const types = {
     '.html': 'text/html',
     '.mjs': 'text/javascript',
@@ -64,9 +67,26 @@ export async function serveAssets(port, { assets, documentPolicy, resourcePolicy
     });
     response.end(request.method === 'HEAD' ? undefined : bytes);
   });
+  let shared;
+  if (observerConfig) {
+    const { createPracticeApi } = await import('../runtime/practice-http.mjs');
+    practice = createPracticeApi(practiceDirectory, {
+      observerOrigin:
+        observerConfig.origin ??
+        'https://' +
+          (observerConfig.host.includes(':') ? '[' + observerConfig.host + ']' : observerConfig.host) +
+          ':' +
+          observerConfig.port
+    });
+    opening = Promise.resolve(practice);
+    const { serveObserver } = await import('./observer-server.mjs');
+    shared = await serveObserver({ ...observerConfig, assets, api: practice, policy: documentPolicy });
+    server.observer = shared;
+  }
   const close = server.close.bind(server);
   server.close = (callback) => {
     closing = true;
+    shared?.close();
     practice?.closeStreams();
     return close(callback);
   };

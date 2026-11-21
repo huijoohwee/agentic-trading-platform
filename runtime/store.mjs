@@ -56,6 +56,10 @@ export function openStore(path) {
   }
   return {
     read,
+    listScopes(prefix) {
+      requireThat(prefix === 'research/', 'ACCOUNT_BINDING');
+      return db.prepare("SELECT json_extract(body,'$.scope') AS scope FROM accounts WHERE json_extract(body,'$.scope.account_alias') LIKE 'research/%'").all().map(row=>JSON.parse(row.scope));
+    },
     transaction(scope, mutate, expectedRevision) {
       db.exec('BEGIN IMMEDIATE');
       try {

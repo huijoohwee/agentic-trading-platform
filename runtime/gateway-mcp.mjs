@@ -1,5 +1,6 @@
 import { boundedJson, id, requireThat } from './core.mjs';
 
+import {actionFor} from '../src/desk-actions.mjs';
 const PROTOCOLS = ['2025-03-26', '2025-06-18', '2025-11-25'];
 const SEMANTIC_SCHEMA = {
   type: 'object',
@@ -24,7 +25,9 @@ export function createGatewayMcp({ gateway }) {
   requireThat(gateway?.admit && gateway?.discover && gateway?.authenticate, 'GATEWAY_REQUIRED');
   const tools = () => {
     const operations = [...new Set(gateway.discover().flatMap(record => record.operations))];
-    return operations.map(operation => ({ name: operation, description: `Semantic ${operation} over reviewed capabilities`, inputSchema: SEMANTIC_SCHEMA }));
+    return operations.map(operation => {const a=actionFor(operation);
+      return {name:operation,description:a?.description??('Semantic '+operation+' over reviewed capabilities'),
+        ...(a?{annotations:a.annotations}:{}),inputSchema:a?{...SEMANTIC_SCHEMA,properties:{...SEMANTIC_SCHEMA.properties,inputs:a.inputSchema}}:SEMANTIC_SCHEMA};});
   };
   async function callTool(params, authorization) {
     const name = params?.name, request = boundedJson(params?.arguments ?? {});

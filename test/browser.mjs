@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {verifyLaboratory} from './laboratory-browser.mjs';
 import { verifyDesk } from './desk-browser.mjs';
 import { verifyWorksheets } from './worksheets-browser.mjs';
 import { verifyTradingSkills } from './skills-browser.mjs';
@@ -409,4 +410,5 @@ try {
   }
   assert.deepEqual(errors,[]);
   await verifyDesk(browser);
+  await verifyLaboratory(browser);console.log('Landing and desk WebMCP actions, paper revision parity, observer and research workflows passed.');
 } finally { if (server.listening) server.close(); await browser.close(); }

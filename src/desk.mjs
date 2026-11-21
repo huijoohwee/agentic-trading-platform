@@ -1,3 +1,4 @@
+import { bindLab } from './desk-lab.mjs';
 import { orderTriggers } from './practice-account.mjs';
 import { searchCatalog, frames, history, quote, bucket, SOURCE } from './market.mjs';
 import { studies, presets } from './indicators.mjs';
@@ -31,9 +32,21 @@ async function openDesk() {
   const error = (message) => {
     el('notice').textContent = message;
   };
+  let lab,
+    publicMarkets = [],
+    lastPublicSequence = -1,
+    lastPublicKey = '',
+    hasForming = true,
+    overlayBefore;
+  const external = () => Boolean(saved.venue && saved.venue !== 'synthetic');
+  const marketKey = () => [saved.venue ?? 'synthetic', saved.marketType ?? 'spot', symbol, frame].join('/');
   const effective = () => (symbol === saved.symbol ? saved : { ...saved, symbol });
   function series(at) {
-    const key = symbol + '/' + frame;
+    if (external()) {
+      chart.update(bars, selection, markers, frame);
+      return;
+    }
+    const key = marketKey();
     if (key !== seriesKey || !bars.length || at < bars.at(-1).time || bucket(at, frame) !== bars.at(-1).time) {
       bars = history(symbol, frame, at, 300);
       seriesKey = key;
@@ -93,10 +106,24 @@ async function openDesk() {
   panels = bindPanels({
     state: effective,
     act,
+    readFlow: async (input) => {
+      const [b, t] = await Promise.all([lab.human('read.depth', input), lab.human('read.tape', input)]);
+      return { ...b.rows, tape: t.rows, volumes: t.volumes };
+    },
     onError: error,
-    getBars: () => bars.slice(0, -1),
+    getBars: () => (external() && !hasForming ? [...bars] : bars.slice(0, -1)),
     onMarkers: (m) => {
       markers = m;
+      if (lab && client?.online && m.length)
+        void lab
+          .human('desk.markers', {
+            symbol,
+            frame,
+            venue: saved.venue ?? 'synthetic',
+            marketType: saved.marketType ?? 'spot',
+            markers: m.map(({ time, price, action }) => ({ time, price, action }))
+          })
+          .catch((e) => error(e.message));
       if (bars.length) chart.update(bars, selection, markers, frame);
     },
     settingsChanged
@@ -122,7 +149,12 @@ async function openDesk() {
     renderStudies();
   }
   function options() {
-    const matches = searchCatalog(value('search')),
+    const query = value('search').toUpperCase();
+    const matches = external()
+        ? publicMarkets
+            .filter((m) => m.venue === saved.venue && m.marketType === saved.marketType && m.symbol.includes(query))
+            .map((m) => ({ ...m, name: m.base }))
+        : searchCatalog(query),
       select = el('instrument');
     select.replaceChildren(
       ...matches.map((a) => new Option((a.featured ? '★ ' : '') + a.symbol + ' · ' + a.name, a.symbol))
@@ -138,14 +170,18 @@ async function openDesk() {
   }
   function recent() {
     el('watch').replaceChildren(
-      ...saved.watch.map((s) => {
-        const b = document.createElement('button');
-        b.className = 'agentic-form-control';
-        b.textContent = s;
-        b.setAttribute('aria-pressed', String(s === symbol));
-        b.onclick = () => choose(s);
-        return b;
-      })
+      ...saved.watch
+        .filter((v) =>
+          external() ? publicMarkets.some((m) => m.venue === saved.venue && m.symbol === v) : v.endsWith('.USD')
+        )
+        .map((s) => {
+          const b = document.createElement('button');
+          b.className = 'agentic-form-control';
+          b.textContent = s;
+          b.setAttribute('aria-pressed', String(s === symbol));
+          b.onclick = () => choose(s);
+          return b;
+        })
     );
   }
   async function choose(next) {
@@ -177,11 +213,45 @@ async function openDesk() {
     el('studies').append(label);
   }
   el('search').oninput = options;
+  el('venue').onchange = async () => {
+    const venue = value('venue'),
+      market = publicMarkets.find((m) => m.venue === venue),
+      next = market?.symbol ?? searchCatalog('')[0].symbol;
+    if (
+      !(await act({
+        kind: 'select',
+        venue,
+        symbol: next,
+        marketType: market?.marketType ?? saved.marketType ?? 'spot',
+        frame: market?.frame ?? frame
+      }))
+    ) {
+      el('venue').value = saved.venue ?? 'synthetic';
+      return;
+    }
+    void poll();
+  };
+  el('market-type').onchange = async () => {
+    if (!(await act({ kind: 'select', symbol, marketType: value('market-type') })))
+      el('market-type').value = saved.marketType;
+  };
   el('instrument').onchange = (e) => choose(e.target.value);
-  el('frame').onchange = (e) => {
+  el('frame').onchange = async (e) => {
+    if (external()) {
+      const next = e.target.value;
+      e.target.value = frame;
+      const accepted = await act({ kind: 'select', symbol, frame: next });
+      if (accepted) {
+        applySettings(accepted.session);
+        overlayBefore = undefined;
+        void poll();
+      }
+      return;
+    }
     frame = e.target.value;
     clearSeries();
-    series(latestTime);
+    if (external()) void poll();
+    else series(latestTime);
     settingsChanged();
   };
   el('preset').onchange = (e) => {
@@ -199,8 +269,18 @@ async function openDesk() {
       const first = revision === -1,
         newSession = data.sessionId !== sessionId,
         reset = data.notice === 'RESET',
-        oldSymbol = symbol;
+        oldSymbol = symbol,
+        oldKey = marketKey();
       saved = data.session;
+      el('venue').value = saved.venue ?? 'synthetic';
+      el('place').disabled =
+        external() &&
+        !publicMarkets.some(
+          (m) => m.venue === saved.venue && m.symbol === saved.symbol && m.live && m.currency === 'USD'
+        );
+      el('prediction').querySelector('button').disabled = el('place').disabled;
+      el('market-type').value = saved.marketType ?? 'spot';
+      el('contract-options').hidden = saved.marketType !== 'perpetual';
       symbol = saved.symbol;
       revision = data.revision;
       sessionId = data.sessionId;
@@ -216,10 +296,16 @@ async function openDesk() {
           JSON.stringify(saved.studies) !== JSON.stringify(selection))
       )
         applySettings(saved);
-      if (first || reset || newSession || oldSymbol !== symbol) clearSeries();
+      if (first || reset || newSession || oldSymbol !== symbol || oldKey !== marketKey()) {
+        bars = [];
+        overlayBefore = undefined;
+        clearSeries();
+      }
       recent();
       options();
-      refresh(quote(symbol, Date.now()));
+      if (external()) {
+        if (lab) void poll();
+      } else refresh(quote(symbol, Date.now()));
     },
     (status) => (el('storage').textContent = status)
   );
@@ -229,17 +315,24 @@ async function openDesk() {
     streamSymbol,
     lastEvent = 0;
   function connect(target) {
-    if (channel && streamSymbol === target) return;
+    const key = marketKey();
+    if (channel && streamSymbol === key) return;
     channel?.close();
     lastEvent = 0;
-    streamSymbol = target;
+    streamSymbol = key;
     if (!navigator.onLine || typeof EventSource === 'undefined') {
       channel = null;
       return;
     }
-    channel = new EventSource('/api/practice/events?symbol=' + encodeURIComponent(target));
+    const params = new URLSearchParams({
+      symbol: target,
+      venue: 'synthetic',
+      marketType: saved.marketType ?? 'spot',
+      frame
+    });
+    channel = new EventSource('/api/practice/events?' + params);
     channel.onmessage = (event) => {
-      if (target !== symbol || closed) return;
+      if (key !== marketKey() || closed) return;
       try {
         const tick = JSON.parse(event.data);
         if (tick.source !== SOURCE || tick.rows?.symbol !== target || tick.at !== tick.rows.at) throw Error();
@@ -264,7 +357,81 @@ async function openDesk() {
     if (closed) return;
     clearTimeout(marketTimer);
     const seq = ++sequence,
-      target = symbol;
+      target = symbol,
+      bound = marketKey();
+    if (external()) {
+      channel?.close();
+      channel = null;
+      lastEvent = 0;
+      try {
+        const data = await lab.human('desk.chart', {
+          symbol,
+          venue: saved.venue,
+          marketType: saved.marketType,
+          frame,
+          count: 300,
+          ...(overlayBefore ? { before: overlayBefore } : {})
+        });
+        if (closed || bound !== marketKey() || seq !== sequence) return;
+        if (data.sequence !== undefined) {
+          if (lastPublicKey === bound && data.sequence < lastPublicSequence) throw Error('FEED_ROLLBACK');
+          lastPublicKey = bound;
+          lastPublicSequence = data.sequence;
+        }
+        hasForming = Boolean(data.forming);
+        bars = data.forming ? [...data.bars, data.forming] : data.bars;
+        markers = data.markers;
+        seriesKey = bound;
+        el('symbol').textContent = symbol;
+        const last = bars.at(-1);
+        el('price').textContent = last ? last.close.toLocaleString() + ' ' + symbol.split('.')[1] : 'Missing';
+        el('ticker').textContent =
+          saved.venue +
+          ' · ' +
+          saved.marketType +
+          ' · ' +
+          (last?.volume == null ? 'volume unavailable' : 'volume ' + last.volume.toLocaleString());
+        el('stream').textContent =
+          data.quality +
+          ' · ' +
+          data.source.id +
+          ' · ' +
+          data.source.license +
+          ' · ' +
+          (last ? new Date(data.asOf ?? last.lastObservation ?? last.time).toISOString() : 'no observations');
+        series(last?.time ?? Date.now());
+        panels.refresh(effective(), Date.now(), last?.close ?? 0);
+        if (publicMarkets.some((m) => m.venue === saved.venue && m.live)) {
+          const tick = await lab.human('read.ticker', {
+            symbol,
+            venue: saved.venue,
+            marketType: saved.marketType,
+            frame
+          });
+          if (bound !== marketKey() || seq !== sequence) return;
+          const q = tick.rows;
+          el('price').textContent = String(q.last);
+          el('ticker').textContent =
+            '24h ' + q.change + '% · High ' + q.high + ' · Low ' + q.low + ' · Volume ' + q.volume;
+          if (
+            data.quality === 'live' &&
+            saved.orders.some(
+              (o) =>
+                o.venue === saved.venue &&
+                o.symbol === symbol &&
+                o.marketType === saved.marketType &&
+                orderTriggers(o, q.last)
+            )
+          )
+            await act({ kind: 'tick', symbol });
+        }
+      } catch (e) {
+        error(e.message);
+      }
+      if (!closed && seq === sequence && publicMarkets.some((m) => m.venue === saved.venue && m.live))
+        marketTimer = setTimeout(poll, 2500);
+      return;
+    }
     connect(target);
     let q, source;
     if (Date.now() - lastEvent < 4500) {
@@ -289,7 +456,7 @@ async function openDesk() {
         source = 'Loopback feed unavailable · sealed synthetic replay';
         failures++;
       }
-    if (seq !== sequence || target !== symbol || closed) return;
+    if (seq !== sequence || bound !== marketKey() || closed) return;
     if (q && Date.now() - lastEvent >= 4500) {
       el('stream').textContent = source + ' · ' + new Date(q.at).toISOString().slice(11, 19) + ' UTC';
       refresh(q);
@@ -300,7 +467,12 @@ async function openDesk() {
     }
     if (
       client.online &&
-      saved.orders.some((o) => o.symbol === target && orderTriggers(o, Number(el('price').textContent.slice(1)))) &&
+      saved.orders.some(
+        (o) =>
+          (o.marketType ?? 'spot') === (saved.marketType ?? 'spot') &&
+          o.symbol === target &&
+          orderTriggers(o, Number(el('price').textContent.slice(1)))
+      ) &&
       !failures
     )
       await act({ kind: 'tick', symbol: target });
@@ -321,6 +493,26 @@ async function openDesk() {
       void poll();
     }
   });
+  lab = bindLab(client, (data) => {
+    markers = data.markers;
+    if (external() && markers.length) {
+      overlayBefore = bucket(markers.at(-1).time, frame, 1);
+      void poll();
+    } else series(latestTime);
+  });
+  if (client.online) {
+    const catalog = await lab.human('read.catalog', { count: 600 }).catch((e) => {
+      error('Public catalog unavailable · ' + e.message);
+      return { rows: [] };
+    });
+    publicMarkets = catalog.rows.filter((m) => m.venue !== 'synthetic');
+    for (const venue of new Set(publicMarkets.map((m) => m.venue)))
+      el('venue').add(new Option(venue + ' · market data', venue));
+    el('venue').value = saved.venue ?? 'synthetic';
+    options();
+    recent();
+  }
+  for (const key of Object.keys(frames)) el('historical').elements.frame.add(new Option(key, key));
   await poll();
 }
 openDesk().catch((e) => {

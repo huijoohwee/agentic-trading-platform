@@ -35,5 +35,15 @@ export function marketRead(operation, inputs, at) {
     default:
       throw Error('UNSUPPORTED');
   }
-  return { source: SOURCE, at, rows };
+  return {
+    source: SOURCE,
+    at,
+    rows,
+    market: {
+      venue: 'synthetic',
+      symbol: symbol ?? null,
+      marketType: inputs.marketType ?? 'spot',
+      frame: frame ?? null
+    }
+  };
 }

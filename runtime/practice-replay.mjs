@@ -1,28 +1,43 @@
 import { boundedJson, sha, requireThat as need } from './core.mjs';
+import { valueAccount } from './practice-prices.mjs';
 import { frames, instrument, mark, SOURCE } from '../src/market.mjs';
 import { estimate, portfolio, settleFill, orderTriggers } from '../src/practice-account.mjs';
 import { studies } from '../src/indicators.mjs';
 import { initialPractice as initial } from '../src/practice-defaults.mjs';
+import {
+  accrueFunding,
+  settleContract,
+  contractChange,
+  reservedExposure,
+  accountKey,
+  valuation
+} from '../src/contracts.mjs';
 import { horizons } from '../src/predictions.mjs';
 
 const commandFields = {
-  select: ['symbol'],
+  select: ['symbol', 'marketType', 'frame', 'venue'],
+  studies: ['studies'],
   settings: ['frame', 'studies', 'code'],
-  order: ['symbol', 'side', 'type', 'qty', 'trigger'],
+  order: ['symbol', 'side', 'type', 'qty', 'trigger', 'marketType', 'leverage', 'reduceOnly', 'explicitIntent'],
   tick: ['symbol'],
-  cancel: ['id'],
-  funds: ['amount'],
-  reset: ['confirm'],
-  prediction: ['symbol', 'direction', 'horizon', 'confidence', 'note']
+  cancel: ['id', 'explicitIntent'],
+  funds: ['amount', 'explicitIntent'],
+  reset: ['confirm', 'explicitIntent'],
+  prediction: ['symbol', 'direction', 'horizon', 'confidence', 'note', 'explicitIntent']
 };
 const fits = (v, max) => Number.isFinite(v) && v > 0 && v <= max;
 const boundedUsd = (v) => Math.round(v * 1e6) / 1e6;
 
 function fill(s, o, price, at) {
-  const { fee } = estimate(o.qty, price),
-    closing = settleFill(s, o.symbol, o.side, o.qty, price, fee);
+  const { fee } = estimate(o.qty, price);
+  const derivative = o.marketType === 'perpetual';
+  if (!derivative && o.side === 'BUY') checkSpotRisk(s, o.qty, price, at);
+  const result = derivative ? settleContract(s, o, price, fee, at, portfolio(s, at)) : null;
+  const closing = derivative
+    ? result.pnl
+    : settleFill(s, accountKey(o.venue, o.marketType, o.symbol), o.side, o.qty, price, fee);
   s.fees = boundedUsd(s.fees + fee);
-  if (o.side === 'SELL') {
+  if (derivative ? result.closing > 0 : o.side === 'SELL') {
     s.closes++;
     if (closing - fee > 0) s.wins++;
   }
@@ -31,14 +46,25 @@ function fill(s, o, price, at) {
     at,
     symbol: o.symbol,
     type: o.type,
+    marketType: o.marketType ?? 'spot',
     side: o.side,
     qty: o.qty,
     price,
     fee,
     closing,
-    source: SOURCE
+    venue: o.venue ?? 'synthetic',
+    source: s.observedMarks?.[accountKey(o.venue, o.marketType, o.symbol)]?.source ?? SOURCE
   });
   s.fills = s.fills.slice(-1000);
+}
+function checkSpotRisk(session, quantity, price, at) {
+  const totals = portfolio(session, at),
+    { notional, fee } = estimate(quantity, price);
+  need(totals.available >= boundedUsd(notional + fee), 'RESERVED_CASH');
+  need(
+    totals.assets + totals.contractExposure + reservedExposure(session) + notional <= 2 * (totals.equity - fee),
+    'LEVERAGE_LIMIT'
+  );
 }
 function place(s, c, at, id) {
   need(
@@ -48,12 +74,14 @@ function place(s, c, at, id) {
       Math.abs(c.qty * 1e6 - Math.round(c.qty * 1e6)) < 0.00001,
     'INVALID_TICKET'
   );
-  const last = mark(s.symbol, at),
+  const key = accountKey(s.venue, s.marketType, s.symbol),
+    last = valuation(s, key, at),
     trigger = c.type === 'MARKET' ? last : c.trigger;
   need(fits(trigger, 1e7) && s.orders.length < 200, 'INVALID_TRIGGER');
   const { notional, fee } = estimate(c.qty, trigger);
   const order = {
     id,
+    venue: s.venue ?? 'synthetic',
     symbol: s.symbol,
     type: c.type,
     side: c.side,
@@ -62,10 +90,43 @@ function place(s, c, at, id) {
     at,
     reserve: boundedUsd(notional + fee)
   };
-  const held = s.positions[s.symbol]?.qty ?? 0,
-    pending = s.orders.filter((o) => o.symbol === s.symbol && o.side === 'SELL').reduce((v, o) => v + o.qty, 0);
+  order.marketType = c.marketType ?? s.marketType;
+  need(order.marketType === s.marketType, 'MARKET_CHANGED');
+  if (order.marketType === 'perpetual') {
+    order.leverage = c.leverage ?? 1;
+    order.reduceOnly = c.reduceOnly ?? false;
+    need([1, 2].includes(order.leverage) && typeof order.reduceOnly === 'boolean', 'INVALID_LEVERAGE');
+    const change = contractChange(s, order, trigger);
+    if (orderTriggers(order, last)) {
+      fill(s, order, last, at);
+      return 'FILLED';
+    }
+    const opening = order.qty - change.closing;
+    order.reserve = boundedUsd((opening * trigger) / order.leverage + fee);
+    const totals = portfolio(s, at);
+    const gross = reservedExposure(s);
+    need(
+      !opening || totals.contractExposure + totals.assets + gross + opening * trigger <= 2 * (totals.equity - fee),
+      'LEVERAGE_LIMIT'
+    );
+    need(!opening || totals.available >= order.reserve, 'RESERVED_MARGIN');
+    s.orders.push(order);
+    return 'WORKING';
+  }
+  need(!c.reduceOnly && (!c.leverage || c.leverage === 1), 'SPOT_ONLY');
+  const held = s.positions[key]?.qty ?? 0,
+    pending = s.orders
+      .filter(
+        (o) =>
+          o.marketType !== 'perpetual' &&
+          (o.venue ?? 'synthetic') === (s.venue ?? 'synthetic') &&
+          o.symbol === s.symbol &&
+          o.side === 'SELL'
+      )
+      .reduce((v, o) => v + o.qty, 0);
   const ready = orderTriggers(order, last);
   if (c.side === 'BUY') {
+    checkSpotRisk(s, c.qty, ready ? last : trigger, at);
     const actual = estimate(c.qty, ready ? last : trigger);
     need(
       actual.notional > 0 && portfolio(s, at).available >= boundedUsd(actual.notional + actual.fee),
@@ -80,31 +141,58 @@ function place(s, c, at, id) {
   return 'WORKING';
 }
 function monitor(s, at) {
-  const price = mark(s.symbol, at),
+  const price = valuation(s, accountKey(s.venue, s.marketType, s.symbol), at),
     notices = [];
   for (const o of [...s.orders]) {
-    if (o.symbol !== s.symbol || !orderTriggers(o, price)) continue;
+    if (
+      (o.venue ?? 'synthetic') !== (s.venue ?? 'synthetic') ||
+      o.symbol !== s.symbol ||
+      (o.marketType ?? 'spot') !== s.marketType ||
+      !orderTriggers(o, price)
+    )
+      continue;
     s.orders = s.orders.filter((v) => v.id !== o.id);
     const actual = estimate(o.qty, price);
-    if (o.side === 'BUY' && portfolio(s, at).available < boundedUsd(actual.notional + actual.fee)) {
+    if (
+      o.marketType !== 'perpetual' &&
+      o.side === 'BUY' &&
+      portfolio(s, at).available < boundedUsd(actual.notional + actual.fee)
+    ) {
       notices.push('REJECTED · insufficient cash at trigger');
       continue;
     }
-    fill(s, o, price, at);
+    try {
+      fill(s, o, price, at);
+    } catch (error) {
+      if (!['RESERVED_MARGIN', 'LEVERAGE_LIMIT', 'REDUCE_ONLY'].includes(error.message)) throw error;
+      notices.push('REJECTED · ' + error.message);
+      continue;
+    }
     notices.push('FILLED · ' + o.side + ' ' + o.qty + ' ' + o.symbol);
   }
   return notices.join(' · ') || 'MONITORING';
 }
 // Synthetic practice is a closed replay inside the paper guard. It cannot reach an adapter,
 // a signed account, provider credentials, or an externally selected price or clock.
-export function practiceReplay({ store, scope, now = Date.now }) {
+export function practiceReplay({ store, scope, now = Date.now, market }) {
   need(
     scope?.environment === 'SIMULATE' &&
       scope.profile === 'practice' &&
       /^desk\/[0-9a-f]{64}$/.test(scope.account_alias),
     'ACCOUNT_BINDING'
   );
-  const projection = (state) => ({ revision: state.revision, session: state.configs.practice ?? initial() });
+  function migrate(saved) {
+    if (!saved) return initial();
+    if (saved.schema === 'practice-session/v2') return saved;
+    need(saved.schema === 'practice-session/v1', 'STORAGE_VERSION');
+    return { ...initial(), ...saved, schema: 'practice-session/v2' };
+  }
+  const projection = (state) => {
+    const session = migrate(state.configs.practice);
+    valueAccount(session, market, now());
+    accrueFunding(session, now());
+    return { revision: state.revision, session };
+  };
   return {
     read: () => projection(store.read(scope)),
     apply(command, expectedRevision, requestId) {
@@ -137,14 +225,41 @@ export function practiceReplay({ store, scope, now = Date.now }) {
           scope,
           (state) => {
             need(Object.keys(state.checkpoints).length < 10000, 'RECEIPT_CAPACITY');
-            const s = state.configs.practice ?? initial(),
+            const s = migrate(state.configs.practice),
               at = now();
+            if (['order', 'cancel', 'funds', 'reset', 'prediction'].includes(c.kind))
+              need(c.explicitIntent === true, 'EXPLICIT_INTENT_REQUIRED');
+            const trading = ['order', 'prediction', 'tick'].includes(c.kind);
+            if (trading && s.venue && s.venue !== 'synthetic') need(market, 'HISTORICAL_MARKET_READ_ONLY');
+            valueAccount(s, market, at, { effect: trading, selected: trading });
+            accrueFunding(s, at);
             let notice = 'SAVED';
             switch (c.kind) {
               case 'select':
-                instrument(c.symbol);
+                const venue = c.venue ?? s.venue ?? 'synthetic';
+                need(typeof venue === 'string' && /^[a-z0-9-]{1,45}$/.test(venue), 'UNKNOWN_VENUE');
+                if (venue === 'synthetic') instrument(c.symbol);
+                else need(/^[A-Z0-9]+\.[A-Z0-9]+$/.test(c.symbol), 'UNKNOWN_INSTRUMENT');
+                s.venue = venue;
+                if (c.marketType !== undefined) {
+                  need(['spot', 'perpetual'].includes(c.marketType), 'INVALID_MARKET_TYPE');
+                  s.marketType = c.marketType;
+                }
+                if (c.frame !== undefined) {
+                  need(Object.hasOwn(frames, c.frame), 'UNKNOWN_TIMEFRAME');
+                  s.frame = c.frame;
+                }
                 s.symbol = c.symbol;
                 s.watch = [c.symbol, ...s.watch.filter((x) => x !== c.symbol)].slice(0, 20);
+                break;
+              case 'studies':
+                need(
+                  Array.isArray(c.studies) &&
+                    c.studies.length <= 20 &&
+                    c.studies.every((id) => Object.hasOwn(studies, id)),
+                  'INVALID_SETTINGS'
+                );
+                s.studies = [...new Set(c.studies)];
                 break;
               case 'settings':
                 need(
@@ -181,7 +296,7 @@ export function practiceReplay({ store, scope, now = Date.now }) {
                 s.cash = boundedUsd(s.cash + c.amount);
                 break;
               case 'reset':
-                need(c.confirm === true, 'CONFIRM_RESET');
+                need(c.confirm === 'RESET PAPER SESSION', 'CONFIRM_RESET');
                 Object.assign(s, initial());
                 notice = 'RESET';
                 break;
@@ -202,12 +317,14 @@ export function practiceReplay({ store, scope, now = Date.now }) {
                   id: requestId,
                   symbol: s.symbol,
                   at,
-                  entry: mark(s.symbol, at),
+                  venue: s.venue ?? 'synthetic',
+                  marketType: s.marketType,
+                  entry: valuation(s, accountKey(s.venue, s.marketType, s.symbol), at),
                   direction: c.direction,
                   horizon: c.horizon,
                   confidence: c.confidence,
                   note: c.note,
-                  source: SOURCE
+                  source: s.observedMarks?.[accountKey(s.venue, s.marketType, s.symbol)]?.source ?? SOURCE
                 });
                 break;
               default:

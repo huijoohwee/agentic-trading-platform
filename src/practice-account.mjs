@@ -1,4 +1,5 @@
 import { dollars, MICRO } from './competition-rules.mjs';
+import { contractRisk, valuation } from './contracts.mjs';
 import { mark, SOURCE } from './market.mjs';
 
 export function orderTriggers(order, price) {
@@ -40,20 +41,36 @@ export function portfolio(account, at) {
   const holdings = Object.entries(account.positions)
     .filter(([, p]) => p.qty > 0)
     .map(([symbol, p]) => {
-      const price = mark(symbol, at),
+      const price = valuation(account, symbol, at),
         marketValue = money(p.qty * price),
         open = money((price - p.avg_cost) * p.qty);
       value += marketValue;
       unrealized += open;
-      return { symbol, quantity: p.qty, average: p.avg_cost, mark: price, value: marketValue, open };
+      return {
+        symbol: symbol.split('/').at(-1),
+        venue: symbol.includes('/') ? symbol.split('/')[0] : 'synthetic',
+        marketType: 'spot',
+        quantity: p.qty,
+        average: p.avg_cost,
+        mark: price,
+        value: marketValue,
+        open
+      };
     });
-  const reserved = account.orders.filter((o) => o.side === 'BUY').reduce((s, o) => s + o.reserve, 0);
+  const risk = contractRisk(account, at);
+  const reserved = account.orders
+    .filter((o) => o.marketType === 'perpetual' || o.side === 'BUY')
+    .reduce((s, o) => s + o.reserve, 0);
+  unrealized += risk.pnl;
   return {
-    holdings,
+    holdings: [...holdings, ...risk.holdings],
+    contractExposure: risk.exposure,
+    margin: risk.margin,
+    funding: account.fundingTotal ?? 0,
     source: SOURCE,
     at,
-    equity: money(account.cash + value),
-    available: money(account.cash - reserved),
+    equity: money(account.cash + value + risk.pnl),
+    available: money(account.cash + Math.min(0, risk.pnl) - reserved - risk.margin),
     cash: account.cash,
     assets: money(value),
     realized: account.realized,

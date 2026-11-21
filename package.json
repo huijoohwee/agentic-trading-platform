@@ -1,6 +1,6 @@
 {
   "name": "agentic-trading-platform",
-  "version": "0.1.0",
+  "version": "0.14.0",
   "private": true,
   "type": "module",
   "engines": { "node": ">=22.22.0" },
@@ -12,6 +12,8 @@
     "check:runtime-browser": "node test/runtime-browser.mjs",
     "check:runtime": "node --test test/runtime-*.test.mjs test/paper-guard.test.mjs test/forward-runtime.test.mjs test/skill-package.test.mjs",
     "runtime": "node scripts/runtime.mjs",
+    "market:import": "python3 scripts/import-pool-history.py",
+    "market:snapshot": "node scripts/publish-market-snapshot.mjs",
     "package:skill": "python3 scripts/package-skill.py",
     "package:replay": "python3 scripts/package-replay.py",
     "audit:local": "node scripts/audit.mjs",

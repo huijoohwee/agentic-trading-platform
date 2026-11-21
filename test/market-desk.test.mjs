@@ -13,7 +13,7 @@ import { portfolio, journalCsv, estimate } from '../src/practice-account.mjs';
 
 const at = Date.UTC(2026, 10, 19, 15, 10, 22),
   symbol = catalog[0].symbol;
-test('eleven UTC frames aggregate one price path, including forming monthly and custom candles', () => {
+test('twelve UTC frames aggregate one price path, including forming monthly and custom candles', () => {
   for (const frame of Object.keys(frames)) {
     const bars = history(symbol, frame, at, 6);
     assert.equal(bars.at(-1).close, mark(symbol, at));
@@ -106,7 +106,7 @@ test('practice sessions use a single transaction for triggers, costs, revisions,
   const scope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'desk/' + 'a'.repeat(64) };
   const bind = () => createPaperGuard({ scope, store: db, mode: 'synthetic-replay', now: () => time });
   let guard = bind();
-  const apply = (cmd) => guard.apply(cmd, guard.read().revision, 'command-number-' + ++seq);
+  const apply = (cmd) => guard.apply(['cancel','order','funds','prediction','reset'].includes(cmd.kind) ? {...cmd, explicitIntent:true} : cmd, guard.read().revision, 'command-number-' + ++seq);
   const order = (side, type, qty, trigger) => apply({ kind: 'order', symbol, side, type, qty, trigger });
   assert.equal(guard.read().session.cash, 100000);
   assert.throws(() => createPaperGuard({ scope, store: db, mode: 'synthetic-replay', broker: {} }), /REPLAY_ISOLATION/);
@@ -170,7 +170,7 @@ test('practice sessions use a single transaction for triggers, costs, revisions,
   db = openStore(file);
   guard = bind();
   assert.deepEqual(guard.read(), before);
-  const cmd = { kind: 'funds', amount: 12 };
+  const cmd = { kind: 'funds', explicitIntent:true, amount: 12 };
   const readback = guard.apply(cmd, before.revision, 'same-command-id');
   assert.deepEqual(guard.apply(cmd, before.revision, 'same-command-id'), readback);
   for (const a of catalog) apply({ kind: 'select', symbol: a.symbol });
@@ -193,5 +193,5 @@ test('practice sessions use a single transaction for triggers, costs, revisions,
     /INVALID_PREDICTION/
   );
   assert.throws(() => apply({ kind: 'reset', confirm: false }), /CONFIRM_RESET/);
-  assert.equal(apply({ kind: 'reset', confirm: true }).session.cash, 100000);
+  assert.equal(apply({ kind: 'reset', confirm: 'RESET PAPER SESSION' }).session.cash, 100000);
 });

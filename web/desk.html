@@ -15,6 +15,8 @@
     <h1>Paper trading desk</h1><p>Synthetic USD markets · local practice</p></header>
   <section class="market-controls agentic-collection-item">
     <label>Find an instrument<input id="search" type="search" placeholder="Symbol or name"></label>
+    <label>Venue<select id="venue"><option value="synthetic">Local replay</option></select></label>
+    <label>Market type<select id="market-type"><option value="spot">Spot</option><option value="perpetual">USD perpetual</option></select></label>
     <label>Market<select id="instrument"></select></label>
     <div><span class="agentic-text-detail">Recent markets</span><div id="watch" class="actions"></div></div>
   </section>
@@ -32,6 +34,7 @@
     <section class="agentic-collection-item"><h2>Paper ticket</h2>
       <form id="ticket"><div class="pair"><label>Side<select name="side"><option>BUY</option><option>SELL</option></select></label>
         <label>Order type<select name="type"><option>MARKET</option><option>LIMIT</option><option>STOP</option></select></label></div>
+        <div id="contract-options" hidden><label>Leverage<select name="leverage"><option>1</option><option>2</option></select></label><label><input type="checkbox" name="reduceOnly"> Reduce only</label></div>
         <label>Quantity<input type="number" name="qty" min=".000001" step=".000001" value="1" required></label>
         <label id="trigger-label" hidden>Trigger price (USD)<input type="number" name="trigger" min=".0001" step="any"></label>
         <div class="actions" id="allocation" aria-label="Allocation shortcuts"></div>
@@ -52,8 +55,20 @@
   <section id="research" class="agentic-collection-item"><h2>Strategy experiment</h2><p>Run a bounded Python strategy over closed candles. Signals stay in this report and on the chart.</p>
     <label for="code">Strategy source</label><div class="editor"><pre id="numbers" aria-hidden="true"></pre><textarea id="code" rows="9" maxlength="8192" spellcheck="false" wrap="off"></textarea></div>
     <div class="actions"><button class="agentic-form-control" id="run">Run experiment</button><button class="agentic-form-control" id="sample">Load crossover example</button></div>
-    <details><summary>Language and report assumptions</summary><p>Define strategy(candles). Use lists, dictionaries, comprehensions, for loops, conditions, print, sma, ema, crossed_above and crossed_below. Return a list of signals with a candle time in Unix seconds and a side of buy, sell, short or cover. Price and label are optional. The isolated worker limits each run to five seconds. The estimate pairs closing signals at candle closes, one unit per trade, before fees. Return compounds closed trades. Drawdown uses their closing equity.</p></details>
+    <details><summary>Language and report assumptions</summary><p>Define strategy(candles). The sealed offline scientific subset supports named functions, module-level imports from math, statistics and numpy, including mean, std, diff and vector arithmetic. Use lists, dictionaries, comprehensions, for loops, conditions, print, sma, ema, crossed_above and crossed_below. Return a list of signals with a candle time in Unix seconds and a side of buy, sell, short or cover. Price and label are optional. The isolated worker limits each run to five seconds. The estimate pairs closing signals at candle closes, one unit per trade, before fees. Return compounds closed trades. Drawdown uses their closing equity.</p></details>
+    <div class="actions"><label>Strategy name<input id="strategy-name" maxlength="64"></label><button class="agentic-form-control" id="save-source">Save version</button><label>Saved source<select id="saved-source"></select></label></div>
     <output id="report" role="status"></output><pre id="logs"></pre></section>
+  <section class="agentic-collection-item"><h2>Historical research</h2>
+    <form id="historical"><div class="pair"><label>Hypothesis<select id="hypothesis"></select></label><label>Research capital (quote units)<input name="capital" type="number" value="100000" min="1" max="1000000000" required></label>
+    <label>Start UTC<input name="start" type="date" required></label><label>End UTC (inclusive)<input name="end" type="date" required></label>
+    <label>Venue<input name="venue" maxlength="45" value="uniswap-v3-500" required></label><label>Single-run instrument<input name="symbol" placeholder="Catalog default"></label>
+    <label>Rotation peers (optional)<input name="basket" placeholder="Two symbols with the same quote"></label><label>Single-run interval<select name="frame"><option value="">Catalog default</option></select></label></div>
+    <div class="actions"><button class="agentic-form-control" value="single">Queue hypothesis</button><button class="agentic-form-control" value="suite">Queue all 20</button></div></form>
+    <div class="actions"><button id="cancel-run" class="agentic-form-control" disabled>Cancel run</button><button id="overlay-run" class="agentic-form-control">Overlay selected hypothesis</button></div>
+    <output id="lab-status" role="status"></output><pre id="run-trace"></pre><div id="run-results"></div><details><summary>Metrics and calendar windows</summary><pre id="run-detail"></pre></details>
+    <div class="actions"><button id="research-sheets" class="agentic-form-control">Export results to Sheets</button><button id="export-run" class="agentic-form-control">Export run summary</button><a id="export-artifact" hidden download>Download verified research artifact</a></div></section>
+  <section class="agentic-collection-item"><h2>Shared observation</h2><button id="observer-open" class="agentic-form-control">Get 24-hour observer link</button> <a id="observer-link" rel="noreferrer" hidden></a>
+    <details id="console"><summary>Activity console</summary><ol id="activity-log"></ol></details></section>
   <section id="predictions" class="agentic-collection-item"><h2>Prediction journal</h2>
     <form id="prediction"><div class="pair"><label>Direction<select name="direction"><option value="up">Up</option><option value="down">Down</option></select></label>
       <label>Horizon<select name="horizon"></select></label></div>

@@ -8,16 +8,41 @@ import { history, SOURCE } from '../src/market.mjs';
 import { portfolio, journalCsv } from '../src/practice-account.mjs';
 import { assessPrediction } from '../src/predictions.mjs';
 
+import { deskActions, actionFor, validate } from '../src/desk-actions.mjs';
+import { deskRead } from './desk-reads.mjs';
+import { observerLink, activityScope, recordActivity } from './observer.mjs';
 const writes = ['select', 'settings', 'order', 'tick', 'cancel', 'funds', 'reset', 'prediction'];
 const operations = [
-  ...marketOperations,
-  ...['session', 'portfolio', 'journal', 'predictions', 'experiment', ...writes].map((v) => 'practice.' + v)
+  ...new Set([
+    ...marketOperations,
+    ...deskActions.map((a) => a.operation),
+    'desk.tab',
+    'desk.markers',
+    'desk.activity',
+    ...['session', 'portfolio', 'journal', 'predictions', 'experiment', ...writes].map((v) => 'practice.' + v)
+  ])
 ];
 const files = [
   './practice-domain.mjs',
+  './desk-reads.mjs',
+  './market-library.mjs',
+  './practice-prices.mjs',
+  './public-feed.mjs',
+  './observer.mjs',
+  './research-service.mjs',
+  './research-artifact.mjs',
+  './research-engine.mjs',
+  './research-events.mjs',
+  './research-portfolio.mjs',
+  './research-data.mjs',
+  './research-signals.mjs',
+  './research-statistics.mjs',
+  '../src/desk-actions.mjs',
+  '../src/research-catalog.mjs',
   './practice-replay.mjs',
   './paper-guard.mjs',
   '../src/practice-account.mjs',
+  '../src/contracts.mjs',
   '../src/practice-defaults.mjs',
   '../src/indicators.mjs',
   '../src/market.mjs',
@@ -26,6 +51,7 @@ const files = [
   '../src/experiment.mjs',
   '../src/strategy-example.mjs',
   '../src/strategy-language.mjs',
+  '../src/scientific-packages.mjs',
   './strategy-worker.mjs'
 ];
 const candidate = sha(files.map((f) => [f, sha(readFileSync(new URL(f, import.meta.url)))]));
@@ -52,8 +78,17 @@ function research(code, bars) {
     });
   });
 }
-export function practiceDomain({ scope, store, token, now }) {
-  const guard = createPaperGuard({ mode: 'synthetic-replay', scope, store, now });
+export function practiceDomain({
+  scope,
+  store,
+  token,
+  now,
+  archive,
+  researchService,
+  observerOrigin,
+  actor = 'agent'
+}) {
+  const guard = createPaperGuard({ mode: 'synthetic-replay', scope, store, now, market: archive?.market });
   const expires = new Date(Math.floor(now() / 86400000) * 86400000 + 86400000).toISOString().replace('.000Z', 'Z');
   const capability = {
     provider: 'local-practice',
@@ -79,11 +114,91 @@ export function practiceDomain({ scope, store, token, now }) {
     let current = guard.read(),
       data;
     const verb = operation.slice('practice.'.length);
+    const action = actionFor(operation);
+    if (action) validate(inputs, action.inputSchema);
+    const context = { s: current.session, archive, at, store, scope };
+    if (
+      ['practice.select', 'practice.settings'].includes(operation) &&
+      (inputs.venue ?? current.session.venue ?? 'synthetic') !== 'synthetic'
+    ) {
+      const target = { ...current.session, ...inputs };
+      requireThat(
+        archive?.catalog.some(
+          (m) => m.venue === target.venue && m.marketType === target.marketType && m.symbol === target.symbol
+        ),
+        'ARCHIVE_REQUIRED'
+      );
+      archive.read({ ...target, count: 1 });
+    }
     if (writes.includes(verb) && operation.startsWith('practice.')) {
       requireThat(!Object.hasOwn(inputs, 'kind'), 'UNSUPPORTED');
       const { revision, ...args } = inputs;
       current = guard.apply({ ...args, kind: verb }, revision, request_id);
       data = current;
+    } else if (operation === 'desk.observer')
+      data = {
+        ...observerLink({ store, scope, token, now }),
+        ...(observerOrigin ? { origin: observerOrigin } : {})
+      };
+    else if (operation === 'desk.markers') {
+      const s = current.session;
+      requireThat(
+        inputs.symbol === s.symbol &&
+          inputs.frame === s.frame &&
+          inputs.venue === (s.venue ?? 'synthetic') &&
+          inputs.marketType === s.marketType,
+        'CHART_BINDING'
+      );
+      requireThat(Array.isArray(inputs.markers) && inputs.markers.length <= 1000, 'INVALID_MARKERS');
+      const markers = inputs.markers.map((m) => {
+        requireThat(
+          ['buy', 'sell', 'short', 'cover', 'entry', 'exit', 'stop', 'target'].includes(m.action) &&
+            Number.isSafeInteger(m.time) &&
+            Number.isFinite(m.price) &&
+            m.price > 0,
+          'INVALID_MARKERS'
+        );
+        return { action: m.action, time: m.time, price: m.price, label: m.action };
+      });
+      data = store.transaction(
+        activityScope(scope),
+        (s) =>
+          (s.configs.overlay = {
+            symbol: inputs.symbol,
+            frame: inputs.frame,
+            venue: inputs.venue,
+            marketType: inputs.marketType,
+            markers
+          })
+      );
+    } else if (operation === 'desk.studies') {
+      current = guard.apply({ kind: 'studies', studies: inputs.studies }, inputs.revision, request_id);
+      data = current;
+    } else if (operation === 'desk.tab') {
+      requireThat(
+        Object.keys(inputs).join() === 'tab' &&
+          ['market', 'portfolio', 'research', 'predictions'].includes(inputs.tab),
+        'INVALID_INPUT'
+      );
+      data = store.transaction(activityScope(scope), (s) => ({ tab: (s.configs.tab = inputs.tab) }));
+    } else if (operation.startsWith('research.'))
+      data = researchService.invoke(scope, operation, inputs, request_id, current.session);
+    else if (
+      [
+        'desk.describe',
+        'desk.chart',
+        'desk.history',
+        'desk.activity',
+        'read.catalog',
+        'read.depth',
+        'read.tape',
+        'read.ticker'
+      ].includes(operation)
+    )
+      data = deskRead(operation, inputs, context);
+    else if (operation === 'read.candles' && (inputs.venue ?? current.session.venue) !== 'synthetic') {
+      const r = deskRead('desk.chart', inputs, context);
+      data = { ...r, rows: r.forming ? [...r.bars, r.forming] : r.bars };
     } else if (marketOperations.includes(operation)) data = marketRead(operation, inputs, at);
     else
       switch (operation) {
@@ -100,13 +215,8 @@ export function practiceDomain({ scope, store, token, now }) {
           data = current.session.predictions.map((p) => ({ ...p, ...assessPrediction(p, at) }));
           break;
         case 'practice.experiment':
-          data = await research(
-            inputs.code ?? current.session.code,
-            history(inputs.symbol ?? current.session.symbol, inputs.frame ?? current.session.frame, at, 300).slice(
-              0,
-              -1
-            )
-          );
+          const chart = deskRead('desk.chart', { ...inputs, count: 300 }, context);
+          data = await research(inputs.code ?? current.session.code, chart.bars);
           break;
         default:
           throw Error('UNSUPPORTED');
@@ -120,7 +230,40 @@ export function practiceDomain({ scope, store, token, now }) {
     capabilities: [capability],
     audienceToken: token,
     now,
-    practice: { capability_digest, invoke }
+    practice: {
+      capability_digest,
+      async invoke(body) {
+        const start = now();
+        let status = 'REFUSED',
+          runId;
+        try {
+          const result = await invoke(body);
+          status = 'OK';
+          runId = result.data?.id;
+          return result;
+        } finally {
+          if (
+            ![
+              'practice.session',
+              'desk.activity',
+              'desk.chart',
+              'research.get',
+              'desk.describe',
+              'practice.tick'
+            ].includes(body.operation)
+          )
+            recordActivity(store, scope, {
+              operation: body.operation,
+              status,
+              actor,
+              at: now(),
+              elapsed: now() - start,
+              runId,
+              delivery: sha([body.operation, body.request_id, body.inputs, status])
+            });
+        }
+      }
+    }
   });
   function request(operation, inputs, id) {
     return {

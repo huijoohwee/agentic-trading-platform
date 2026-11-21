@@ -219,6 +219,8 @@ details[open] > :not(summary) {
   max-height: 12rem;
   overflow: auto;
 }
+#run-detail, #run-trace, #activity-log { overflow:auto; max-height:20rem; max-width:100%; overflow-wrap:anywhere; }
+#lab-status { display:block; overflow-wrap:anywhere; }
 #notice:empty,
 #logs:empty {
   display: none;

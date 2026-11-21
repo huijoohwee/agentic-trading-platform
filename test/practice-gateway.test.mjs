@@ -52,7 +52,7 @@ test('one session, one guard and one revision across browser HTTP, gateway and M
   );
   assert.deepEqual(listed.sort(), cap.operations.slice().sort());
   assert.equal(listed.includes('release'), false);
-  const order = req('practice.order', { revision: 0, symbol, side: 'BUY', type: 'MARKET', qty: 1 });
+  const order = req('practice.order', { revision: 0, explicitIntent:true, symbol, side: 'BUY', type: 'MARKET', qty: 1 });
   const accepted = await (await post('gateway', order)).json();
   assert.equal(accepted.status, 'OK');
   assert.equal(accepted.data.notice, 'FILLED');

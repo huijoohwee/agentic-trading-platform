@@ -17,7 +17,7 @@ function download(content, name, type) {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function table(id, headers, rows) {
+export function renderTable(id, headers, rows) {
   const host = el(id);
   if (!rows.length) {
     host.replaceChildren(document.createTextNode('No records'));
@@ -42,7 +42,8 @@ function table(id, headers, rows) {
     host._table = mountDataView(mount, view);
   } else host._table.update(view);
 }
-export function bindPanels({ state, act, onError, getBars, onMarkers, settingsChanged }) {
+const table = renderTable;
+export function bindPanels({ state, act, onError, getBars, onMarkers, settingsChanged, readFlow }) {
   let account,
     at,
     price,
@@ -76,8 +77,19 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
       if (!p) return;
       const s = state(),
         held = s.positions[s.symbol]?.qty ?? 0,
-        pending = s.orders.filter((o) => o.symbol === s.symbol && o.side === 'SELL').reduce((n, o) => n + o.qty, 0);
-      const max = fields.side.value === 'BUY' ? account.available / (p * (1 + feeRate)) : Math.max(0, held - pending);
+        pending = s.orders
+          .filter((o) => o.symbol === s.symbol && o.marketType !== 'perpetual' && o.side === 'SELL')
+          .reduce((n, o) => n + o.qty, 0);
+      let max;
+      if (s.marketType === 'perpetual') {
+        const q = s.contracts?.[s.symbol]?.quantity ?? 0,
+          sign = fields.side.value === 'BUY' ? 1 : -1;
+        const closing = Math.max(0, -sign * q);
+        max = fields.reduceOnly.checked
+          ? closing
+          : closing + Math.max(0, account.available) / (p * (1 / Number(fields.leverage.value) + feeRate));
+      } else
+        max = fields.side.value === 'BUY' ? account.available / (p * (1 + feeRate)) : Math.max(0, held - pending);
       fields.qty.value = Math.floor(((max * percent) / 100) * 1e6) / 1e6;
       estimateTicket();
     };
@@ -88,6 +100,10 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
     e.preventDefault();
     act({
       kind: 'order',
+      explicitIntent: true,
+      marketType: state().marketType ?? 'spot',
+      leverage: state().marketType === 'perpetual' ? Number(fields.leverage.value) : 1,
+      reduceOnly: state().marketType === 'perpetual' && fields.reduceOnly.checked,
       symbol: state().symbol,
       type: fields.type.value,
       side: fields.side.value,
@@ -97,11 +113,11 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
   };
   el('funds').onsubmit = (e) => {
     e.preventDefault();
-    act({ kind: 'funds', amount: Number(e.target.elements.amount.value) });
+    act({ kind: 'funds', explicitIntent: true, amount: Number(e.target.elements.amount.value) });
   };
   el('reset').onclick = () => {
-    if (confirm('Reset the entire synthetic session, including orders, holdings, predictions and strategy source?'))
-      act({ kind: 'reset', confirm: true });
+    const phrase = prompt('Type RESET PAPER SESSION to erase this practice account.');
+    if (phrase !== null) act({ kind: 'reset', explicitIntent: true, confirm: phrase });
   };
   el('csv').onclick = () => download(journalCsv(state().fills), 'practice-journal.csv', 'text/csv;charset=utf-8');
   for (const key of Object.keys(horizons)) prediction.horizon.add(new Option(key, key));
@@ -110,6 +126,7 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
     e.preventDefault();
     act({
       kind: 'prediction',
+      explicitIntent: true,
       symbol: state().symbol,
       direction: prediction.direction.value,
       horizon: prediction.horizon.value,
@@ -189,9 +206,31 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
       onError(e.message);
     }
   };
-  function flow() {
+  let bookVersion = 0;
+  async function flow() {
     if (!el('flow').open || !at) return;
-    const book = microstructure(state().symbol, at);
+    const version = ++bookVersion,
+      s = state();
+    let book;
+    if (s.venue && s.venue !== 'synthetic') {
+      try {
+        const result = await readFlow?.({
+          venue: s.venue,
+          symbol: s.symbol,
+          marketType: s.marketType,
+          frame: s.frame,
+          count: 20
+        });
+        if (version !== bookVersion) return;
+        if (!result) throw Error('Missing');
+        book = result;
+      } catch {
+        if (version !== bookVersion) return;
+        el('spread').textContent = 'No qualified depth or trade tape for this market.';
+        for (const id of ['bids', 'asks', 'tape']) table(id, [], []);
+        return;
+      }
+    } else book = microstructure(s.symbol, at);
     el('spread').textContent =
       'Best bid ' +
       f(book.bids[0].price) +
@@ -230,6 +269,8 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
       ['Total P&L', account.total],
       ['Fees', account.fees],
       ['Closing win rate', pct(account.winRate)],
+      ['Contract margin', account.margin],
+      ['Funding', account.funding],
       ['Cash / assets', pct(account.cash / account.equity) + ' / ' + pct(account.assets / account.equity)]
     ];
     el('balances').replaceChildren(
@@ -246,7 +287,10 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
     table(
       'holdings',
       ['Instrument', 'Quantity', 'Average entry', 'Mark', 'Value', 'Open P&L'],
-      account.holdings.map((r) => [r.symbol, ...[r.quantity, r.average, r.mark, r.value, r.open].map(f)])
+      account.holdings.map((r) => [
+        r.symbol + ' · ' + (r.marketType ?? 'spot'),
+        ...[r.quantity, r.average, r.mark, r.value, r.open].map(f)
+      ])
     );
     const calls = s.predictions.map((p) => ({ ...p, ...assessPrediction(p, at) })),
       closed = calls.filter((p) => p.state !== 'Tracking');
@@ -283,7 +327,7 @@ export function bindPanels({ state, act, onError, getBars, onMarkers, settingsCh
             div.textContent = o.side + ' ' + o.qty + ' ' + o.symbol + ' · ' + o.type + ' ' + f(o.trigger) + ' ';
             b.className = 'agentic-form-control';
             b.textContent = 'Cancel';
-            b.onclick = () => act({ kind: 'cancel', id: o.id });
+            b.onclick = () => act({ kind: 'cancel', explicitIntent: true, id: o.id });
             div.append(b);
             return div;
           })

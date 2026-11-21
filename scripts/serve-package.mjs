@@ -1,3 +1,4 @@
+import { observerEnvironment } from './observer-server.mjs';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +19,7 @@ for (const [name, digest] of Object.entries(files)) {
 const policy = JSON.parse(await readFile(join(root, 'server-policy.json'), 'utf8'));
 const server = await serveAssets(Number(process.env.PORT ?? 4181), {
   assets,
+  observerConfig: observerEnvironment(process.env),
   documentPolicy: policy,
   resourcePolicy: policy,
   practiceDirectory: join(root, '.runtime-private', 'desk')

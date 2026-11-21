@@ -21,7 +21,7 @@ export async function practiceCache() {
     if (!row) return null;
     const data = JSON.parse(row.values.snapshot);
     if (
-      data.session?.schema !== 'practice-session/v1' ||
+      !['practice-session/v1', 'practice-session/v2'].includes(data.session?.schema) ||
       data.session.source !== SOURCE ||
       !Number.isSafeInteger(data.revision)
     )

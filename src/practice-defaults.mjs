@@ -2,7 +2,12 @@ import { catalog, SOURCE } from './market.mjs';
 import { example } from './strategy-example.mjs';
 
 export const initialPractice = () => ({
-  schema: 'practice-session/v1',
+  schema: 'practice-session/v2',
+  marketType: 'spot',
+  venue: 'synthetic',
+  contracts: {},
+  funding: [],
+  fundingTotal: 0,
   source: SOURCE,
   watch: [catalog[0].symbol],
   symbol: catalog[0].symbol,

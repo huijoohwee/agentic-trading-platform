@@ -5,10 +5,51 @@ import { openStore } from './store.mjs';
 import { practiceDomain } from './practice-domain.mjs';
 import { createGatewayMcp } from './gateway-mcp.mjs';
 import { sha } from './core.mjs';
+import { marketLibrary } from './market-library.mjs';
+import { researchService as openResearch } from './research-service.mjs';
+import { observerRead } from './observer.mjs';
 import { marketRead } from '../src/market-reads.mjs';
 
-export function createPracticeApi(directory, { now = Date.now } = {}) {
-  let store;
+export function createPracticeApi(directory, { now = Date.now, observerOrigin } = {}) {
+  let store, archive, researchService;
+  function open() {
+    if (!store) {
+      mkdirSync(directory, { recursive: true, mode: 0o700 });
+      store = openStore(join(directory, 'practice.sqlite'));
+      archive = marketLibrary(directory);
+      researchService = openResearch({ store, directory, now });
+    }
+  }
+  function observe(req, res) {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer'
+    };
+    if (req.method !== 'GET') {
+      res.writeHead(403, headers);
+      res.end(JSON.stringify({ error: 'OBSERVER_READ_ONLY' }));
+      return;
+    }
+    try {
+      open();
+      const url = new URL(req.url, 'https://observer.invalid');
+      const token = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization ?? '')?.[1];
+      const result = observerRead(
+        store,
+        token,
+        Number(url.searchParams.get('after') ?? 0),
+        now(),
+        archive,
+        researchService
+      );
+      res.writeHead(200, headers);
+      res.end(JSON.stringify(result));
+    } catch (e) {
+      res.writeHead(403, headers);
+      res.end(JSON.stringify({ error: 'OBSERVER_DENIED' }));
+    }
+  }
   const streams = new Set();
   const cookieName = 'trading_practice_id';
   async function handle(req, res) {
@@ -30,10 +71,22 @@ export function createPracticeApi(directory, { now = Date.now } = {}) {
     )
       return send(403, { error: 'ORIGIN_DENIED' });
     try {
+      if (url.pathname === '/api/practice/observe') return observe(req, res);
       if (url.pathname === '/api/practice/events' && req.method === 'GET') {
         if (streams.size >= 16) return send(429, { error: 'STREAM_CAPACITY' });
         const symbol = url.searchParams.get('symbol');
-        const event = () => JSON.stringify(marketRead('read.ticker', { symbol }, now()));
+        const event = () =>
+          JSON.stringify(
+            marketRead(
+              'read.ticker',
+              {
+                symbol,
+                marketType: url.searchParams.get('marketType') ?? 'spot',
+                frame: url.searchParams.get('frame') ?? '5m'
+              },
+              now()
+            )
+          );
         const first = event();
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -55,7 +108,8 @@ export function createPracticeApi(directory, { now = Date.now } = {}) {
         return send(200, marketRead('read.ticker', { symbol: url.searchParams.get('symbol') }, now()));
       }
       const route = url.pathname.slice('/api/practice/'.length);
-      if (!['session', 'capabilities', 'gateway', 'mcp'].includes(route)) return send(404, { error: 'UNSUPPORTED' });
+      if (!['session', 'capabilities', 'gateway', 'ui', 'mcp', 'artifact', 'receipt'].includes(route))
+        return send(404, { error: 'UNSUPPORTED' });
       if (!['GET', 'POST'].includes(req.method)) return send(405, { error: 'METHOD_NOT_ALLOWED' });
       let token = (req.headers.cookie ?? '')
         .split(';')
@@ -70,12 +124,35 @@ export function createPracticeApi(directory, { now = Date.now } = {}) {
           cookieName + '=' + token + '; HttpOnly; SameSite=Strict; Path=/api/practice; Max-Age=31536000'
         );
       }
-      if (!store) {
-        mkdirSync(directory, { recursive: true, mode: 0o700 });
-        store = openStore(join(directory, 'practice.sqlite'));
-      }
+      open();
       const scope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'desk/' + sha(token) };
-      const { gateway, request } = practiceDomain({ store, scope, token, now }),
+      if (route === 'receipt' && req.method === 'GET') {
+        const id = url.searchParams.get('id');
+        if (!/^[a-zA-Z0-9-]{12,64}$/.test(id ?? '')) return send(400, { error: 'INVALID_REQUEST' });
+        const accepted = store.read(scope).checkpoints['practice:' + id];
+        return send(200, { accepted: Boolean(accepted), revision: accepted?.revision ?? null });
+      }
+      if (route === 'artifact' && req.method === 'GET') {
+        const { filename, bytes } = researchService.download(scope, url.searchParams.get('id'));
+        res.writeHead(200, {
+          'Content-Type': 'application/gzip',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Disposition': 'attachment; filename="' + filename + '"'
+        });
+        res.end(bytes);
+        return;
+      }
+      const { gateway, request } = practiceDomain({
+          store,
+          scope,
+          token,
+          now,
+          archive,
+          researchService,
+          observerOrigin,
+          actor: ['session', 'ui'].includes(route) ? 'human' : 'agent'
+        }),
         auth = 'Bearer ' + token;
       const unwrap = (result) => {
         if (result.status !== 'OK') throw Error(result.error.code);
@@ -97,7 +174,7 @@ export function createPracticeApi(directory, { now = Date.now } = {}) {
         chunks.push(chunk);
       }
       const payload = JSON.parse(Buffer.concat(chunks));
-      if (route === 'gateway') return send(200, await gateway.admit(payload, auth));
+      if (route === 'gateway' || route === 'ui') return send(200, await gateway.admit(payload, auth));
       if (route === 'mcp') return send(200, await createGatewayMcp({ gateway }).handle(payload, auth));
       if (route !== 'session') return send(405, { error: 'METHOD_NOT_ALLOWED' });
       const { command, revision, requestId } = payload;
@@ -110,6 +187,7 @@ export function createPracticeApi(directory, { now = Date.now } = {}) {
     }
   }
   return {
+    observe,
     route(req, res) {
       if (!req.url?.startsWith('/api/practice/')) return false;
       void handle(req, res);
@@ -119,6 +197,8 @@ export function createPracticeApi(directory, { now = Date.now } = {}) {
       for (const response of streams) response.end();
     },
     close() {
+      researchService?.close();
+      archive?.close();
       store?.close();
     }
   };

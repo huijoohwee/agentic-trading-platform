@@ -43,6 +43,7 @@ export const catalog = Object.freeze(
 export const frames = Object.freeze({
   '1m': 1,
   '5m': 5,
+  '10m': 10,
   '15m': 15,
   '30m': 30,
   '1h': 60,

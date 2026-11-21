@@ -30,10 +30,10 @@ const exact = (n, step) => {
   return (a * 10n ** BigInt(x - e)) % (b * 10n ** BigInt(y - e)) === 0n;
 };
 
-export function createPaperGuard({ store, scope, candidate, keys, broker, now = Date.now, mode }) {
+export function createPaperGuard({ store, scope, candidate, keys, broker, now = Date.now, mode, market }) {
   if (mode === 'synthetic-replay') {
     need(!broker && !keys && !candidate, 'REPLAY_ISOLATION');
-    return practiceReplay({ store, scope, now });
+    return practiceReplay({ store, scope, now,market });
   }
   need(mode === undefined && !scope?.account_alias?.startsWith('desk/'), 'ACCOUNT_BINDING');
   scope = boundedJson(scope); scopeKey(scope);

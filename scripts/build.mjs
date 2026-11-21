@@ -19,8 +19,8 @@ const pins = [
     paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/dashboard-range.mjs', 'site/dashboard-range.css', 'site/THIRD-PARTY-NOTICES.txt',
       'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js', 'site/floating-panel.js', 'site/floating-panel.css', 'site/hover.css',
       'site/skills-commands.js', 'site/skills-commands.css', 'site/collection-layout.js', 'site/toolbar.css'] },
-  { repo: 'agentic-os', prefix: 'os', revision: 'a5d8f7afca3d1a3109d5d7f3ec9869685d1c235d',
-    digest: '66010573b89efc77b336fef08ed861399dffc8a9a1567e60566038969842c6ea',
+  { repo: 'agentic-os', prefix: 'os', revision: 'eed72ec7597c94c95669cb537dda81c59596a0ed',
+    digest: '95ae3322b49b5ae1475b692c477fbf5e9b33e5fafb2d23656b0c76ddc3889869',
     paths: ['LICENSE', 'catalog/invocation.json', 'skills/trading/SKILL.md'] },
 ];
 
@@ -37,13 +37,18 @@ export function verifyOwner(repo, sources) {
 }
 
 export function verifyImports(assets) {
-  for (const [path, bytes] of assets) {
-    if (!/\.m?js$/.test(path)) continue;
-    const source = bytes.toString();
-    // The sealed modules use literal ESM specifiers exclusively.
-    const references = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)(['"])([^'"]+)\1/g;
+  const modules = [...assets].filter(([path]) => /\.m?js$/.test(path)).map(([path, bytes]) => [path, bytes.toString()]);
+  // Ask the same Node parser that loads our modules. Parsing never executes the source.
+  const inspect = `const {SourceTextModule}=require('node:vm'),fs=require('node:fs');
+    const modules=JSON.parse(fs.readFileSync(0,'utf8'));
+    process.stdout.write(JSON.stringify(modules.map(([name,src])=>new SourceTextModule(src,{identifier:name}).dependencySpecifiers)));`;
+  const imports = JSON.parse(execFileSync(process.execPath, ['--no-warnings','--experimental-vm-modules','-e',inspect], {
+    input: JSON.stringify(modules), maxBuffer: 2000000
+  }));
+  for (const [index,[path,source]] of modules.entries()) {
     if (/\bimport\s*\(\s*(?!\s*['"])/.test(source)) throw new Error('Computed import in ' + path);
-    for (const [, , ref] of source.matchAll(references)) {
+    const dynamic = [...source.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g)].map(match => match[2]);
+    for (const ref of [...imports[index],...dynamic]) {
       const target = new URL(ref, 'https://fixture.invalid/' + path);
       if (!ref.startsWith('.') || target.origin !== 'https://fixture.invalid' || !assets.has(target.pathname.slice(1))) {
         throw new Error('Unowned module in ' + path + ': ' + ref);
@@ -64,13 +69,13 @@ export async function assemble({ devDocumentPolicy } = {}) {
       assets.set('owners/' + pin.prefix + '/' + output, body);
     }
   }
-  const files = ['web/desk.html', 'web/desk.css', ...['market','market-reads','indicators','chart','experiment','strategy-language','strategy-example','experiment-worker',
+  const files = ['web/observe.html','src/observer-view.mjs','web/desk.html', 'web/desk.css', ...['desk-lab','research-catalog','desk-actions','landing-tools','contracts','market','market-reads','indicators','chart','experiment','strategy-language','scientific-packages','strategy-example','experiment-worker',
     'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
     'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/skills-panel.mjs'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   if (devDocumentPolicy !== undefined) {
-    for (const document of ['index.html','desk.html']) {
+    for (const document of ['index.html','desk.html','observe.html']) {
       const template = assets.get(document).toString();
       const policyTag = /(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/g;
       if ([...template.matchAll(policyTag)].length !== 1) throw new Error('Expected one document policy');

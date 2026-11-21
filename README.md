@@ -20,15 +20,56 @@ Open **Private cash-policy audit**, **Decision and execution log**, **Verified r
 
 ## Paper trading desk
 
-From the decision journal, select **Open paper trading desk**. Search by symbol or name, choose a timeframe, and use the indicator library or a preset. The desk serves 24 synthetic USD instruments from one versioned price path. The event stream, snapshot fallback and sealed device replay share that source. The footer identifies the active transport and event age. Open **Order book and trade tape** for twenty levels per side and the latest trades.
+From the decision journal, select **Open paper trading desk**. The chart, market replay and calculations run in first-party code. The default venue has 24 synthetic USD instruments and twelve UTC intervals, including 10m and 3h. The selector also discovers markets installed by the local operator. The footer identifies the venue, data time and transport. The order book and tape show depth, spread, bid/ask pressure and aggressor direction where the source supplies them. Historical pools expose closed candles and volume.
 
-The anonymous practice account starts with $100,000. Market orders fill at the observed fixture price. Limits and stops reserve buying power or held quantity, and the guard checks them when the selected market is active. The estimate includes a 0.10% fee. A stop that gaps beyond available buying power is rejected. Portfolio shows holdings, allocation, realized and open P&L, closing win rate and fees. Export the journal as CSV or a Sheets workbook. **Practice funds** supports top-up and confirmed reset of this session.
+The anonymous account starts with 100,000 paper USD. Choose spot or perpetual before entering a market, limit or stop order. Perpetuals have signed quantities, average entry, margin, fees, realized and open P&L, funding records and a 2× gross leverage ceiling. Reduce-only permits closing part or all of an existing position. The guard rechecks working orders when their selected market is open, and checks observed USD marks and funding continuity before a public-market paper fill. The replay venue models eight-hour funding. The fee estimate is 0.10%. Portfolio and journal exports use Base record views and Sheets workbook generation.
 
-**Strategy experiment** executes an editable subset of Python in a five-second worker. The crossover example accepts closed candles and returns timestamped signals. Supported constructs include list comprehensions, dictionaries, arithmetic, comparisons, conditionals, bounded loops, moving averages and crossover helpers. Research results have no order route. **Prediction journal** freezes the instrument, entry, confidence, horizon and hypothesis at recording. Resolved calls use the fixture mark at expiry.
+Trading 0.14.0 publishes two landing actions and 22 desk actions for Skills 0.10.0. The normal browser controls work on desktop and mobile. On a WebMCP host the top document registers the same actions and validation, and tears down registrations at navigation. From loopback, obtain a session cookie with `GET /api/practice/session`, then read `GET /api/practice/capabilities`. The JSON gateway and MCP endpoints use the same owner session. Paper changes bind direct intent, a request ID and the observed revision. Reuse that binding to resolve an uncertain submission. Reset requires **RESET PAPER SESSION**.
 
-The loopback server commits accepted changes to the existing SQLite store under `.runtime-private/desk`. Anonymous sessions use an HttpOnly cookie and revision checks. Chart and editor preferences save after 350 ms of inactivity. Base caches the latest accepted session on the device. After priming the desk, disconnect to reopen saved holdings and run chart or strategy research. Saving paper changes requires the local server. Journal history and equity samples each retain the latest 1,000 entries. The serialized session is bounded to 480,000 bytes. Each accepted mutation retains its request binding and revision in the runtime ledger. Reaching the 10,000-receipt limit returns an explicit capacity refusal.
+The local server saves to SQLite in `.runtime-private/desk`. Base caches the accepted session on the device. Schema v2 loads existing v1 paper balances, orders, fills and preferences. The chart and strategy editor work offline on sealed synthetic bars. Saves require the local server. Session receipts cap at 10,000, serialized state at 480,000 bytes, and fills and equity samples at 1,000 each. Before source rollback, stop the server and retain the private directory, including its SQLite WAL files. Serve the previous sealed build with its matching pre-upgrade data copy. Keep the current directory for reviewed recovery of later paper entries.
 
-For headless use, open `GET /api/practice/session`, retain its session cookie, then read `GET /api/practice/capabilities` for the exact scope, digest and operations. From the same loopback origin, post the standard gateway envelope to `/api/practice/gateway` or call the same operation with MCP `tools/call` at `/api/practice/mcp`. Mutations require the observed revision and a unique request ID. The replay account is isolated from configured accounts and provider credentials. The sealed ZIP from `npm run package:replay` includes the same server and works without sibling repositories. In an extracted copy, run `node scripts/serve-package.mjs` and open the printed address.
+### Install public historical observations
+
+The optional importer reads the CC BY 4.0 Uniswap v3 hourly archive by Zhou, Liu and Brini. It pins the 14.3 MB Parquet file by SHA-256, excludes publisher-marked missing observations and writes verified UTC partitions under 500 kB. The installer exposes six spot instrument bindings across four 0.05% pools. Prices use the displayed quote unit and volume uses the displayed base unit. Install before opening the desk, or restart the local server to reload the catalog. [Dataset and attribution](https://zenodo.org/records/17302324)
+
+```sh
+uv run --isolated --with duckdb==1.4.4 python scripts/import-pool-history.py
+# With a retained copy of the original, both commands work without a data connection.
+uv run --isolated --with duckdb==1.4.4 python scripts/import-pool-history.py --file /path/to/pool_hourly_data.parquet
+uv run --isolated --with duckdb==1.4.4 node scripts/check-pool-history.mjs .runtime-private/desk /path/to/pool_hourly_data.parquet
+```
+
+The final command rebuilds a directional WETH/USDC experiment and a three-pool monthly rotation against WETH, then recomputes their prices, fills or rebalances and returns independently from the publisher's bytes. The rotation uses WBTC, USDC and DAI as its explicit alternate basket. Results include missing-data warnings and are denominated in WETH. Both checks retain a cold artifact and a separate cache receipt.
+
+### Connect a public market collector
+
+An operator can publish snapshots from a rights-reviewed collector to the existing desk. Store a `public-market-admission/v1` manifest in `feed/admission.json` under the private desk directory. Each entry in `markets` names the venue, symbol, instrument type, quote currency, source, creator, licence, expiry in UTC milliseconds and SHA-256 of its local display-rights receipt. Use `marketType` of `spot` or `perpetual`, `hardCapUsd: 0` and `allowPublicDisplay: true`. Perpetuals also require the settlement currency. Place the reviewed receipt bytes at `feed/<rightsDigest>.rights`.
+
+```sh
+npm run market:snapshot -- .runtime-private/desk /private/collector-snapshot.json
+```
+
+The optional CCXT reader can collect one snapshot directly with `uv run --isolated --with ccxt==4.5.93 python scripts/collect-public-market.py .runtime-private/desk VENUE BASE.QUOTE spot`. Its admission entry also needs a reviewed `collector` mapping with the CCXT exchange ID (`exchange`), unified `instrument`, exact HTTPS `hosts`, `tradeSide` of maker or taker, `amountUnit` of contracts or base, and `candleVolumeUnit` of base. The reader allows 24 public GETs per invocation and requires exchange timestamps for quotes and books. It collects spot and linear perpetual market observations. External paper contracts additionally require settled funding evidence from a collector that supplies that history. The CCXT software licence and the exchange's display rights have separate receipts. [CCXT market data methods](https://github.com/ccxt/ccxt/wiki/Manual)
+
+The collector publishes a `public-market-snapshot/v1` with the same market binding, monotone sequence, UTC timestamp, ticker, at least 20 ordered bids and asks, aggressor-tagged trades, and timestamped OHLCV candles by interval. Perpetual positions need the covered funding interval and settled events. The runtime checks the snapshot before advancing its SQLite head. Observations older than 15 seconds are stale. The local conformance test contains a complete fixture for the schema. Public live-feed qualification requires current source rights and matching observations from the chosen venue. [Snapshot contract and examples](test/public-market-feed.test.mjs)
+
+### Strategies and historical research
+
+The strategy editor runs a bounded Python subset in an isolated five-second worker. It accepts named functions, closed OHLCV candles, supported math and statistics imports and one-dimensional array operations. **Save version** stores a named source hash. The discovered package inventory lists each supported function. Signals overlay the chart. Prediction entries record the observed quote, horizon and owner hypothesis.
+
+Queue one historical hypothesis or all 20. Supply the venue, UTC date range and starting capital in quote units. The default spans January 2021 through the last completed UTC month. The worker models execution costs, returns a run ID, recovers queued jobs after restart and enforces 30 new runs per owner in a rolling 24 hours. Poll for status, cancel an active job, select the matching chart to display its markers, or download the verified gzip artifact. Each completed calculation stores its parameters, data manifest, equity history, signals, trades or rebalances, costs, UTC annual and walk-forward windows, and an independent scientific hash. Unavailable datasets produce a reason and unknown return. The complete suite includes a row for each hypothesis even when individual markets are unavailable.
+
+**Get 24-hour observer link** opens a read-only session view. An optional HTTPS listener uses `TRADING_OBSERVER_HOST`, `TRADING_OBSERVER_PORT`, `TRADING_OBSERVER_CERT` and `TRADING_OBSERVER_KEY` to share that view on a device-reachable address. The owner and artifact routes stay on loopback.
+
+### Qualification of the 0.14.0 source release
+
+| Check | Evidence available in this release |
+|---|---|
+| Trading VCC-40 | A rights-identified historical source was imported. Live-feed conformance covers 20 levels, aggressor volume, moving candles, UTC aggregation, stale snapshots and sequence rollback. Real public spot and perpetual feed receipts remain open. |
+| Trading VCC-41/42 and Skills VCC-15/18 | Migration, signed paper positions, risk and funding, timeout replay after page reload, strict tool schemas, two landing actions and all 22 desk actions passed locally. The desk test replayed the same request bindings across the browser, UI gateway and MCP. The WebMCP host used in tests implements the browser registration contract. |
+| Trading VCC-43 and Skills VCC-16 | Local read-only scope, expiry, reconnect and simulator coverage exist. Physical-device acceptance was deferred. |
+| Trading VCC-44/45 and Skills VCC-17 | Versioned source, bounded Python workers, quota, recovery, cancellation and overlays passed. Independent DuckDB checks on the original hourly data reproduced five directional trades and eight portfolio rebalances over 906 marked days. These use explicitly selected alternate spot instruments. |
+| Trading VCC-46 | Cold and warm runs agreed on scientific hashes and retained independent provenance. Integrity checks rejected corrupt data. The default 20-row suite against the installed archive reports missing canonical inputs with unknown returns. Qualified perpetual, liquidation, tick-depth and options histories are outstanding. |
 
 ## Replay the competition offline
 

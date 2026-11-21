@@ -24,7 +24,10 @@ files['asset-manifest.json'] = (build / 'asset-manifest.json').read_bytes()
 for name in ['scripts/local-file.mjs', 'scripts/rehearse.mjs', 'scripts/audit.mjs', 'test/rehearsal.test.mjs', 'test/forward-schedule.test.mjs',
              'test/local-audit.test.mjs', 'test/cash-oracle.py', 'src/forward-bindings.mjs', 'src/binding-fixture.json',
              'scripts/local-server.mjs', 'scripts/serve-package.mjs', 'runtime/practice-http.mjs',
-             'runtime/practice-domain.mjs', 'runtime/practice-replay.mjs', 'runtime/strategy-worker.mjs',
+             'scripts/import-pool-history.py','scripts/collect-public-market.py','scripts/check-pool-history.mjs','scripts/verify-pool-history.py','scripts/verify-pool-rotation.py','scripts/publish-market-snapshot.mjs',
+             'scripts/observer-server.mjs','runtime/observer.mjs','runtime/desk-reads.mjs','runtime/market-library.mjs','runtime/public-feed.mjs','runtime/practice-prices.mjs',
+             'runtime/research-service.mjs','runtime/research-worker.mjs','runtime/research-artifact.mjs','runtime/research-data.mjs','runtime/research-engine.mjs',
+             'runtime/research-signals.mjs','runtime/research-events.mjs','runtime/research-portfolio.mjs','runtime/research-statistics.mjs','runtime/practice-domain.mjs', 'runtime/practice-replay.mjs', 'runtime/strategy-worker.mjs',
              'runtime/gateway.mjs', 'runtime/gateway-mcp.mjs', 'runtime/paper-guard.mjs', 'runtime/store.mjs', 'runtime/core.mjs']:
     files[name] = (root / name).read_bytes()
 files['server-policy.json'] = subprocess.check_output([

@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>Market observer</title><link rel="stylesheet" href="./owners/design/profile.css"><link rel="stylesheet" href="./desk.css">
+<script type="module" src="./src/observer-view.mjs"></script></head><body data-agentic-typography><main id="desk" class="agentic-form-controls">
+<header><h1>Market observer</h1><p id="status" role="status">Opening shared session…</p></header>
+<section class="agentic-collection-item"><h2 id="context">Market</h2><button id="expand" class="agentic-form-control">Expand chart</button>
+<div id="chart" tabindex="0"></div><output id="ohlc"></output></section>
+<section class="agentic-collection-item"><h2>Paper account</h2><p id="account"></p><div id="positions"></div>
+<h3>Recent fills</h3><div id="recent-fills"></div><h3>Working orders</h3><div id="pending-orders"></div></section>
+<details class="agentic-collection-item"><summary>Activity</summary><ol id="activity"></ol></details>
+</main></body></html>

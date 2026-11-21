@@ -1,4 +1,5 @@
-// Parse a bounded Python subset to data. The worker has no eval, property traversal, imports or host callbacks.
+// Imports resolve only to the sealed offline scientific inventory.
+import { packages, isVector, vec } from './scientific-packages.mjs';
 const namePattern = /^[A-Za-z][A-Za-z0-9_]*$/;
 const precedence = {
   or: 1,
@@ -78,9 +79,10 @@ function expression(tokens) {
       else if (/^["']/.test(t)) node = { kind: 'value', value: t.slice(1, -1).replace(/\\([\\"'])/g, '$1') };
       else if (['True', 'False', 'None'].includes(t))
         node = { kind: 'value', value: t === 'None' ? null : t === 'True' };
-      else if (namePattern.test(t))
-        node = take('(') ? { kind: 'call', name: t, args: args(')') } : { kind: 'variable', name: t };
-      else fail('Unexpected ' + t);
+      else if (namePattern.test(t)) {
+        const callable = take('.') ? t + '.' + name() : t;
+        node = take('(') ? { kind: 'call', name: callable, args: args(')') } : { kind: 'variable', name: callable };
+      } else fail('Unexpected ' + t);
     }
     while (take('[')) {
       const key = parse();
@@ -117,15 +119,68 @@ export function compileStrategy(code) {
     if (open) {
       rows.at(-1).ts.push(...ts);
     } else rows.push({ line: i + 1, indent: line.length - line.trimStart().length, ts });
-    open += ts.filter((t) => ['(', '[', '{'].includes(t)).length - ts.filter((t) => [')', ']', '}'].includes(t)).length;
+    open +=
+      ts.filter((t) => ['(', '[', '{'].includes(t)).length - ts.filter((t) => [')', ']', '}'].includes(t)).length;
     if (open < 0 || open > 24 || rows.at(-1).ts.length > 400) fail('Invalid expression bounds at line ' + (i + 1));
   }
-  if (open || rows.length > 250 || rows[0]?.indent !== 0 || rows[0]?.ts.join(' ') !== 'def strategy ( candles ) :')
-    fail('Define strategy(candles) with an indented body');
+  if (open || rows.length > 250) fail('Invalid module bounds');
+  const defs = new Map(),
+    imports = new Map();
+  let def;
+  for (const row of rows) {
+    if (!row.indent) {
+      const [keyword, mod, ...rest] = row.ts;
+      if (keyword === 'import' || keyword === 'from') {
+        if (!Object.hasOwn(packages, mod)) fail('Unavailable offline module');
+        const member = keyword === 'from' ? rest[1] : null;
+        const alias = member ? (rest[3] ?? member) : (rest[1] ?? mod);
+        const valid = member
+          ? rest[0] === 'import' &&
+            Object.hasOwn(packages[mod], member) &&
+            (rest.length === 2 || (rest.length === 4 && rest[2] === 'as'))
+          : !rest.length || (rest.length === 2 && rest[0] === 'as');
+        if (!valid || !namePattern.test(alias) || imports.has(alias)) fail('Invalid offline import');
+        imports.set(alias, { mod, member });
+        def = null;
+        continue;
+      }
+      if (
+        keyword !== 'def' ||
+        !namePattern.test(mod) ||
+        defs.has(mod) ||
+        row.ts[2] !== '(' ||
+        row.ts.at(-2) !== ')' ||
+        row.ts.at(-1) !== ':'
+      )
+        fail('Expected named function');
+      const args = row.ts.slice(3, -2);
+      if (
+        args.length &&
+        (!args.every((v, i) => (i % 2 ? v === ',' : namePattern.test(v))) || args.length % 2 !== 1)
+      )
+        fail('Invalid arguments');
+      const params = args.filter((_, i) => i % 2 === 0);
+      if (new Set(params).size !== params.length) fail('Duplicate argument');
+      def = { params, rows: [] };
+      defs.set(mod, def);
+    } else {
+      if (!def) fail('Expected function');
+      def.rows.push(row);
+    }
+  }
+  if (defs.get('strategy')?.params.join(',') !== 'candles') fail('Define strategy(candles)');
+  for (const fn of defs.values()) {
+    if (!fn.rows.length) fail('Empty function');
+    fn.body = parseBody(fn.rows);
+    delete fn.rows;
+  }
+  return { defs, imports };
+}
+function parseBody(rows) {
   const stack = [{ indent: 0, body: [] }];
   let parent = { body: stack[0].body },
     prev = 0;
-  for (const { line, indent, ts } of rows.slice(1)) {
+  for (const { line, indent, ts } of rows) {
     try {
       if (indent <= 0) fail('Expected function body');
       if (indent > prev) {
@@ -184,7 +239,13 @@ const binary = {
 };
 const truth = (v) => (Array.isArray(v) ? v.length !== 0 : Boolean(v));
 export function runStrategy(program, candles, functions) {
-  const vars = new Map([['candles', candles]]);
+  let vars = new Map([['candles', candles]]),
+    depth = 0;
+  const imported = Object.create(null);
+  for (const [alias, { mod, member }] of program.imports) {
+    if (member) imported[alias] = packages[mod][member];
+    else for (const [key, fn] of Object.entries(packages[mod])) imported[alias + '.' + key] = fn;
+  }
   let budget = 300000,
     line = 0;
   function sequence(v) {
@@ -227,12 +288,29 @@ export function runStrategy(program, candles, functions) {
         else vars.delete(n.variable);
         return result;
       }
-      case 'call':
+      case 'call': {
+        const args = n.args.map(evaluate),
+          fn = program.defs.get(n.name);
+        if (fn) {
+          if (args.length !== fn.params.length || depth >= 24) fail('Function call limit or invalid arguments');
+          const parent = vars;
+          vars = new Map(fn.params.map((p, i) => [p, args[i]]));
+          depth++;
+          try {
+            return block(fn.body)?.value ?? null;
+          } finally {
+            vars = parent;
+            depth--;
+          }
+        }
+        if (Object.hasOwn(imported, n.name)) return imported[n.name](...args);
         if (!Object.hasOwn(functions, n.name)) fail('Unsupported helper ' + n.name);
-        return functions[n.name](...n.args.map(evaluate));
+        return functions[n.name](...args);
+      }
       case 'unary': {
         const v = evaluate(n.arg);
         if (n.op === 'not') return !truth(v);
+        if (isVector(v)) return vec(v, -1, (a, b) => a * b);
         if (!Number.isFinite(v)) fail('Expected number');
         return -v;
       }
@@ -241,6 +319,8 @@ export function runStrategy(program, candles, functions) {
         if (n.op === 'and') return truth(a) ? evaluate(n.right) : a;
         if (n.op === 'or') return truth(a) ? a : evaluate(n.right);
         const b = evaluate(n.right);
+        if ((isVector(a) || isVector(b)) && ['+', '-', '*', '/', '%'].includes(n.op))
+          return vec(a, b, binary[n.op]);
         if (!['==', '!=', 'is', 'is not'].includes(n.op) && ![a, b].every(Number.isFinite))
           fail('Expected finite numbers');
         const out = binary[n.op](a, b);
@@ -302,7 +382,7 @@ export function runStrategy(program, candles, functions) {
     }
   }
   try {
-    const result = block(program);
+    const result = block(program.defs.get('strategy').body);
     if (result?.kind !== 'return') fail('Return a signal list');
     return sequence(result.value);
   } catch (e) {
