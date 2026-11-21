@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, linkSync, unlinkSync, lstatSyn
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { sha, canonical, requireThat as need } from './core.mjs';
-import { loadData } from './research-data.mjs';
+import { loadData, partitionInventory } from './research-data.mjs';
 import { historicalReport } from './research-engine.mjs';
 const sources = [
   './research-engine.mjs',
@@ -64,7 +64,9 @@ export function readArtifact(dir, receipt) {
   }
 }
 export function runArtifact({ directory, artifactDir, input, range, id }) {
-  const data = loadData(directory, range),
+  const venue = input.venue ?? 'uniswap-v3-500';
+  const parts = partitionInventory(directory).filter((p) => p.venue === venue);
+  const data = loadData(directory, range, { parts }),
     inputHash = sha({ engine, input, range, sources: data.sources });
   mkdirSync(artifactDir, { recursive: true, mode: 0o700 });
   const index = join(artifactDir, inputHash + '.index');
@@ -85,8 +87,17 @@ export function runArtifact({ directory, artifactDir, input, range, id }) {
   return {
     receipt: { ...receipt, cached, engine },
     status: artifact.status,
-    rows: artifact.rows.map(({ curve, trades, signals, rebalances, ...summary }) => ({
+    rows: artifact.rows.map(({ curve, trades, signals, rebalances, latencyScenarios, ...summary }) => ({
       ...summary,
+      ...(latencyScenarios
+        ? {
+            latencyScenarios: latencyScenarios.map(({ latency, trades, finalEquity }) => ({
+              latency,
+              tradeCount: trades.length,
+              finalEquity
+            }))
+          }
+        : {}),
       signals: signals.length,
       curvePoints: curve?.length ?? 0,
       rebalances: rebalances?.length ?? 0

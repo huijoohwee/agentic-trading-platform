@@ -1,0 +1,137 @@
+[
+  {
+    "key": "node_trades/hourly/20250322/23.lz4",
+    "bytes": 5789973,
+    "sha256": "f30e16ae25d2ae970efb8aed2bd3dc28853b53827c8fc76a1c2668d307b2dd8a"
+  },
+  {
+    "key": "node_trades/hourly/20250323/0.lz4",
+    "bytes": 5497834,
+    "sha256": "973e6561a9ed54f7e3acc95056f90429e499935efc22d9730fcbb9010b5f03d4"
+  },
+  {
+    "key": "node_trades/hourly/20250323/1.lz4",
+    "bytes": 5242539,
+    "sha256": "a975e80555f29e2f11dbf2a243bea391657553b862f18097aa67e04c4fe29d1f"
+  },
+  {
+    "key": "node_trades/hourly/20250323/2.lz4",
+    "bytes": 5814427,
+    "sha256": "de72562f0f9eab4fbf486d7a711d13d9112bcd2f522f38d19d016a3c118b41c4"
+  },
+  {
+    "key": "node_trades/hourly/20250323/3.lz4",
+    "bytes": 5981821,
+    "sha256": "c30f94c7191a1e5eff972df0c15d661df0a082d6f035ca7ea3213daf5c8499dd"
+  },
+  {
+    "key": "node_trades/hourly/20250323/4.lz4",
+    "bytes": 5228680,
+    "sha256": "8cb8feb50c2dec2fa23d87d139c21f68cabeff9ed588aca94d20d9ed6c761a08"
+  },
+  {
+    "key": "node_trades/hourly/20250323/5.lz4",
+    "bytes": 4718148,
+    "sha256": "619dd8c1a93908b39d20bc1fbbd1aa76867f763b93ee64c90a82c3ec279556ea"
+  },
+  {
+    "key": "node_trades/hourly/20250323/6.lz4",
+    "bytes": 4425548,
+    "sha256": "a9bd517e15a5f2723736baf16670e6f86404499f1d5ddc7cebc3ceac8447c614"
+  },
+  {
+    "key": "node_trades/hourly/20250323/7.lz4",
+    "bytes": 5228452,
+    "sha256": "6595b3980cf79f4ba94b76c98c5acac2f0e8fe2cfc1bcb568cc5171fa7be547d"
+  },
+  {
+    "key": "node_trades/hourly/20250323/8.lz4",
+    "bytes": 5032251,
+    "sha256": "141d11c7a9ebab3fd2efa46fe90975a78c34e5c78bb593d61f8a88259c18007e"
+  },
+  {
+    "key": "node_trades/hourly/20250323/9.lz4",
+    "bytes": 5390443,
+    "sha256": "844657de302943a53faff05b5a7be5d71bae61c8dadce3e6b1b7e6ef3d928c31"
+  },
+  {
+    "key": "node_trades/hourly/20250323/10.lz4",
+    "bytes": 5913647,
+    "sha256": "5c1e6e682d5d7daad2a8cbc80ba1ff89b100dfff48b590548b2d16ba99397b6e"
+  },
+  {
+    "key": "node_trades/hourly/20250323/11.lz4",
+    "bytes": 7702255,
+    "sha256": "437f5c168b9343dd4b38c1bd8093f09bbb14f54ab56430c28273c940406ba844"
+  },
+  {
+    "key": "node_trades/hourly/20250323/12.lz4",
+    "bytes": 5976132,
+    "sha256": "115cad1bf3ff796d026cc0dd65391bf97b83ff231bd2d9fcb0ddc9473f769ccc"
+  },
+  {
+    "key": "node_trades/hourly/20250323/13.lz4",
+    "bytes": 6658398,
+    "sha256": "09d01051e785987157e7fa5034907352625fd8dd313dfb91358e33c42e1fe3a2"
+  },
+  {
+    "key": "node_trades/hourly/20250323/14.lz4",
+    "bytes": 7497643,
+    "sha256": "e07dab4464679ce34be991cb1770a20a1c7cb852c09305e342f4e7d6589d47e1"
+  },
+  {
+    "key": "node_trades/hourly/20250323/15.lz4",
+    "bytes": 7595319,
+    "sha256": "e7ff5aaaaf42848c6e801f52a587c4518e134acb6070941310e8a5e85c260b9b"
+  },
+  {
+    "key": "node_trades/hourly/20250323/16.lz4",
+    "bytes": 7288705,
+    "sha256": "40f39f63f6f55ad00791ae13d8da04e3b7dc706cd829e83559b7f56f892e029b"
+  },
+  {
+    "key": "node_trades/hourly/20250323/17.lz4",
+    "bytes": 7304768,
+    "sha256": "40e79a62f62eb8fdaa301261a1bbbd1f8024fd58055a200dc867ac38ccadb3e1"
+  },
+  {
+    "key": "node_trades/hourly/20250323/18.lz4",
+    "bytes": 6245830,
+    "sha256": "5e58d083bf3dbc2a12f5f76b74c92409ec99aed27d85511cd28a6dc352477249"
+  },
+  {
+    "key": "node_trades/hourly/20250323/19.lz4",
+    "bytes": 4865036,
+    "sha256": "886c0cea01d6adf506d93d575241dc851bde1c35a58a33f9ff9b8d838ee3bf8d"
+  },
+  {
+    "key": "node_trades/hourly/20250323/20.lz4",
+    "bytes": 5426385,
+    "sha256": "c2e37b7eaed5be9ac978b3ef93fdc15db47f09dc32f354bfc5d195a6609457fb"
+  },
+  {
+    "key": "node_trades/hourly/20250323/21.lz4",
+    "bytes": 5716169,
+    "sha256": "378d69c2da191f7cb7c6bc4d8903c2332db9898f3c7584ec6b2f116e480b59c2"
+  },
+  {
+    "key": "node_trades/hourly/20250323/22.lz4",
+    "bytes": 7376885,
+    "sha256": "22c316b3e8549fe23e86ae0457c2a11b5a12f55e8805d307a4e89d9e4c468bfb"
+  },
+  {
+    "key": "node_trades/hourly/20250323/23.lz4",
+    "bytes": 7034078,
+    "sha256": "556406ee5df7fe804383845afc572d208512139abd11f512a184c96f17fa6377"
+  },
+  {
+    "key": "node_trades/hourly/20250324/0.lz4",
+    "bytes": 11030578,
+    "sha256": "304a4f125821e868aeb5256c52e4b5caecc4580b4fc71202cecdb8d6f127a222"
+  },
+  {
+    "key": "asset_ctxs/20250323.csv.lz4",
+    "bytes": 10828744,
+    "sha256": "1ae918d808712b19071e9012fc87b7041822565f383cee8949e2242f956461fa"
+  }
+]

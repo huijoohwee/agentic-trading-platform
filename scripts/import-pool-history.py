@@ -1,14 +1,12 @@
 """Install rights-reviewed hourly pool observations as immutable UTC partitions."""
 import argparse
-from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
-import os
 from pathlib import Path
 import subprocess
 import tempfile
 
+from archive_partitions import activate, encode
 import duckdb
 
 RECORD = 'https://zenodo.org/records/17302324'
@@ -22,37 +20,6 @@ POOLS = {
     'WETH_USDT_500': [('WETH', 'USDT', True)],
     'WBTC_WETH_500': [('WBTC', 'WETH', True)],
 }
-
-
-def encode(item):
-    return json.dumps(item, allow_nan=False, separators=(',', ':'), sort_keys=True).encode()
-
-
-@contextmanager
-def locked(directory):
-    with (directory / '.import.lock').open('a+b') as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
-
-
-def activate(directory, stage, manifest):
-    dest = directory / 'partitions'
-    dest.mkdir(mode=0o700, exist_ok=True)
-    entries = {p['file']: p for p in manifest['partitions']}
-    with locked(directory):
-        head = dest / 'manifest.json'
-        if head.exists():
-            old = json.loads(head.read_bytes())
-            if old.get('schema') != manifest['schema'] or any(entries.get(p['file']) != p for p in old['partitions']):
-                raise ValueError('EXISTING_PARTITION_MANIFEST_DIFFERS')
-        for name, part in entries.items():
-            try:
-                os.link(stage / name, dest / name)
-            except FileExistsError:
-                if hashlib.sha256((dest / name).read_bytes()).hexdigest() != part['sha256']:
-                    raise ValueError('EXISTING_PARTITION_INTEGRITY')
-        (stage / 'manifest.json').write_bytes(encode(manifest))
-        os.replace(stage / 'manifest.json', head)
 
 
 def install(directory, local_file):

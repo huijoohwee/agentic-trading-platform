@@ -199,15 +199,15 @@ export function bindLab(client, onOverlay) {
       input.symbol = form.symbol.value.trim() || chosen.base + '.USDT';
       input.frame = form.frame.value || chosen.frame;
       input.marketType = chosen.marketType;
-      if (chosen.id === 19 && form.basket.value.trim())
-        input.basket = [
-          input.symbol,
-          ...form.basket.value
-            .trim()
-            .toUpperCase()
-            .split(/[,\s]+/)
-        ];
     }
+    if ((suite || input.hypothesis === 19) && form.basket.value.trim())
+      input.basket = [
+        input.symbol ?? (form.symbol.value.trim().toUpperCase() || 'BTC.USDT'),
+        ...form.basket.value
+          .trim()
+          .toUpperCase()
+          .split(/[,\s]+/)
+      ];
     const bytes = JSON.stringify([suite, input]);
     if (request?.bytes !== bytes) request = { bytes, id: crypto.randomUUID() };
     try {
@@ -222,7 +222,8 @@ export function bindLab(client, onOverlay) {
   el('overlay-run').onclick = () =>
     active &&
     human('research.overlay', { id: active, hypothesis: Number(h.value) }, crypto.randomUUID()).catch(err);
-  el('export-run').onclick = () => reference && download(JSON.stringify(reference, null, 2), 'historical-run.json');
+  el('export-run').onclick = () =>
+    reference && download(JSON.stringify(reference, null, 2), 'historical-run.json');
   el('observer-open').onclick = async () => {
     try {
       const data = await human('desk.observer'),

@@ -1,6 +1,7 @@
+import { asOf } from './research-data.mjs';
 import { hypotheses } from '../src/research-catalog.mjs';
 import { frames, DAY, bucket } from '../src/market.mjs';
-import { directionalSignals, aggregate } from './research-signals.mjs';
+import { directionalSignals, composeBars } from './research-signals.mjs';
 import { portfolioSignals, executePortfolio } from './research-portfolio.mjs';
 import { depthReplay, liquidationPlans, optionsReplay } from './research-events.mjs';
 import { metrics, periods } from './research-statistics.mjs';
@@ -135,21 +136,26 @@ export function historicalReport({ input, range, data, engine }) {
     venue = input.venue ?? 'uniswap-v3-500',
     rows = [];
   const lanes = [...data.series.values()];
+  const seriesCache = new Map();
   function find(symbol, type, kind, frame) {
     const candidates = lanes.filter(
       (p) => p.venue === venue && p.symbol === symbol && p.marketType === type && p.kind === kind
     );
     if (kind !== 'ohlcv') return candidates[0];
-    const exact = candidates.find((p) => p.frame === frame);
-    if (exact) return exact;
-    const compatible = candidates
-      .filter((p) => frames[p.frame] && frames[frame] && frames[frame] % frames[p.frame] === 0)
-      .sort((a, b) => frames[b.frame] - frames[a.frame])[0];
-    return compatible ? { ...compatible, frame, rows: aggregate(compatible.rows, compatible.frame, frame) } : null;
+    const key = [symbol, type, frame].join('/');
+    if (seriesCache.has(key)) return seriesCache.get(key);
+    const series = composeBars(candidates, frame);
+    seriesCache.set(key, series);
+    return series;
   }
   for (const strategy of hypotheses.filter((h) => !input.hypothesis || input.hypothesis === h.id)) {
     const { id, requires, base } = strategy,
-      symbol = input.hypothesis && input.symbol ? input.symbol : base + '.USDT',
+      symbol =
+        input.hypothesis && input.symbol
+          ? input.symbol
+          : input.basket && [8, 19].includes(id)
+            ? input.basket[0]
+            : base + '.USDT',
       type = input.hypothesis && input.marketType ? input.marketType : strategy.marketType,
       frame = input.hypothesis && input.frame ? input.frame : strategy.frame,
       quote = symbol.split('.')[1],
@@ -203,7 +209,13 @@ export function historicalReport({ input, range, data, engine }) {
         const symbol = n + '.' + quote;
         const oi = find(symbol, type, 'openInterest', frame),
           liq = find(symbol, type, 'liquidations', frame);
-        if (!oi || !liq) missing.push(n + ' liquidation and open-interest mapping');
+        if (
+          !oi?.rows.some((r) => r.time >= range.start && r.time < range.end) ||
+          !liq?.rows.some(
+            (r) => r.time >= range.start && r.time < range.end && asOf(oi.rows, r.time, frames[frame] * 60000)
+          )
+        )
+          missing.push(n + ' liquidation and open-interest mapping');
         else cross[n] = { openInterest: oi.rows, liquidations: liq.rows };
       }
     }
@@ -217,10 +229,11 @@ export function historicalReport({ input, range, data, engine }) {
       else if (observations[0].time > range.start || observations.at(-1).time + DAY < range.end)
         incompleteInputs = true;
     }
-    const actual = source?.rows.filter((b) => b.time >= range.start && bucket(b.time, frame, 1) <= range.end) ?? [];
+    const actual =
+      source?.rows.filter((b) => b.time >= range.start && bucket(b.time, frame, 1) <= range.end) ?? [];
     if (!actual.length && !missing.length) missing.push('observations within requested dates');
     const common = {
-      capitalUnit: quote,
+      capitalUnit: source?.settlement ?? quote,
       ...(id === 19 ? { basket: Object.keys(markets).map((n) => n + '.' + quote) } : {}),
       id,
       name: strategy.name,
@@ -229,17 +242,18 @@ export function historicalReport({ input, range, data, engine }) {
       required: requires,
       actual: actual.length ? [actual[0].time, bucket(actual.at(-1).time, frame, 1)] : null
     };
+    const blocked = (reason) => ({
+      ...common,
+      status: 'blocked',
+      reason,
+      metrics: null,
+      return: null,
+      profitability: 'unknown',
+      signals: [],
+      warnings: []
+    });
     if (missing.length) {
-      rows.push({
-        ...common,
-        status: 'blocked',
-        reason: missing.join(', '),
-        metrics: null,
-        return: null,
-        profitability: 'unknown',
-        signals: [],
-        warnings: []
-      });
+      rows.push(blocked(missing.join(', ')));
       continue;
     }
     const warnings = incompleteInputs ? ['Partial coverage of required companion data'] : [];
@@ -255,6 +269,8 @@ export function historicalReport({ input, range, data, engine }) {
       else warnings.push('Unobserved funding modeled at zero');
     }
     if (type === 'perpetual') {
+      if (aux.funding?.some((r) => r.price === undefined))
+        warnings.push('Observed funding rates valued at modeled bar-open prices');
       aux.fundingByAsset = {};
       for (const name of Object.keys(markets).filter((n) => n !== 'spot')) {
         const observations =
@@ -264,16 +280,44 @@ export function historicalReport({ input, range, data, engine }) {
       }
     }
     if (id === 14) warnings.push('Fixed-universe selection has survivorship bias');
-    if (id === 17) report = depthReplay(aux, capital, range, assumptions);
-    else if (id === 20) report = optionsReplay(source.rows, aux.options, capital, range, assumptions);
+    if (id === 17) {
+      const start = Math.max(range.start, aux.depth[0].time, aux.trades[0].time),
+        end = Math.min(range.end, aux.depth.at(-1).time + 1, aux.trades.at(-1).time + 1);
+      report = depthReplay(aux, capital, { start, end }, assumptions);
+      common.actual = end > start ? [start, end] : null;
+      if (report.curve?.length) {
+        const gaps = report.curve
+          .slice(1)
+          .map((p, i) => p.time - report.curve[i].time)
+          .sort((a, b) => a - b);
+        report.bookMedianIntervalMs = gaps[Math.floor(gaps.length / 2)] ?? null;
+        warnings.push(
+          'Fills use the next observed book after each latency; median book interval ' +
+            report.bookMedianIntervalMs +
+            ' ms'
+        );
+      }
+    } else if (id === 20) report = optionsReplay(source.rows, aux.options, capital, range, assumptions);
     else if (id === 15) {
-      const plans = liquidationPlans(markets, cross, source.rows, frames[frame] * 60000);
+      const histories = Object.values(cross).flatMap((m) => [m.openInterest, m.liquidations]);
+      const joined = {
+        start: Math.max(range.start, ...histories.map((rows) => rows[0].time)),
+        end: Math.min(range.end, ...histories.map((rows) => rows.at(-1).time + 1))
+      };
+      if (joined.start >= joined.end) {
+        rows.push(blocked('No common liquidation and open-interest window across the universe'));
+        continue;
+      }
+      common.actual = [joined.start, joined.end];
+      if (joined.start > range.start || joined.end < range.end)
+        warnings.push('Partial common liquidation and open-interest window');
+      const plans = liquidationPlans(markets, cross, source.rows, frames[frame] * 60000, joined);
       report = executePortfolio(
         source.rows,
         markets,
         plans,
         capital,
-        range,
+        joined,
         assumptions,
         aux,
         frames[frame] * 60000
@@ -294,8 +338,17 @@ export function historicalReport({ input, range, data, engine }) {
       const planned = directionalSignals(id, source.rows, frame, aux);
       report = executeDirectional(source.rows, planned, capital, range, assumptions, aux.funding);
     }
+    if (report.unavailable) {
+      rows.push(blocked(report.unavailable));
+      continue;
+    }
     if (report.incomplete) warnings.push(report.incomplete);
-    const summary = metrics(report.curve, report.trades, capital);
+    const untested =
+      !report.trades.length &&
+      !report.rebalances.length &&
+      actual.at(-1).time - source.rows[0].time < warmup[id] * DAY;
+    if (untested) warnings.push('Insufficient history to interpret a no-trade preview');
+    const summary = untested ? null : metrics(report.curve, report.trades, capital);
     rows.push({
       ...common,
       status: warnings.length ? 'partial' : 'completed',
@@ -303,7 +356,7 @@ export function historicalReport({ input, range, data, engine }) {
       metrics: summary,
       return: summary?.return ?? null,
       profitability: summary ? (summary.return > 0 ? 'gain' : summary.return < 0 ? 'loss' : 'flat') : 'unknown',
-      ...periods(report.curve, report.trades, capital, range),
+      ...periods(untested ? [] : report.curve, report.trades, capital, range),
       ...report
     });
   }

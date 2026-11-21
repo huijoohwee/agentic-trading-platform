@@ -40,6 +40,7 @@ function action(operation, description, properties, required, readOnlyHint = tru
     annotations: { readOnlyHint, untrustedContentHint: true }
   };
 }
+const basket = { type: 'array', minItems: 3, maxItems: 3, uniqueItems: true, items: symbol };
 export const deskActions = [
   action('desk.describe', 'Describe desk capabilities and data quality'),
   action('desk.observer', 'Open or resume the expiring read-only observer session', {}, [], false),
@@ -136,12 +137,18 @@ export const deskActions = [
     {
       ...parameters,
       hypothesis: integer(1, 20),
-      basket: { type: 'array', minItems: 3, maxItems: 3, uniqueItems: true, items: symbol }
+      basket
     },
     ['hypothesis'],
     false
   ),
-  action('research.suite', 'Queue the complete historical catalog', parameters, [], false),
+  action(
+    'research.suite',
+    'Queue all 20 hypotheses with an optional explicit spot basket for rows 8 and 19',
+    { ...parameters, basket },
+    [],
+    false
+  ),
   action('research.get', 'Read research progress and scientific results', { id: string(64) }, ['id']),
   action(
     'research.overlay',

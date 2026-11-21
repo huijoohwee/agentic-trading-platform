@@ -111,7 +111,9 @@ function verifyRow(row, part) {
     );
   if (part.kind === 'funding')
     need(
-      finite(row.rate) && (row.price === undefined || (finite(row.price) && row.price > 0)) && row.settled === true,
+      finite(row.rate) &&
+        (row.price === undefined || (finite(row.price) && row.price > 0)) &&
+        row.settled === true,
       'ARCHIVE_FUNDING'
     );
   if (part.kind === 'openInterest') need(finite(row.value) && row.value >= 0, 'ARCHIVE_OI');
@@ -135,7 +137,15 @@ export function partitionInventory(directory) {
   for (const part of manifest.partitions) {
     need(
       kinds.includes(part.kind) &&
-        ['CC0-1.0', 'CC-BY-4.0', 'ODC-PDDL-1.0'].includes(part.license) &&
+        (['CC0-1.0', 'CC-BY-4.0', 'ODC-PDDL-1.0'].includes(part.license) ||
+          (part.license === 'MIT' &&
+            part.creator === 'Hyperliquid' &&
+            part.venue === 'hyperliquid' &&
+            part.source === 'https://registry.opendata.aws/aws-public-blockchain/' &&
+            part.upstreamPrefix ===
+              'https://aws-public-blockchain.s3.us-east-2.amazonaws.com/v1.1/hyperliquid/mainnet/' &&
+            part.licenseUrl === 'https://github.com/aws-samples/digital-assets-examples/blob/main/LICENSE' &&
+            /^[a-f0-9]{64}$/.test(part.upstreamInventorySha256))) &&
         part.creator &&
         part.source &&
         /^[a-f0-9]{64}$/.test(part.sha256) &&
@@ -172,16 +182,24 @@ export function loadData(directory, range, { parts = partitionInventory(director
     if (!lane) series.set(key, (lane = { ...part, rows: [], gaps: 0, duplicates: 0 }));
     for (const row of rows) {
       verifyRow(row, part);
-      if (row.time < range.end) lane.rows.push(row);
+      if (row.time >= range.start - warmup && row.time < range.end) lane.rows.push(row);
     }
     sources.push({ ...part, rows: rows.length, timeUnit: 'UTC_ms' });
   }
   for (const lane of series.values()) {
-    lane.rows.sort((a, b) => a.time - b.time);
+    lane.rows.sort((a, b) => a.time - b.time || (a.sequence ?? 0) - (b.sequence ?? 0));
     for (let i = 1; i < lane.rows.length; i++) {
       const a = lane.rows[i - 1],
         b = lane.rows[i];
-      need(a.time !== b.time, 'ARCHIVE_DUPLICATE');
+      need(
+        a.time !== b.time ||
+          (lane.kind === 'trades' &&
+            Number.isSafeInteger(a.sequence) &&
+            Number.isSafeInteger(b.sequence) &&
+            a.sequence >= 0 &&
+            b.sequence > a.sequence),
+        'ARCHIVE_DUPLICATE'
+      );
       if (lane.kind === 'depth') need(b.sequence === a.sequence + 1, 'ARCHIVE_DEPTH_SEQUENCE');
       if (lane.kind === 'ohlcv' && bucket(a.time, lane.frame, 1) !== b.time) lane.gaps++;
     }

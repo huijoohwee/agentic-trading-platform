@@ -34,6 +34,13 @@ test('tick-level book and aggressor fixtures admit at each latency and exit on t
     cost
   );
   assert.equal(none.trades.length, 0);
+  const sparse = depthReplay(
+    { depth: [levels(0, 100), levels(2000, 100)], trades: [{ time, qty: 4, aggressor: 'buyer' }] },
+    1000,
+    { start: time, end: time + 3000 },
+    cost
+  );
+  assert.match(sparse.unavailable, /subsecond/);
 });
 test('carry hedges equal notionals, credits shorts at observed funding, and flattens negative basis at next open', () => {
   const step = 3600000,
@@ -102,6 +109,14 @@ test('dated four-leg chain uses independent bid/ask credit, wing risk, daily hed
     chains.push({ time, quotes });
   }
   const r = optionsReplay(bars, chains, 10000, { start, end: start + 369 * DAY }, cost);
+  const sparse = optionsReplay(
+    bars,
+    chains.filter((_, i) => i !== 35),
+    10000,
+    { start, end: start + 369 * DAY },
+    cost
+  );
+  assert.match(sparse.unavailable, /year of daily/);
   assert.equal(r.trades.length, 1);
   assert.equal(r.trades[0].entry, start + 366 * DAY);
   assert.equal(r.trades[0].exit, start + 368 * DAY);

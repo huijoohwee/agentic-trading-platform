@@ -85,6 +85,16 @@ function depthScenario(books, tape, latency, capital, range, cost) {
   return r;
 }
 export function depthReplay(aux, capital, range, cost) {
+  // A sparse sequence cannot resolve the latency scenarios even when each snapshot has ten levels.
+  const simultaneous = aux.depth.some(
+    (b, i) =>
+      i &&
+      b.time >= range.start &&
+      b.time < range.end &&
+      b.time - aux.depth[i - 1].time < 1000 &&
+      asOf(aux.trades, b.time, 1000)
+  );
+  if (!simultaneous) return { unavailable: 'Overlapping subsecond book updates and aggressor trades required' };
   const [primary, ...rest] = [50, 100, 250, 500].map((latency) => ({
     latency,
     ...depthScenario(aux.depth, aux.trades, latency, capital, range, cost)
@@ -98,7 +108,7 @@ export function depthReplay(aux, capital, range, cost) {
     }))
   };
 }
-export function liquidationPlans(markets, auxiliary, bars, frameMs) {
+export function liquidationPlans(markets, auxiliary, bars, frameMs, range = { start: -Infinity, end: Infinity }) {
   const names = Object.keys(markets),
     maps = Object.fromEntries(names.map((n) => [n, new Map(markets[n].map((b) => [b.time, b]))]));
   const history = Object.fromEntries(names.map((n) => [n, []])),
@@ -139,6 +149,8 @@ export function liquidationPlans(markets, auxiliary, bars, frameMs) {
           oi &&
           prior &&
           oi.value <= 0.95 * prior.value &&
+          t >= range.start &&
+          t < range.end &&
           asOf(a.liquidations, t, frameMs)
         ) {
           held.set(n, { at: t, side: -Math.sign(z), risk: Math.min(0.2, 0.005 / Math.max(0.001, 3 * sd)) });
@@ -154,7 +166,9 @@ export function liquidationPlans(markets, auxiliary, bars, frameMs) {
 }
 function optionLegs(chain, time) {
   const expiries = [
-    ...new Set(chain.filter((q) => q.expiry >= time + 30 * DAY && q.expiry <= time + 45 * DAY).map((q) => q.expiry))
+    ...new Set(
+      chain.filter((q) => q.expiry >= time + 30 * DAY && q.expiry <= time + 45 * DAY).map((q) => q.expiry)
+    )
   ].sort((a, b) => a - b);
   for (const expiry of expiries) {
     const legs = [];
@@ -183,7 +197,9 @@ export function optionsReplay(bars, chains, capital, range, cost) {
     hedge = 0,
     lastSpot = null,
     priorClose,
-    prevPlan;
+    prevPlan,
+    lastVolTime;
+  let eligible = false;
   for (const b of bars) {
     const t = b.time,
       quotes = asOf(chains, t, DAY),
@@ -261,15 +277,22 @@ export function optionsReplay(bars, chains, capital, range, cost) {
       iv = legs ? avg(legs.slice(0, 2).map((l) => l.iv)) : NaN;
     if (priorClose) returns.push(Math.log(b.close / priorClose));
     priorClose = b.close;
+    const dated = legs && t - quotes.time < DAY;
+    const ready = dated && lastVolTime === t - DAY && vols.length >= 365 && returns.length >= 21;
+    if (ready && t >= range.start && t < range.end) eligible = true;
     if (
-      legs &&
-      vols.length >= 365 &&
-      returns.length >= 21 &&
+      ready &&
       iv >= deviation(returns.slice(-21)) * Math.sqrt(365) + 0.12 &&
       iv > quantile(vols.slice(-365), 0.7)
     )
       prevPlan = { legs };
-    if (Number.isFinite(iv)) vols.push(iv);
+    if (dated && Number.isFinite(iv)) {
+      if (lastVolTime !== t - DAY) vols.length = 0;
+      vols.push(iv);
+      lastVolTime = t;
+    }
   }
+  if (!eligible)
+    return { unavailable: 'Four executable option legs and a year of daily dated IV observations required' };
   return r;
 }

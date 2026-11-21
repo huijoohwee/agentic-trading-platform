@@ -12,7 +12,7 @@
 <body data-agentic-typography>
 <main id="desk" class="agentic-form-controls">
   <header><nav><a href="./">Decision journal</a> <span aria-hidden="true">/</span> Paper trading desk</nav>
-    <h1>Paper trading desk</h1><p>Synthetic USD markets · local practice</p></header>
+    <h1>Paper trading desk</h1><p>Local paper trading · market source shown with each chart</p></header>
   <section class="market-controls agentic-collection-item">
     <label>Find an instrument<input id="search" type="search" placeholder="Symbol or name"></label>
     <label>Venue<select id="venue"><option value="synthetic">Local replay</option></select></label>
@@ -61,8 +61,8 @@
   <section class="agentic-collection-item"><h2>Historical research</h2>
     <form id="historical"><div class="pair"><label>Hypothesis<select id="hypothesis"></select></label><label>Research capital (quote units)<input name="capital" type="number" value="100000" min="1" max="1000000000" required></label>
     <label>Start UTC<input name="start" type="date" required></label><label>End UTC (inclusive)<input name="end" type="date" required></label>
-    <label>Venue<input name="venue" maxlength="45" value="uniswap-v3-500" required></label><label>Single-run instrument<input name="symbol" placeholder="Catalog default"></label>
-    <label>Rotation peers (optional)<input name="basket" placeholder="Two symbols with the same quote"></label><label>Single-run interval<select name="frame"><option value="">Catalog default</option></select></label></div>
+    <label>Venue<input name="venue" maxlength="45" value="uniswap-v3-500" required></label><label>Instrument or spot basket leader<input name="symbol" placeholder="Catalog default"></label>
+    <label>Spot rotation peers (optional)<input name="basket" placeholder="Two symbols with the same quote"></label><label>Single-run interval<select name="frame"><option value="">Catalog default</option></select></label></div>
     <div class="actions"><button class="agentic-form-control" value="single">Queue hypothesis</button><button class="agentic-form-control" value="suite">Queue all 20</button></div></form>
     <div class="actions"><button id="cancel-run" class="agentic-form-control" disabled>Cancel run</button><button id="overlay-run" class="agentic-form-control">Overlay selected hypothesis</button></div>
     <output id="lab-status" role="status"></output><pre id="run-trace"></pre><div id="run-results"></div><details><summary>Metrics and calendar windows</summary><pre id="run-detail"></pre></details>

@@ -130,11 +130,10 @@ export function researchService({ store, directory, now }) {
     }
     if (inputs.basket)
       need(
-        op === 'research.start' &&
-          inputs.hypothesis === 19 &&
-          inputs.basket[0] === inputs.symbol &&
+        (op === 'research.suite' ||
+          (op === 'research.start' && inputs.hypothesis === 19 && inputs.basket[0] === inputs.symbol)) &&
           inputs.basket.every(
-            (s) => /^[A-Z0-9]+\.[A-Z0-9]+$/.test(s) && s.split('.')[1] === inputs.symbol.split('.')[1]
+            (s) => /^[A-Z0-9]+\.[A-Z0-9]+$/.test(s) && s.split('.')[1] === inputs.basket[0].split('.')[1]
           ),
         'INVALID_BASKET'
       );

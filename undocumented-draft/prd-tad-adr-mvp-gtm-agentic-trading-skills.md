@@ -544,4 +544,4 @@ E-09/10 describe the pre-release worktree at base `abcbfc6`, with skill digest `
 
 **Historical 0.8.0 handoff.** The original lane, candidate pins and receipt boundaries remain recorded in the 0.8.0 revision of this document at Trading `94ee095`. E-19–27 retain the historical validation results.
 
-**Current handoff.** Trading `453ed2f` and OS `a5d8f7a` establish the native synthetic baseline (E-28, Product E-46). Product E-47 defines the full parity review. Collect VCC-15–18 evidence on a single runtime candidate before advancing the consumer claim. Host qualification, provider rights, independent risk isolation and adoption remain open.
+**Current handoff.** Trading `453ed2f` and OS `a5d8f7a` establish the native synthetic baseline (E-28, Product E-46). Product E-47 defines the full parity review. Collect VCC-15–18 evidence on a single runtime candidate before advancing the consumer claim. Host qualification, provider rights, independent risk isolation and adoption remain open. See the [November 21 historical qualification](../README.md#historical-qualification-on-the-current-worktree) for current local evidence and outstanding data rights.

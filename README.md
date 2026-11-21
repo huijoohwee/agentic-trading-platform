@@ -71,6 +71,30 @@ Queue one historical hypothesis or all 20. Supply the venue, UTC date range and 
 | Trading VCC-44/45 and Skills VCC-17 | Versioned source, bounded Python workers, quota, recovery, cancellation and overlays passed. Independent DuckDB checks on the original hourly data reproduced five directional trades and eight portfolio rebalances over 906 marked days. These use explicitly selected alternate spot instruments. |
 | Trading VCC-46 | Cold and warm runs agreed on scientific hashes and retained independent provenance. Integrity checks rejected corrupt data. The default 20-row suite against the installed archive reports missing canonical inputs with unknown returns. Qualified perpetual, liquidation, tick-depth and options histories are outstanding. |
 
+### Historical qualification on the current worktree
+
+The March 23, 2025 UTC perpetual session is derived from 474,628 executions across 21 native contracts. The source archive includes minute open interest and individual liquidation prints. One hour of the BTC book contains 6,446 top-ten snapshots and 4,007 timestamped prints. Archive ordinals distinguish simultaneous trades. The median book interval was 550 ms. The four latency scenarios fill at the next observed executable quote. [AWS Public Blockchain Data, accessed November 21, 2026](https://registry.opendata.aws/aws-public-blockchain/)
+
+The October 2026 Ironflow vintage adds 302,064 hourly candles, 292,605 settled funding observations, 276,696 open-interest readings and 40,146 timestamp-grouped liquidation observations. The 68 input files have pinned revisions, SHA-256 digests and publication dates before November 10. Credit **Ironflow (ironflow.sh)** under CC BY 4.0. Its hourly open interest becomes available at hour close. The perpetual instruments in this sample are USDT-denominated and USDC-settled. [Publisher's catalog and file licenses](https://ironflow.sh/datasets) · [Venue contract specifications](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/contract-specifications)
+
+Use Python 3, the LZ4 CLI and DuckDB 1.4.4 for the imports. They read public files anonymously, verify the bytes and install immutable partitions into the same local archive. Repeating an import retains prior sources. Keep the raw cache for independent replay.
+
+```sh
+python3 scripts/import-hyperliquid-history.py .runtime-private/desk .runtime-private/qualification-inputs/20250323
+python3 scripts/import-depth-preview.py .runtime-private/desk .runtime-private/qualification-inputs/20250323
+uv run --with duckdb==1.4.4 python scripts/import-ironflow-history.py .runtime-private/desk .runtime-private/qualification-inputs/ironflow
+node scripts/check-historical-desk.mjs .runtime-private/desk
+```
+
+| Acceptance | Verified locally |
+|---|---|
+| Trading VCC-44 and Skills VCC-17 | A browser saved named strategy source by hash and ran the offline scientific subset against archived candles. The desk queued, polled and cancelled jobs and overlaid 40 markers from BTC hypothesis 18. The independent replay reconciled all ten fills and a −2.7923% simulated return after costs, including observed funding rates valued at modeled bar-open prices. |
+| Trading VCC-46 | The 20-row run survived restart. A warm run retained its own trace and the original scientific hash. Changed data, parameters and an actual predecessor engine revision each missed the cache. Missing data produced unknown returns and corrupt inputs produced a technical failure. The account revision stayed fixed across research operations. |
+| Trading VCC-40 and VCC-45 | Partial. Sixteen default hypotheses received historical inputs. Rows 8, 12, 19 and 20 remained blocked. An explicit UBTC/USDC, UETH/USDC and USOL/USDC spot basket enabled partial previews for 8 and 19. BTC carry still needs matched spot/perpetual liquidity, and BTC options need dated executable four-leg quotes, Greeks and an annual IV history. The installed archives do not cover the full January 2021–October 2026 window. Public live display still requires a qualifying grant for both market types. |
+| Physical-device verification | Skipped by request. |
+
+Prices and costs are research observations and modeled assumptions. The browser checker creates its own owner, database and artifact directory under `.runtime-private/desk/qualification`. Its `verified.json` records actual window, request ID, cache provenance and the row-level outcome. Run `scripts/verify-aggressor-history.py` with the original March session cache, Ironflow cache and the downloaded hypothesis-18 gzip artifact to reproduce the result independently.
+
 ## Replay the competition offline
 
 Open **Moomoo × Qoder competition rehearsal** in the journal after **Offline ready** appears. Disconnect, select **Run A · practice** and choose **Replay run**. Open **Decision and execution log** and filter for `fill`. Select either five-share fill by click, tap, or Enter to inspect its execution price and equity. The two fills are at $24 and $26 against a $25 buy limit. The second execution breaches the limit even though the average is $25. The run also exercises an independent risk veto, a repeated trigger, cancellation after a partial fill and a halt until simulator readback.

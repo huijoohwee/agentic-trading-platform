@@ -83,7 +83,12 @@ export function deskRead(op, input, { s, archive, at, store, scope }) {
     };
   }
   if (['read.depth', 'read.tape', 'read.ticker'].includes(op)) {
-    if (archive?.catalog.some((m) => m.venue === binding.venue && m.live))
+    if (
+      archive?.catalog.some(
+        (m) =>
+          m.venue === binding.venue && m.symbol === binding.symbol && m.marketType === binding.marketType && m.live
+      )
+    )
       return archive.market(op, { ...binding, ...input });
     need(binding.venue === 'synthetic', 'ARCHIVE_MICROSTRUCTURE_UNAVAILABLE');
     const result = marketRead(op, binding, at);

@@ -29,6 +29,28 @@ export function aggregate(bars, sourceFrame, target) {
   }
   return output.filter((b) => b.count === (bucket(b.time, target, 1) - b.time) / (frames[sourceFrame] * 60000));
 }
+export function compatible(from, to) {
+  if (!Object.hasOwn(frames, to)) return false;
+  return (
+    from === to ||
+    (frames[from] > 0 && (to === '1M' ? 1440 % frames[from] === 0 : frames[to] % frames[from] === 0))
+  );
+}
+// Prefer native observations at each UTC boundary, then fill only complete buckets from finer intervals.
+export function composeBars(lanes, frame) {
+  const choices = lanes
+    .filter((lane) => compatible(lane.frame, frame))
+    .sort((a, b) => (b.frame === frame) - (a.frame === frame) || frames[b.frame] - frames[a.frame]);
+  if (!choices.length) return null;
+  const byTime = new Map();
+  for (const lane of choices) {
+    const rows = lane.frame === frame ? lane.rows : aggregate(lane.rows, lane.frame, frame);
+    for (const bar of rows) if (!byTime.has(bar.time)) byTime.set(bar.time, bar);
+  }
+  const rows = [...byTime.values()].sort((a, b) => a.time - b.time);
+  const gaps = rows.filter((b, i) => i && bucket(rows[i - 1].time, frame, 1) !== b.time).length;
+  return { ...choices[0], frame, rows, gaps };
+}
 function indexed(bars, frame) {
   const close = bars.map((b) => b.close),
     keys = [20, 50, 100, 200],
@@ -114,7 +136,7 @@ export function directionalSignals(id, bars, frame, lanes) {
     priorZ = z;
     const funding = asOf(lanes.funding, t, 8 * 3600000),
       oi = asOf(lanes.openInterest, t, dt),
-      taker = asOf(lanes.taker, t, dt);
+      taker = asOf(lanes.taker, t, dt - 1);
     if (taker) cumulative += taker.buy - taker.sell;
     flow.push(cumulative);
     let entry = null,
