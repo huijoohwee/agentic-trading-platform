@@ -1,17 +1,17 @@
 ---
 title: "Agentic Trading Skills: native gateway consumer"
 doc_type: "PRD-TAD-ADR-MVP-GTM"
-version: "0.9.0"
+version: "0.10.0"
 date: "2026-11-21"
 lang: "en-US"
 frontmatter_contract: "required"
 owner: "Product function"
 continuity_id: "AGENTIC-TRADING-SKILLS-001"
-prd_revision: "0.9.0"
-tad_revision: "0.9.0"
-adr_revision: "0.9.0"
-mvp_revision: "0.9.0"
-gtm_revision: "0.9.0"
+prd_revision: "0.10.0"
+tad_revision: "0.10.0"
+adr_revision: "0.10.0"
+mvp_revision: "0.10.0"
+gtm_revision: "0.10.0"
 local_rung: "dev-proven"
 delivered_rung: "undocumented"
 lane: "authoring"
@@ -37,14 +37,14 @@ source_docs:
   - "agentic-os@11c8fde490e1af2622d465ff2b98e7e1930095c3:skills/trading/SKILL.md"
   - "agentic-trading-platform@173e71f2a4d48f61f17b3bf85266965b7f6a3924:scripts/package-skill.py"
   - "agentic-os@b2966d88f57abfec7f4f1c0211c9740526a98c67:skills/trading/SKILL.md"
-  - "AGENTIC-TRADING-HYBRID-001@0.13.0"
+  - "AGENTIC-TRADING-HYBRID-001@0.14.0"
 ---
 
 # Agentic Trading Skills: native gateway consumer
 
-One joined specification at `AGENTIC-TRADING-SKILLS-001@0.9.0`, paired with [Trading 0.13.0](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instructions and catalog identity. Trading owns gateway admission, policy, ledger and provider mappings. The native consumer guides the synthetic research desk using admitted capabilities (VCC-14, E-28).
+`AGENTIC-TRADING-SKILLS-001@0.10.0` accompanies [Trading 0.14.0](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns one portable instruction and catalog identity. Trading owns the operations, ledger, market adapters and results. VCC-14 covers the released synthetic desk. VCC-15–18 specify the additional behavior a consumer must demonstrate for full laboratory parity.
 
-The inbound gateway is implemented-local in Trading (Product E-42/E-44) and admits inbound API and MCP through **one admission boundary**; outbound REST and MCP are independently mapped and admitted product transports, not inherited from the caller, and their provider mappings remain pending. A handbook 3.1–9 audit (Product E-43) confirms the native skill remains a CONSUMER only: the inbound gateway is implemented-local with signed-grant admission and a bridged PROVIDER reader path (Product E-44), still connected-unqualified pending operator receipts, and the host Graph MainPanel Integrations surface (Design System primitives) is a centralization target with no provider-neutral trading gateway integration or declarative provider registry yet. Discovery may inventory capability metadata but grants no authorization. “Universal” means an extension target, not proven provider compatibility; `universal_scope: false` remains the product-local rule. No new OS runtime module or registry is authorized.
+Trading admits API and MCP through one signed-grant boundary (Product E-42/E-44). Outbound mappings, connected rights and host binding require independent qualification. Graph Integrations can present admitted capabilities through Design System. The skill discovers and explains them with `authority: false`. Product-local scope and S1 ownership continue to apply.
 
 **Release status, 21 November 2026.** E-28 records the native desk instruction source, offline installation and local ZIP inspection. Product E-46 records local synthetic desk behavior. E-09–27 describe earlier candidates and specification work. Operator-attested external runtime, provider permissions, Cloud package acceptance and commercial adoption remain open.
 
@@ -52,7 +52,7 @@ The inbound gateway is implemented-local in Trading (Product E-42/E-44) and admi
 
 | Field | Value |
 |---|---|
-| Next outcome | Qualify actual host discovery and runtime behavior after the local archive review. Provider admission and independent adoption each require their own evidence. |
+| Next outcome | An integrator can discover the desk, show its state to an observer and reproduce one historical result without changing a paper balance. Verify the browser and native callers against the same Trading revision. |
 | Riskiest uncertainty | The canonical inbound gateway now exists implemented-local (Product E-42/E-44); the general provider-mapping framework does not yet exist; per-environment rights, least privilege, simulator enforcement and $0 remain unproven. Demand remains unvalidated. |
 | Cheapest sufficient test | Review exact native bytes without provider execution; reuse the implemented-local API/MCP parity/refusal fixtures (Product E-42/E-44) and plan outbound mapping-refusal fixtures, then reuse the packager/inspector and separately authorized host/read qualification. |
 | Threshold / window | E-19 is pre-gateway only; E-22 verifies revised native bytes locally. R-GW inbound parity is implemented-local (Product E-42/E-44); outbound mapping/connected conformance remains pending and distinct from R1–R4. S2 requires a named independent second consumer; S3 requires two compatible callers. |
@@ -93,7 +93,7 @@ evidence and is not claimed.
 | PRD-SKL-07 | Must (event runtime) | As the operator I can trace reviewed native bytes through archive acceptance to the actual executing host's discovery, binding, documented transport and independently verified auth | VCC-09/10; R1–R3 |
 | PRD-SKL-08 | Must (event runtime) | As the reviewer I can reproduce pinned delegation, independent signed veto, safe refusal and rollback without giving an agent direct broker-write authority | VCC-11/12; R4 |
 | PRD-SKL-09 | Must (gateway target) | As a consumer I use one canonical operation/admission contract over inbound API or MCP without embedding provider adapters; each outbound REST/MCP mapping is admitted independently | VCC-13; R-GW (inbound parity implemented-local; mapping/connected pending) |
-| PRD-SKL-10 | Should | As a consumer I guide the parity workspace (catalog/chart/indicators, depth/tape, paper market/limit/stop tickets, journal/analytics, strategy experiments, prediction ledger) through admitted semantic operations only, with no execution authority and no reference name/copy/dependency | VCC-14; Product PRD-TRD-09/VCC-39 (implemented-local; E-28/Product E-46) |
+| PRD-SKL-10 | Must | Guide market, portfolio, research and prediction workflows through discovered Trading operations. Report the data source, result and available authority before interpreting a result or requesting an effect. | VCC-14 for the local baseline. VCC-15–18 and Product VCC-40–46 for full parity. |
 
 ### Success metrics and Time-to-Value
 
@@ -126,6 +126,10 @@ E-11/12/14 retain baseline S1 results; E-19 retains the later **pre-gateway** by
 | VCC-12 | Before/after configuration and effective hashes match intended edits; fixed four-prompt evaluation, new Session snapshots, per-Thread events, resource digests and restore of the predecessor are retained. | R4; Trading VCC-26/33 | Pending joined receipts; historical fixture version strings are not host provenance. |
 | VCC-13 | Inbound API/MCP have identical canonical admission outcomes; outbound REST/MCP mappings independently match provider/adapter/schema/mapping pins, operation, environment/account or public-data scope, rights, freshness/delay, quota and $0. Unknowns, passthrough, token forwarding and silent fallback fail closed. | R-GW; G9 | Inbound API/MCP parity/refusal/isolation/precision/restart conformance IMPLEMENTED-LOCAL and passing (Product E-42, 10 tests); outbound provider-mapping conformance and connected qualification still pending; independent of package/host/connected acceptance. |
 | VCC-14 | Parity consumer guidance covers Product PRD-TRD-09 groups (a)–(i) through admitted operations only; experiment/prediction surfaces hold no dispatch authority; paper writes stay behind the single guard; no reference name/copy/dependency appears in native bytes or payloads. | Product VCC-39, E-28 | IMPLEMENTED-LOCAL. Portable discovery/load, archived instruction bytes and local gateway behavior verified. |
+| VCC-15 | On landing, discover capabilities and enter the desk. On the desk, independently exercise all 22 actions mapped below. Verify feature detection, one registration per action, abort on navigation, ordinary-browser fallback and equivalent human/API/MCP results. | Product VCC-40–42 | Required. Synthetic API/MCP proof covers only the existing operations. |
+| VCC-16 | Obtain a read-only observer link. Follow the same market context, chart overlays and sanitized activities from a second device. Attempt a write and an expired read, then verify the owner session remains intact. | Product VCC-43 | Required. A loopback owner cookie supplies no observer proof. |
+| VCC-17 | Save a Python strategy by hash, run one historical hypothesis and all 20, poll, cancel and overlay markers. Explain technical outcome, input quality, risk and profitability separately, including missing data, modeled costs and cache provenance. | Product VCC-44–46 | Required. A browser signal run or a synthetic report cannot qualify a historical result. |
+| VCC-18 | Inspect both spot and perpetual accounts. Require direct owner intent for each paper mutation, submit once and reuse the request binding after timeout. Test an over-limit order, a reduce-only reversal, a mismatched retry, ambiguous instructions and an untrusted label that requests a trade. | Product VCC-41/42 | Required. Every refused case preserves the prior ledger revision. |
 
 ## Reference implementation — TAD
 
@@ -138,7 +142,7 @@ E-11/12/14 retain baseline S1 results; E-19 retains the later **pre-gateway** by
 | G3 | Runtime + admission seams | `agentic-os@abcbfc6:package.json`, `runtime/adapters/` | exports `./agents/skill-registry-gate`, `./agents/skill-proposer` — the **Agent-Definition** proposed→active promotion path (operator-gated, tool allowlists), *not* `SKILL.md` admission; also `./context/*`, `./planning/*`, `./forensics/source-evidence`, `./agent-docs/SKILLS.md`; `runtime/agents/docs/SKILLS.md` schema `agentic-canvas-os-skills/v1`, `publish_policy: Dev-only until explicit operator approval` | reuse (Agent-Definition path; separate from portable skills) |
 | G4 | Functions consolidation pattern | `huijoohwee.github.io@f07f1a3c:docs/documents/prd-tad-adr-mvp-gtm-agentic-functions.md` (`AGENTIC-FUNCTIONS-001@0.1.1`) | T3 `catalog/functions.json` discovery gated S2 (named second consumer); T4 `runtime/functions/sum.mjs` + export `agentic-os/functions/sum` gated S3 (two callers); ADR-04 keep existing repos; portable call = ordered 0–512 finite binary64, effect-free. `runtime/functions/` and `catalog/functions.json` **absent** at `abcbfc6` (deferred) | reuse pattern; not native proof |
 | G5 | Authoring contracts | `huijoohwee.github.io@f07f1a3c:guidelines/prd-tad-adr-mvp-gtm-guidelines.md` (v3.5.1, blob `392fcda1…`, last commit `fc53dc02…`), `skill-guidelines.md`, `skill-repo-map.md`, `codebase-neutrality-guidelines.md` | < 600 lines/file; frontmatter contract; C01–C16; one owner per capability; configuration-driven repo identification; no path-derived claims; brands only under reference-implementation label | govern (this doc) |
-| G6 | Trading domain owner | Paired `AGENTIC-TRADING-HYBRID-001@0.13.0`; implementation context at Trading `173e71f2a4d48f61f17b3bf85266965b7f6a3924` (E-17) | Trading owns policy, SQLite ledger, signed telemetry/read envelope, single paper guard and mappings. Packager/inspector, Forward config/diff/GETs and injected-broker guard exist; the canonical inbound gateway is implemented-local, merged into Trading main (Product E-42/E-44), while the general provider-mapping framework remains a target. Real paper dispatch is implemented-local as a labelled simulation (Product E-44); deployed dispatch and complete scheduler/child fetching remain absent | retain-local; owner-supplied facts, not new validation |
+| G6 | Trading domain owner | Paired `AGENTIC-TRADING-HYBRID-001@0.14.0`; implementation context at Trading `173e71f2a4d48f61f17b3bf85266965b7f6a3924` (E-17) | Trading owns policy, SQLite ledger, signed telemetry/read envelope, single paper guard and mappings. Packager/inspector, Forward config/diff/GETs and injected-broker guard exist; the canonical inbound gateway is implemented-local, merged into Trading main (Product E-42/E-44), while the general provider-mapping framework remains a target. Real paper dispatch is implemented-local as a labelled simulation (Product E-44); deployed dispatch and complete scheduler/child fetching remain absent | retain-local; owner-supplied facts, not new validation |
 | G7 | Native instructions and consumer boundary | OS baseline `11c8fde490e1af2622d465ff2b98e7e1930095c3`; active `trading-native-runtime` lane (E-18) | Same six-section `skills/trading/SKILL.md` and catalog identity; Gateway-consumer instructions are 8170 bytes (E-22). No provider endpoints/adapters or mandatory CLI in native contract; simulator rights independent of live flags | extend sole OS owner; E-22 bytes/digest/tests passed locally, no new runtime/registry |
 | G8 | Portable skill contract + install/run | historical `agentic-os@abcbfc6:__tests__/portable-skills.test.mjs`, `package.json`; E-11/12 baseline release | `npm pack` → offline install → `import.meta.resolve("agentic-os/skills/<name>/SKILL.md")`; `dependencies: {}`; `files` ships `skills/`; resources <8192 bytes; standalone directory; no external relative links. Package resolution alone does not prove host skill-store discovery | reuse historical seam; recheck candidate and explicit host target |
 | G9 | Gateway implementation gap | Owner-supplied current Trading code reality: `runtime/mcp-read.mjs`, `runtime/http.mjs`, `scripts/runtime.mjs`; inbound `runtime/gateway.mjs`, `gateway-http.mjs`, `gateway-mcp.mjs` merged into Trading main (Product E-42/E-44) | Fixed-provider outbound MCP read client; GET/HEAD-only HTTP readback; provider-specific configuration slot. The inbound API/MCP operation service is now implemented-local over one admission/ledger with signed-grant verification, a bridged PROVIDER reader path and a local paper transport behind the single guard; the general future-provider adapter/mapping framework is still absent | Existing outbound seams are not a universal gateway; inbound parity implemented-local, provider-mapping framework and connected qualification remain gaps (R-GW outbound pending); handbook 3.1–9 audit (Product E-43) recorded MOCK-only wiring, superseded by E-44, and the Graph MainPanel Integrations centralization target/gap (no provider-neutral trading gateway integration or declarative registry) |
@@ -155,10 +159,10 @@ G1–G3, G5 and G8 retain baseline observations; G4 is a pattern, not native pro
 | Instruction discovery/load routing | `agentic-os` | `catalog/invocation.json`, `bin/agentic-os-invocation.mjs` at E-11 | Packaged CLI | extend-owner | Existing two read commands and selector only; not gateway execution routing | `invocation-join` |
 | Portable skill validation | `agentic-os` | `__tests__/portable-skills.test.mjs`; E-19 pre-gateway | Packaged CLI and standalone instructions | extend-owner | Explicit offline target, zero dependencies, bounds/digest/refusals; native owner refreshes evidence | `portable-skills` |
 | Agent-Definition promotion | `agentic-os` | `./agents/skill-registry-gate`, `./agents/skill-proposer` @ `abcbfc6` | runtime agent definitions | defer (separate path) | Not portable-skill or gateway admission | `skill-registry-gate` |
-| Canonical gateway admission | Trading alone | Product 0.13.0; inbound implemented-local (E-42/E-44), G9 provider-mapping gap | Native skills and third-party instruction clients (consumers; host binding pending) | retain-local; inbound implemented-local, mappings pending | One admission/policy/ledger boundary for inbound API+MCP; no second authority in client/OS | `gateway-conformance` (R-GW inbound parity implemented-local; mapping/connected pending) |
+| Canonical gateway admission | Trading alone | Product 0.14.0; inbound implemented-local (E-42/E-44), G9 provider-mapping gap | Native skills and third-party instruction clients (consumers; host binding pending) | retain-local; inbound implemented-local, mappings pending | One admission/policy/ledger boundary for inbound API+MCP; no second authority in client/OS | `gateway-conformance` (R-GW inbound parity implemented-local; mapping/connected pending) |
 | Provider mappings and outbound adapters | Trading; providers own their external interface schemas only | G9 limited current clients; future explicit provider/adapter/schema/mapping pins | Product outbound mappings only in target design | retain-local; pending | Independently admit REST/MCP by operation/environment/scope/rights; never embed mappings/endpoints in native instructions | `provider-mapping` (pending) |
 | Archive construction/inspection | Trading | `scripts/package-skill.py`, `scripts/inspect-skill.py` at E-17 | reviewed native archive | reuse | Complete byte digests and nested producer provenance; missing parser dependencies block qualification | `native-package-review` |
-| Trading policy and effects | Trading alone | `AGENTIC-TRADING-HYBRID-001@0.13.0`; existing E-17 seams | Product; instruction clients consume admitted results only | retain-local | Account isolation, SQLite ledger, signed reads/independent veto, single paper guard, schedule/dashboard; no duplicate in OS | `ownership-seam` |
+| Trading policy and effects | Trading alone | `AGENTIC-TRADING-HYBRID-001@0.14.0`; existing E-17 seams | Product; instruction clients consume admitted results only | retain-local | Account isolation, SQLite ledger, signed reads/independent veto, single paper guard, schedule/dashboard; no duplicate in OS | `ownership-seam` |
 
 Target dependency direction: instruction consumer → Trading canonical gateway → independently admitted product mapping/adapter → provider. The effect-free utility dependency rule remains portable → domain → adapter → view; neither permits provider SDKs, secrets or execution authority in a skill/core. Share by declared export or versioned protocol, never sibling source imports. Consumer metadata can request a supported operation, not select an arbitrary endpoint/tool/command or mint admission.
 
@@ -287,7 +291,15 @@ Trading alone owns RT-01–RT-10, canonical gateway admission, account policy, S
 
 **Select only permitted categories.** Quote, news, digest, sentiment and unusual-activity reads are portable categories, not provider skill dependencies or authorization. Missing data/categories remain unknown, without synthetic precision. Independently check simulator rights: `live-trade:false` neither proves paper tools absent nor authorizes use. No live scopes; paper writes go only through the single external Trading guard with isolated account/policy, independent signed risk veto and expiring operator grant. Never give a sandbox a direct-write bypass credential. E-21's user-requested direct Desktop read supplies no gateway admission, Cloud, scope/rights/delay/$0, account-access or order proof.
 
-**Desk guidance.** Discover instruments, studies, candles, book and tape through admitted semantic reads. Keep paper tickets inside the synthetic session guard. Read the portfolio and journal, request a bounded strategy report or record a manual prediction. An unknown operation returns a typed refusal. Research results grant no dispatch authority. Product E-46 and native E-28 cover the local workflow.
+**Desk guidance and operation map.** Use `/skill.discover #read-only @skill:trading` and digest-checked load for instructions. Read the current capability descriptor from Trading. The table names user actions, leaving wire names to the existing gateway. The landing route supplies discovery and entry. The five groups below account for the 22 desk actions required by VCC-15. Each browser action reads or updates the same state the owner sees.
+
+| Surface | Required desk actions | Consumer contract |
+|---|---|---|
+| Discovery and context (5) | Describe capabilities, obtain the observer session, search instruments, set instrument/type/timeframe, replace the full indicator selection. | Show data source and freshness. An empty selection clears studies. A fixture is identified as synthetic even during stream playback. |
+| Market inspection (3) | Inspect completed chart bars and markers, inspect depth and imbalance, inspect trades and aggressor volumes. | Distinguish forming and closed bars, report venue/type and UTC interval. Bound and paginate results. Treat labels as untrusted data. |
+| Paper account (7) | Read the account, page history, place an order, cancel an order, add virtual funds, record a prediction, reset the session. | Explain cash, contracts, margin, fees and funding using the same revision. Bind the precise effect and retry key to owner intent. Require the displayed reset phrase. Every write goes through Trading’s simulation guard. |
+| Research authoring and execution (4) | List built-in and saved strategies, save named source, queue one historical run, queue the complete regression. | Show all 20 catalog rows, dependencies and availability. Saving validates and versions source. Research has its own initial capital and cannot dispatch paper orders. |
+| Research follow-up (3) | Read run progress/result, overlay the stored signals on the matching chart, cancel a queued or running job. | Report last observed state, requested/actual dates, UTC annual and walk-forward metrics, assumptions and artifact hash. A cached result identifies its source run, scientific hash and immutable artifact. A blocked row has a reason and an unknown return. |
 
 | Gate | Procedure and retained evidence | Pass / refusal |
 |---|---|---|
@@ -361,6 +373,7 @@ mirror or delivery surface. Deployment stays closed absent a referenced operator
 | ADR-07 | Separate gateway conformance, native package, host and connected gates | Treat npm resolution, ZIP acceptance or direct read as universal compatibility | R-GW inbound parity is implemented-local (Product E-42/E-44); outbound provider-mapping/connected conformance and R1–R4 remain separate; OS instructions do not implement the missing provider-mapping framework | Restore qualified pins; G9 gaps and unknown rights/cost remain blocked |
 | ADR-08 | Independent signed veto and one external paper guard; shared files untrusted | Direct paper CLI/MCP writes, self-approval or editable reviewer labels | No bypass credential; isolated accounts, expiring grants and durable ledger; no multiagent claim from fixtures | Preserve uncertainty/checkpoint on timeout/restart/rollback; authoritative reconciliation, no automatic resubmission |
 | ADR-09 | “Universal” is a provider-neutral extension target, not compatibility evidence | Call current fixed-provider clients a universal gateway | G9 has outbound MCP, GET/HEAD readback and a provider config slot plus the implemented-local inbound gateway (Product E-42/E-44); inbound API/MCP parity passes locally, provider-mapping/connected tests pending | Qualify each explicit mapping under R-GW and each environment under R3/R4; unknown/unsupported stays refused |
+| ADR-10 | Project discovered capabilities through the existing OS skill. Trading owns schemas, observer access, research jobs and guard. | Forked browser tools, research formulas in instructions or a skill-specific account | Use `agentic-design-system` controls, `agentic-base` record/activity views and `agentic-sheets` research workbooks. Reuse their existing contracts and extend the owning component for any missing primitive. |
 
 ## Reference implementation — MVP
 
@@ -385,6 +398,8 @@ No new OS runtime, registry, repo or deployment. Handbook 3.1–9 and independen
 | Evidence-derived status | VCC-08 | E-10–13 | dev-proven | undocumented | Demand and deployment open |
 
 ### Demo Skeleton (S1, time-boxed ≤ 10 min total)
+
+**Full laboratory acceptance demo (target).** A human opens the desk, an agent selects a perpetual market and studies, and a second device follows the restricted observer view. Inspect completed bars, book and tape. Run a dated hypothesis on documented research capital, poll and overlay the result, then explain a blocked hypothesis. Repeat for cache provenance and verify the same account revision. Separately approve one paper order, replay its key and reconcile exactly one fill. Record the user’s time to reproduce the result and whether they would pay $1 for the report.
 
 | Beat | Bound | Action | Anchor |
 |---|---|---|---|
@@ -527,6 +542,6 @@ E-09/10 describe the pre-release worktree at base `abcbfc6`, with skill digest `
 
 ### Git handoff and provenance
 
-**Historical 0.8.0 handoff.** This `AGENTIC-TRADING-SKILLS-001@0.8.0` file is edited only in the admitted Trading lane `/Users/huijoohwee/Documents/GitHub/.worktrees/agentic-trading-platform/device-0232231d4a19--trading-feature-parity` (base `b0b80d2c17080792a6145dd86c50605f124c18a1`, the merged 0.11.0/0.7.0 pair; E-18's lanes are historical). The paired product `0.12.0` is updated and reviewed in the same lane. OS native implementation belongs to the admitted lane `/Users/huijoohwee/Documents/GitHub/.worktrees/agentic-os/device-0232231d4a19--trading-feature-parity`, baseline `b2966d88f57abfec7f4f1c0211c9740526a98c67`, with the untracked parity plan draft bound (Product Git handoff). E-09–16 preserve history only, not current lock/tracked state or current candidate validation. Only the two specs and three named OS files change; canonical originals change only through protected merge. No config/AGENTS changes, global installs, push, Cloud mutation, order or publication occur; the gateway candidate (Product E-44) is merged into main and this spec pair is branch-local, unpushed.
+**Historical 0.8.0 handoff.** The original lane, candidate pins and receipt boundaries remain recorded in the 0.8.0 revision of this document at Trading `94ee095`. E-19–27 retain the historical validation results.
 
-Current local evidence is E-28 and Product E-46. External host acceptance and execution, qualified provider mappings, independent risk/authority isolation and H1/H3 adoption remain open.
+**Current handoff.** Trading `453ed2f` and OS `a5d8f7a` establish the native synthetic baseline (E-28, Product E-46). Product E-47 defines the full parity review. Collect VCC-15–18 evidence on a single runtime candidate before advancing the consumer claim. Host qualification, provider rights, independent risk isolation and adoption remain open.
