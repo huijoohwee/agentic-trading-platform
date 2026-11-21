@@ -412,9 +412,10 @@ async function openDesk() {
           const q = tick.rows;
           el('price').textContent = String(q.last);
           el('ticker').textContent =
+            (tick.quality === 'stale' ? 'Stale ticker · ' : '') +
             '24h ' + q.change + '% · High ' + q.high + ' · Low ' + q.low + ' · Volume ' + q.volume;
           if (
-            data.quality === 'live' &&
+            data.quality === 'live' && tick.quality === 'live' &&
             saved.orders.some(
               (o) =>
                 o.venue === saved.venue &&

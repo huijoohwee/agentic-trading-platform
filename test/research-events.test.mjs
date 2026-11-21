@@ -117,6 +117,11 @@ test('dated four-leg chain uses independent bid/ask credit, wing risk, daily hed
     cost
   );
   assert.match(sparse.unavailable, /year of daily/);
+  const noBids = structuredClone(chains);
+  for (const quote of noBids[366].quotes) quote.bid = 0;
+  const noEntry = optionsReplay(bars, noBids, 10000, { start, end: start + 369 * DAY }, cost);
+  assert.match(noEntry.incomplete, /executable dated quote/);
+  assert.equal(noEntry.trades.length, 0);
   assert.equal(r.trades.length, 1);
   assert.equal(r.trades[0].entry, start + 366 * DAY);
   assert.equal(r.trades[0].exit, start + 368 * DAY);

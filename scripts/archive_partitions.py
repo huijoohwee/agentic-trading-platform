@@ -19,18 +19,30 @@ class HttpsRedirect(HTTPRedirectHandler):
 
 
 def verified_download(path, url, size, expected):
-    if not path.exists():
-        if not url.startswith("https://"):
-            raise ValueError("ARCHIVE_SOURCE")
-        with build_opener(HttpsRedirect()).open(url, timeout=45) as response:
-            body = response.read(size + 1)
-        if len(body) != size or hashlib.sha256(body).hexdigest() != expected:
+    def verify(stream, output=None):
+        digest = hashlib.sha256()
+        used = 0
+        while block := stream.read(min(131072, size - used + 1)):
+            used += len(block)
+            if used > size:
+                raise ValueError("UPSTREAM_INTEGRITY: " + str(path))
+            digest.update(block)
+            if output is not None:
+                output.write(block)
+        if used != size or digest.hexdigest() != expected:
             raise ValueError("UPSTREAM_INTEGRITY: " + str(path))
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as tmp:
-            tmp.write(body)
-        Path(tmp.name).replace(path)
-    if path.stat().st_size != size or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
-        raise ValueError("UPSTREAM_INTEGRITY: " + str(path))
+
+    if path.exists():
+        with path.open("rb") as cached:
+            verify(cached)
+        return path
+    if not url.startswith("https://"):
+        raise ValueError("ARCHIVE_SOURCE")
+    with tempfile.TemporaryDirectory(dir=path.parent) as staging:
+        with tempfile.NamedTemporaryFile(dir=staging, delete=False) as out:
+            with build_opener(HttpsRedirect()).open(url, timeout=45) as response:
+                verify(response, out)
+        Path(out.name).replace(path)
     return path
 
 

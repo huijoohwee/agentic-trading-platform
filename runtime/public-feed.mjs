@@ -93,6 +93,10 @@ export function publicFeed(directory, clock = Date.now) {
         d.currency === a.currency,
       'FEED_BINDING'
     );
+    for (const field of ['bookAt', 'tickerAt']) {
+      if (Object.hasOwn(d, field))
+        need(Number.isSafeInteger(d[field]) && d[field] >= 0 && d[field] <= d.at, 'FEED_OBSERVATION_TIME');
+    }
     need(
       d.ticker &&
         [d.ticker.last, d.ticker.high, d.ticker.low].every(price) &&
@@ -173,9 +177,14 @@ export function publicFeed(directory, clock = Date.now) {
     const { d, a, ...meta } = snapshot(input),
       count = input.count ?? 100,
       offset = input.offset ?? 0;
-    const header = { ...meta, at: d.at, asOf: d.at, sequence: d.sequence };
+    const at = operation === 'read.ticker' ? d.tickerAt ?? d.at : operation === 'read.depth' ? d.bookAt ?? d.at : d.at;
+    const header = { ...meta, at, asOf: at, sequence: d.sequence };
+    if (clock() - at > 15000 && header.quality !== 'stale') {
+      header.quality = 'stale';
+      header.warnings.push('Stale public observation');
+    }
     if (operation === 'read.ticker')
-      return { ...header, rows: { ...d.ticker, at: d.at, symbol: a.symbol }, funding: d.funding ?? null };
+      return { ...header, rows: { ...d.ticker, at, symbol: a.symbol }, funding: d.funding ?? null };
     if (operation === 'read.tape') {
       const rows = [...d.tape].sort((a, b) => b.time - a.time).map((t) => ({ ...t, notional: t.price * t.amount }));
       const volumes = { buyer: 0, seller: 0 };

@@ -164,6 +164,28 @@ try {
   assert.deepEqual(alternate.rows[18].basket, ['UBTC.USDC', 'UETH.USDC', 'USOL.USDC']);
   assert.ok(alternate.rows[7].metrics && alternate.rows[18].metrics);
   assert.equal(alternate.rows[19].status, 'blocked');
+  let nativeSpot;
+  if (process.argv.includes('--native-spot')) {
+    const venue = 'bitmex';
+    const run = await finish((await change('research_suite', { ...input, venue })).data.id);
+    const previews = run.rows.filter((r) => [8, 19].includes(r.id));
+    assert.equal(previews.length, 2);
+    for (const row of previews) {
+      assert.equal(row.market.venue, venue);
+      assert.equal(row.market.marketType, 'spot');
+      assert.equal(row.status, 'partial');
+      assert.ok(row.actual && row.warnings.includes('Incomplete indicator warm-up'));
+      assert.equal(row.return, null);
+    }
+    const days = {};
+    for (const [symbol, count] of [['BTC.USDT', 11], ['ETH.USDT', 12], ['SOL.USDT', 14]]) {
+      const { data } = await call('desk_chart', { venue, marketType: 'spot', symbol, frame: '1d', count: 90 });
+      assert.equal(data.source.id, 'https://doi.org/10.21950/HFPJ2F');
+      assert.equal(data.bars.length, count);
+      days[symbol] = count;
+    }
+    nativeSpot = { venue, days, id: run.id, rows: previews, receipt: run.receipt };
+  }
   const changed = await finish((await change('research_suite', { ...input, capital: input.capital / 2 })).data.id);
   assert.equal(changed.receipt.cached, false);
   assert.notEqual(changed.receipt.inputHash, cold.receipt.inputHash);
@@ -212,6 +234,7 @@ try {
   assert.deepEqual(external, []);
   const evidence = {
     strategyHash: saved.hash,
+    nativeSpot,
     revision,
     overlayMarkers: overlay.markers.length,
     source: chart.source,

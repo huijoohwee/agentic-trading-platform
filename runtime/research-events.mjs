@@ -203,13 +203,17 @@ export function optionsReplay(bars, chains, capital, range, cost) {
   for (const b of bars) {
     const t = b.time,
       quotes = asOf(chains, t, DAY),
-      chain = quotes?.quotes ?? [],
+      chain = quotes && t - quotes.time < DAY ? quotes.quotes.filter((q) => q.bid > 0) : [],
       lookup = new Map(chain.map((q) => [q.id, q]));
     let turnover = 0;
     if (lastSpot !== null) cash += hedge * (b.open - lastSpot);
     lastSpot = b.open;
     if (t >= range.start && t < range.end) {
-      if (prevPlan && !p && prevPlan.legs.every((l) => lookup.has(l.id))) {
+      if (prevPlan && !p && !prevPlan.legs.every((l) => lookup.has(l.id))) {
+        r.incomplete = 'missing executable dated quote at planned entry';
+        break;
+      }
+      if (prevPlan && !p) {
         const legs = prevPlan.legs.map((l) => ({ ...lookup.get(l.id), side: l.side })),
           credit = -legs.reduce((s, l) => s + l.side * (l.side < 0 ? l.bid : l.ask), 0);
         const width = Math.max(legs[0].strike - legs[2].strike, legs[3].strike - legs[1].strike),

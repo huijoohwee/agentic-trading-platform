@@ -90,8 +90,20 @@ node scripts/check-historical-desk.mjs .runtime-private/desk
 |---|---|
 | Trading VCC-44 and Skills VCC-17 | A browser saved named strategy source by hash and ran the offline scientific subset against archived candles. The desk queued, polled and cancelled jobs and overlaid 40 markers from BTC hypothesis 18. The independent replay reconciled all ten fills and a −2.7923% simulated return after costs, including observed funding rates valued at modeled bar-open prices. |
 | Trading VCC-46 | The 20-row run survived restart. A warm run retained its own trace and the original scientific hash. Changed data, parameters and an actual predecessor engine revision each missed the cache. Missing data produced unknown returns and corrupt inputs produced a technical failure. The account revision stayed fixed across research operations. |
-| Trading VCC-40 and VCC-45 | Partial. Sixteen default hypotheses received historical inputs. Rows 8, 12, 19 and 20 remained blocked. An explicit UBTC/USDC, UETH/USDC and USOL/USDC spot basket enabled partial previews for 8 and 19. BTC carry still needs matched spot/perpetual liquidity, and BTC options need dated executable four-leg quotes, Greeks and an annual IV history. The installed archives do not cover the full January 2021–October 2026 window. Public live display still requires a qualifying grant for both market types. |
+| Trading VCC-40 | Open. Live spot and perpetual depth was verified. A complete ticker, trade tape and candle feed still needs a published display grant and end-to-end verification. |
+| Trading VCC-45 | Open. The default January 2021–October 2026 run returned 16 partial results and blocked rows 8, 12, 19 and 20. Explicit spot selections gave partial previews for 8 and 19 on both the wrapped-token and native baskets. No hypothesis had complete coverage for the requested window. |
 | Physical-device verification | Skipped by request. |
+
+The CriptoDB deposit includes BitMEX spot observations for BTC/USDT, ETH/USDT and SOL/USDT. Credit Ángel Hernando-Veciana under CC BY 4.0. The importer retained 11 BTC, 12 ETH and 14 SOL daily bars from May 2025. Each day has complete minute coverage, empty UTC boundary minutes and an identifiable first execution. The desk can run hypotheses 8 and 19 on these native instruments. Both previews report unknown returns because their 200-day warm-up is missing. [CriptoDB dataset](https://doi.org/10.21950/HFPJ2F)
+
+```sh
+python3 scripts/import-criptodb-spot.py .runtime-private/desk .runtime-private/qualification-inputs/criptodb
+node scripts/check-historical-desk.mjs .runtime-private/desk --native-spot
+```
+
+VCC-40 remains open. Alex Wu’s CostDepth API publishes depth and funding under CC BY 4.0. A read-only check verified the top 20 levels on both sides of Bybit ETH/USDT spot and perpetual books. The API omits trade tape and OHLCV. Its book timestamps identify the publisher observation. [CostDepth API and data license](https://www.costdepth.io/developers#license)
+
+VCC-45 remains open. The published DataForge Aevo sample contains seven UTC days of BTC quotes. Of 6,696 sampled books, 6,327 had a positive bid and ask with size on both sides. None of those books matched contemporaneous Greeks in the required 30–45-day expiry window. The RED-BASIS spot/perpetual archive records indicative funding for the current period. Hypothesis 12 needs settled funding and matched liquidity, and hypothesis 20 needs four executable legs and a full year of dated IV. [DataForge dataset and ODC-BY grant](https://huggingface.co/datasets/dataforge-labs/crypto-options-surface) · [RED-BASIS deposit and corrections](https://zenodo.org/records/23021004)
 
 Prices and costs are research observations and modeled assumptions. The browser checker creates its own owner, database and artifact directory under `.runtime-private/desk/qualification`. Its `verified.json` records actual window, request ID, cache provenance and the row-level outcome. Run `scripts/verify-aggressor-history.py` with the original March session cache, Ironflow cache and the downloaded hypothesis-18 gzip artifact to reproduce the result independently.
 

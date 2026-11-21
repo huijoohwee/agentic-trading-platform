@@ -134,6 +134,18 @@ test('UTC feed aggregation, signed contract marks, trigger re-admission, funding
   assert.equal(order('BUY', 500).notice, 'FILLED');
   assert.equal(order('BUY', 700, { type: 'STOP', trigger: 120 }).notice, 'WORKING');
   const previous = guard.read().revision;
+  const mixed = snap(100);
+  mixed.tickerAt = time - 15001;
+  mixed.bookAt = time;
+  publish(mixed);
+  assert.equal(query('read.depth').quality, 'live');
+  assert.equal(query('read.ticker').quality, 'stale');
+  assert.equal(query('read.ticker').rows.at, mixed.tickerAt);
+  assert.throws(() => order('BUY', 1), /FRESH_USD_MARK_REQUIRED/);
+  assert.throws(() => publish({ ...mixed, bookAt: time + 1 }), /FEED_OBSERVATION_TIME/);
+  publish({ ...snap(100), bookAt: time - 16000, tickerAt: time });
+  assert.equal(query('read.depth').quality, 'stale');
+  assert.equal(query('read.ticker').quality, 'live');
   assert.throws(() => order('BUY', 1000), /LEVERAGE_LIMIT/);
   assert.equal(guard.read().revision, previous);
   time += 3600000;
