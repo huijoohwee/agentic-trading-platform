@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: huijoohwee/agentic-design-system
-          ref: 83de261f8f3ddf66ed41e5370b6811f498788b40
+          ref: d60b569179c23a14418616abc265d22f2da00e30
           path: owners/agentic-design-system
           fetch-depth: 1
 
