@@ -78,7 +78,12 @@ function verifyRow(row, part) {
       part.mapping === 'liquidation-event/v1' && finite(row.notional) && row.notional > 0,
       'ARCHIVE_LIQUIDATION_MAPPING'
     );
-  if (part.kind === 'liquidity') need(typeof row.liquid === 'boolean', 'ARCHIVE_LIQUIDITY');
+  if (part.kind === 'liquidity') {
+    if (part.mapping === 'matched-hour-turnover/v1')
+      need(row.time % 3600000 === 0 && row.liquid === undefined &&
+        [row.spotTurnover, row.perpetualTurnover].every((v) => finite(v) && v >= 0), 'ARCHIVE_LIQUIDITY');
+    else need(typeof row.liquid === 'boolean', 'ARCHIVE_LIQUIDITY');
+  }
   if (part.kind === 'options')
     need(
       part.mapping === 'option-chain-usd/v1' &&

@@ -12,15 +12,6 @@ document.addEventListener('toggle', ({ target }) => {
   else delete summary.dataset.agenticAnnotationTarget;
 }, true);
 const byId = id => document.getElementById(id);
-const skillsTrigger = byId('trading-skills-trigger');
-skillsTrigger.addEventListener('click', async () => {
-  skillsTrigger.disabled = true;
-  try {
-    const { openTradingSkills } = await import('./skills-panel.mjs');
-    skillsTrigger.disabled = false;
-    openTradingSkills(skillsTrigger, byId('trading-skills-panel'));
-  } catch { skillsTrigger.textContent = 'Skills reference unavailable'; }
-}, { once: true });
 let runtimeOpened = false;
 byId('runtime-readback').addEventListener('toggle', async event => {
   if (!event.target.open || runtimeOpened) return;

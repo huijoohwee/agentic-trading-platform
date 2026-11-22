@@ -37,16 +37,44 @@ async function openDesk() {
     lastPublicSequence = -1,
     lastPublicKey = '',
     hasForming = true,
-    overlayBefore;
+    overlayBefore, runChart, drawnStudies;
   const external = () => Boolean(saved.venue && saved.venue !== 'synthetic');
   const selectedFeed = () => publicMarkets.find(
     (m) => m.live && m.venue === saved.venue && m.symbol === saved.symbol && m.marketType === saved.marketType
   );
   const marketKey = () => [saved.venue ?? 'synthetic', saved.marketType ?? 'spot', symbol, frame].join('/');
   const effective = () => (symbol === saved.symbol ? saved : { ...saved, symbol });
+  function paintChart() {
+    if (runChart) {
+      if (drawnStudies === selection) return;
+      drawnStudies = selection;
+      const { bars, markers, market } = runChart;
+      chart.update(bars, selection, markers, market.frame, market.symbol.split('.')[1]);
+    } else chart.update(bars, selection, markers, frame, symbol.split('.')[1]);
+  }
+  function displayRunChart(data) {
+    if (!data && !runChart) return;
+    runChart = data;
+    drawnStudies = null;
+    el('run-chart').hidden = !data;
+    el('desk-quote').hidden = el('market-frame').hidden = Boolean(data);
+    el('ticket-market').textContent = data ? ' · ' + symbol : '';
+    if (data) {
+      const { market, name, hypothesis, status, source, markers, bars } = data;
+      el('run-chart-title').textContent = 'H' + hypothesis + ' · ' + name;
+      el('run-chart-info').textContent = [market.symbol, market.venue, market.marketType, market.frame,
+        status + ' historical simulation', new Date(bars.at(-1).time).toISOString().slice(0, 10),
+        markers.length ? markers.length + ' of ' + data.signalCount + ' signals in loaded candles' : 'No signals in loaded candles',
+        source.creator, source.license].join(' · ');
+    }
+    chart.reset();
+    paintChart();
+  }
+  el('resume-chart').onclick = () => lab.dismissChart();
+  el('run').addEventListener('click', () => lab?.dismissChart());
   function series(at) {
     if (external()) {
-      chart.update(bars, selection, markers, frame);
+      paintChart();
       return;
     }
     const key = marketKey();
@@ -54,7 +82,7 @@ async function openDesk() {
       bars = history(symbol, frame, at, 300);
       seriesKey = key;
     } else bars[bars.length - 1] = history(symbol, frame, at, 1)[0];
-    chart.update(bars, selection, markers, frame);
+    paintChart();
   }
   function refresh(q) {
     latestTime = q.at;
@@ -128,11 +156,12 @@ async function openDesk() {
             markers: m.map(({ time, price, action }) => ({ time, price, action }))
           })
           .catch((e) => error(e.message));
-      if (bars.length) chart.update(bars, selection, markers, frame);
+      if (bars.length) paintChart();
     },
     settingsChanged
   });
   function clearSeries() {
+    lab?.dismissChart();
     seriesKey = '';
     panels.clearExperiment();
     chart.reset();
@@ -509,7 +538,7 @@ async function openDesk() {
       overlayBefore = bucket(markers.at(-1).time, frame, 1);
       void poll();
     } else series(latestTime);
-  });
+  }, displayRunChart);
   if (client.online) {
     const catalog = await lab.human('read.catalog', { count: 600 }).catch((e) => {
       error('Public catalog unavailable · ' + e.message);
@@ -529,6 +558,9 @@ async function openDesk() {
       if (!research.spotVenue.value && !hasSpot('hyperliquid', 'BTC.USDT') &&
           ['BTC.USDT', 'ETH.USDT', 'SOL.USDT'].every((s) => hasSpot('bitmex', s)))
         research.spotVenue.value = 'bitmex';
+      if (!research.carryVenue.value && hasSpot('binance', 'BTC.USDT') &&
+          archives.some((m) => m.venue === 'binance' && m.symbol === 'BTC.USDT' && m.marketType === 'perpetual'))
+        research.carryVenue.value = 'binance';
     }
     el('venue').value = saved.venue ?? 'synthetic';
     options();

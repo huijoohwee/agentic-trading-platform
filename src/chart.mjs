@@ -11,6 +11,7 @@ const timeFmt = new Intl.DateTimeFormat('en-GB', {
 });
 export function mountChart(root, summary, expand) {
   let frame = '5m',
+    currency = 'USD',
     bars = [],
     lines = [],
     signals = [],
@@ -54,7 +55,15 @@ export function mountChart(root, summary, expand) {
     return data;
   }
   function draw() {
-    if (!bars.length) return;
+    if (!bars.length) {
+      summary.textContent = 'No candles available';
+      for (const { canvas, legend } of panes.values()) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        legend.textContent = '';
+      }
+      return;
+    }
     const extent = Math.max(bars.length, ...lines.map((s) => s.values.length)),
       end = extent - offset,
       start = Math.max(0, end - count);
@@ -64,6 +73,10 @@ export function mountChart(root, summary, expand) {
     );
     const selected = cursor ? show[clamp(Math.floor(cursor.fraction * show.length), 0, show.length - 1)] : bars.at(-1);
     if (!selected) return;
+    const index = new Map(show.map((bar, i) => [bar.time, i]));
+    const visible = signals.map((signal) => ({ signal, i: index.get(bucket(signal.time, frame)) }))
+      .filter(({ i }) => i !== undefined);
+    const markerText = (s) => s.label && s.label !== s.action ? s.action.toUpperCase() + ' · ' + s.label : s.action.toUpperCase();
     summary.textContent =
       selected.open === undefined
         ? timeFmt.format(selected.time) + ' UTC · projected indicator'
@@ -79,6 +92,12 @@ export function mountChart(root, summary, expand) {
           '   ' +
           fmt(100 * (selected.close / selected.open - 1)) +
           '%';
+    if (cursor) {
+      const details = visible.filter(({ i }) => show[i] === selected).map(({ signal }) =>
+        markerText(signal) + ' ' + fmt(signal.price));
+      if (details.length) summary.textContent += ' · ' + details.slice(0, 6).join(' / ') +
+        (details.length > 6 ? ' (+' + (details.length - 6) + ')' : '');
+    }
     for (const [name, { canvas, legend }] of panes) {
       const w = canvas.clientWidth,
         h = canvas.clientHeight;
@@ -98,7 +117,10 @@ export function mountChart(root, summary, expand) {
         palette = [up, down, fg, '#8d73b2', '#6598bc', '#ad8d4a'];
       const series = lines.filter((line) => line.pane === name),
         values = series.flatMap((s) => s.values.slice(start, end).filter(Number.isFinite));
-      if (name === 'price') for (const b of show) if (b.open !== undefined) values.push(b.high, b.low);
+      if (name === 'price') {
+        for (const b of show) if (b.open !== undefined) values.push(b.high, b.low);
+        for (const { signal } of visible) values.push(signal.price);
+      }
       if (series.some((s) => s.style === 'bars')) values.push(0);
       const bottom = h - (name === 'price' ? 24 : 9),
         width = Math.max(1, w - 56),
@@ -192,17 +214,23 @@ export function mountChart(root, summary, expand) {
         });
         ctx.stroke();
       });
-      if (name === 'price')
-        for (const signal of signals) {
-          const i = show.findIndex((b) => b.time === signal.time);
-          if (i < 0) continue;
+      if (name === 'price') {
+        const labels = [];
+        for (const { signal, i } of visible) {
+          const px = x(i), py = y(signal.price), label = markerText(signal);
+          ctx.fillStyle = ['buy', 'cover'].includes(signal.action) ? up :
+            ['sell', 'short'].includes(signal.action) ? down : fg;
+          ctx.beginPath();
+          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fill();
+          const size = ctx.measureText(label).width, left = clamp(px - 8, 1, Math.max(1, width - size));
+          const baseline = clamp(py - 6, 12, bottom - 2);
+          if (labels.some((p) => Math.abs(p.baseline - baseline) < 11 && p.left < left + size + 3 && left < p.right + 3)) continue;
+          labels.push({ left, right: left + size, baseline });
           ctx.fillStyle = fg;
-          ctx.fillText(
-            signal.label || signal.action.toUpperCase(),
-            clamp(x(i) - 8, 0, width - 32),
-            clamp(y(signal.price) - 8, 12, bottom - 2)
-          );
+          ctx.fillText(label, left, baseline);
         }
+      }
       if (cursor) {
         ctx.strokeStyle = fg;
         ctx.setLineDash([3, 4]);
@@ -216,7 +244,7 @@ export function mountChart(root, summary, expand) {
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      legend.textContent = [name === 'price' ? 'Price · USD' : '', ...series.map((s) => s.name)]
+      legend.textContent = [name === 'price' ? 'Price · ' + currency : '', ...series.map((s) => s.name)]
         .filter(Boolean)
         .join(' / ');
     }
@@ -278,7 +306,8 @@ export function mountChart(root, summary, expand) {
     }
   };
   return {
-    update(next, selection, markers, timeframe) {
+    update(next, selection, markers, timeframe, quoteCurrency = 'USD') {
+      currency = quoteCurrency;
       frame = timeframe ?? frame;
       bars = next;
       lines = calculateStudies(bars, selection);

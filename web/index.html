@@ -10,21 +10,19 @@
   <link rel="stylesheet" href="./owners/design/profile.css">
   <link rel="stylesheet" href="./owners/design/site/collection-layout.css">
   <link rel="stylesheet" href="./owners/design/site/toolbar.css">
-  <link rel="stylesheet" href="./owners/design/site/floating-panel.css">
-  <link rel="stylesheet" href="./owners/design/site/panel-section.css">
-  <link rel="stylesheet" href="./owners/design/site/skills-commands.css">
+  <link rel="stylesheet" href="./trading.css">
   <link rel="stylesheet" href="./journal.css">
   <script type="module" src="./src/landing-tools.mjs"></script>
   <script type="module" src="./src/browser.mjs"></script>
+  <script type="module" src="./src/skills-toolbar.mjs"></script>
 </head>
 <body data-agentic-typography>
+  <!-- trading-toolbar -->
   <main id="journal" aria-label="Decision journal">
     <noscript>Enable JavaScript to open the offline trading journal.</noscript>
   </main>
   <template id="session-slot">
-    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" class="agentic-text-detail" role="status">Opening local workspace…</span>
-      <a class="agentic-form-control" href="./desk.html">Open paper trading desk</a>
-      <button id="trading-skills-trigger" type="button" class="agentic-form-control" aria-haspopup="dialog" aria-controls="trading-skills-panel" aria-expanded="false">Skills &amp; Commands</button></div>
+    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" class="agentic-text-detail" role="status">Opening local workspace…</span></div>
   </template>
   <template id="age-slot">
     <div class="measure"><div><span>Quote age</span><strong id="age" class="agentic-mono-detail">—</strong></div>
@@ -96,7 +94,6 @@
       <p id="notional" role="status"></p>
     </details>
   </template>
-  <div id="trading-skills-panel" hidden></div>
   <div id="fatal" role="alert" hidden></div>
 </body>
 </html>

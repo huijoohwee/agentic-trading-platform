@@ -42,7 +42,7 @@ async function poll() {
     el('context').textContent = [s.context.venue, s.context.symbol, s.context.marketType, s.context.frame].join(
       ' · '
     );
-    chart.update(s.bars, s.context.studies, s.markers, s.context.frame);
+    chart.update(s.bars, s.context.studies, s.markers, s.context.frame, s.context.symbol.split('.')[1]);
     el('status').textContent =
       'Read only · ' +
       s.tab +

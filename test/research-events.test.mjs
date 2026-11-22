@@ -42,6 +42,24 @@ test('tick-level book and aggressor fixtures admit at each latency and exit on t
   );
   assert.match(sparse.unavailable, /subsecond/);
 });
+test('carry sizes its liquidity screen from both legs at the signal close', () => {
+  const hour = 3600000, t = Date.UTC(2025, 4, 12);
+  const candle = (close) => ({ time: t, close });
+  const markets = { BTC: [candle(102)], spot: [candle(100)] };
+  const decision = (spotTurnover, perpetualTurnover, at, capital) => {
+    const carry = { start: t, end: t + hour, capital, observations: 0, turnoverObservations: 0 };
+    const aux = { funding: [{ time: t, rate: 0.001, settlementHours: 8 }],
+      liquidity: [{ time: at, spotTurnover, perpetualTurnover }] };
+    const [plan] = portfolioSignals(12, markets, markets.BTC, hour, aux, carry);
+    return [plan, carry.observations];
+  };
+  assert.deepEqual(decision(100000, 100000, t + hour, 1000), [{ spot: 1, BTC: -1 }, 1]);
+  assert.deepEqual(decision(100000, 99999, t + hour, 1000), [null, 1]);
+  assert.deepEqual(decision(99999, 100000, t + hour, 1000), [null, 1]);
+  assert.deepEqual(decision(100000, 100000, t + hour, 1001), [null, 1]);
+  assert.deepEqual(decision(100000, 100000, t, 1000), [null, 0]);
+  assert.deepEqual(decision(100000, 100000, t + hour + 1, 1000), [null, 0]);
+});
 test('carry hedges equal notionals, credits shorts at observed funding, and flattens negative basis at next open', () => {
   const step = 3600000,
     start = Date.UTC(2022, 0, 1),

@@ -17,7 +17,7 @@ const normalize = (weights, gross = 1) => {
   const sum = Object.values(weights).reduce((s, n) => s + Math.abs(n), 0);
   return Object.fromEntries(Object.entries(weights).map(([s, n]) => [s, sum ? (n / sum) * gross : 0]));
 };
-export function portfolioSignals(id, markets, bars, frameMs, aux) {
+export function portfolioSignals(id, markets, bars, frameMs, aux, carry) {
   const names = Object.keys(markets),
     base = names[0],
     byName = {};
@@ -45,8 +45,19 @@ export function portfolioSignals(id, markets, bars, frameMs, aux) {
       while (fundingEnd < funding.length && funding[fundingEnd].time <= t) fundingEnd++;
       while (fundingStart < fundingEnd && funding[fundingStart].time <= t - 7 * DAY) fundingStart++;
       const rate = funding[fundingEnd - 1];
-      if (rate && t - rate.time <= rate.settlementHours * 3600000 && liquid?.liquid === true &&
-          b.close > spot && annualFunding(rate) > 0.2 &&
+      const currentRate = rate && t - rate.time <= rate.settlementHours * 3600000;
+      const turnover = liquid?.spotTurnover !== undefined && liquid.time === t && frameMs === 3600000;
+      const observed = typeof liquid?.liquid === 'boolean' || turnover;
+      const enoughLiquidity = turnover
+        ? Math.min(liquid.spotTurnover, liquid.perpetualTurnover) * 0.01 >= carry?.capital
+        : liquid?.liquid === true;
+      if (carry && currentRate && observed && b.time >= carry.start && t <= carry.end) {
+        carry.first ??= b.time;
+        carry.last = t;
+        carry.observations++;
+        if (turnover) carry.turnoverObservations++;
+      }
+      if (currentRate && enoughLiquidity && b.close > spot && annualFunding(rate) > 0.2 &&
           (!held.spot || day !== Math.floor((prior.time + frameMs) / DAY)))
         weights = { spot: 1, [base]: -1 };
       if (held.spot) {

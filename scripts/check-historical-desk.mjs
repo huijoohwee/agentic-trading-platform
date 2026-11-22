@@ -37,6 +37,13 @@ await ctx.route('**/*', (route) => {
   return route.abort();
 });
 await ctx.addInitScript(() => {
+  const drawText = CanvasRenderingContext2D.prototype.fillText;
+  window.paintedSignals = new Set();
+  CanvasRenderingContext2D.prototype.fillText = function (label, ...args) {
+    if (this.canvas.closest('[data-pane="price"]') && typeof label === 'string' && /^(BUY · entry|SELL · (stop|target))$/.test(label))
+      window.paintedSignals.add(label);
+    return drawText.call(this, label, ...args);
+  };
   const actions = new Map();
   window.qualificationActions = actions;
   Object.defineProperty(document, 'modelContext', {
@@ -183,8 +190,16 @@ try {
     assert.equal(await form.locator('[name=venue]').inputValue(), input.venue);
     assert.equal(await form.locator('[name=spotVenue]').inputValue(), venue);
     const run = await submitResearch(form, true);
-    assert.deepEqual(run.rows.filter((r) => r.status === 'blocked').map((r) => r.id), [12, 20]);
-    for (const row of run.rows.filter((r) => ![8, 19].includes(r.id))) {
+    const carry = manifest.partitions.some((p) => p.venue === 'binance' && p.mapping === 'matched-hour-turnover/v1');
+    assert.deepEqual(run.rows.filter((r) => r.status === 'blocked').map((r) => r.id), carry ? [20] : [12, 20]);
+    if (carry) {
+      const row = run.rows[11];
+      assert.equal(row.market.venue, 'binance');
+      assert.equal(row.status, 'partial');
+      assert.ok(row.matchedObservations >= 128);
+      assert.ok(row.warnings.some((warning) => warning.startsWith('Modeled liquidity')));
+    }
+    for (const row of run.rows.filter((r) => ![8, 19].includes(r.id) && !(carry && r.id === 12))) {
       assert.equal(row.market.venue, input.venue);
       assert.equal(row.status, cold.rows[row.id - 1].status);
       assert.equal(row.return, cold.rows[row.id - 1].return);
@@ -263,7 +278,10 @@ try {
     const form = page.locator('#historical');
     await form.locator('[name=venue]').fill(input.venue);
     await form.locator('[name=spotVenue]').fill(nativeSpot.venue);
+    const paper = await call('practice_portfolio');
+    const currentSymbol = await page.locator('#symbol').innerText();
     for (const expected of nativeSpot.suiteOutcomes) {
+      await page.evaluate(() => window.paintedSignals.clear());
       await form.locator('#hypothesis').selectOption(String(expected.id));
       const run = await submitResearch(form, false);
       assert.equal(run.rows.length, 1);
@@ -274,6 +292,27 @@ try {
       assert.equal(row.return, expected.result);
       assert.deepEqual(row.actual, expected.actual);
       assert.equal(row.reason, expected.reason);
+      if (row.status === 'blocked') {
+        await page.locator('#lab-status').filter({ hasText: 'No chart for hypothesis ' + row.id + ' · ' }).waitFor();
+        assert.equal(await page.locator('#view-run-chart').isHidden(), true);
+        assert.equal(await page.locator('#run-chart').isHidden(), true);
+      } else {
+        await page.locator('#run-chart-title').filter({ hasText: 'H' + row.id + ' · ' }).waitFor();
+        assert.ok((await page.locator('#run-chart-info').innerText()).includes(row.market.symbol));
+        assert.ok((await page.locator('#ticket-market').innerText()).includes(currentSymbol));
+        if (row.id === 18) {
+          await page.locator('#view-run-chart').click();
+          await page.waitForFunction(() => window.paintedSignals.has('BUY · entry') &&
+            [...window.paintedSignals].some((label) => label.startsWith('SELL · ')));
+          const projection = (await call('research_get', { id: run.id, hypothesis: 18 })).data;
+          assert.ok(projection.bars.length && projection.markers.length);
+          assert.equal(projection.source.license, chart.source.license);
+          await page.locator('#resume-chart').click();
+          await page.locator('#desk-quote').waitFor();
+          assert.equal(await page.locator('#symbol').innerText(), currentSymbol);
+          assert.equal((await call('practice_portfolio')).ledger_revision, paper.ledger_revision);
+        }
+      }
       catalogRuns.push({ hypothesis: row.id, runId: run.id, market: row.market,
         status: row.status, actual: row.actual, result: row.return, reason: row.reason,
         scientificHash: run.receipt.scientificHash });
@@ -287,6 +326,15 @@ try {
     await page.locator('#lab-status').filter({ hasText: reopened.scientificHash }).waitFor();
     assert.equal(await form.locator('#hypothesis').inputValue(), '18');
     assert.equal(await page.locator('#export-artifact').getAttribute('href'), '/api/practice/artifact?id=' + reopened.runId);
+    if (manifest.partitions.some((p) => p.venue === 'bitmex' && p.marketType === 'perpetual' && p.frame === '1h')) {
+      await form.locator('[name=carryVenue]').fill('bitmex');
+      await form.locator('#hypothesis').selectOption('12');
+      const carry = await submitResearch(form, false);
+      assert.equal(carry.rows[0].reason, 'funding, liquidity');
+      assert.equal(carry.rows[0].return, null);
+      assert.ok(carry.rows[0].actual);
+      nativeSpot.matchedCarry = { id: carry.id, row: carry.rows[0] };
+    }
   }
   assert.deepEqual(external, []);
   const evidence = {

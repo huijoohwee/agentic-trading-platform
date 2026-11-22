@@ -123,8 +123,12 @@ test('Trading Skills project the pinned OS catalog through the shared FloatingPa
     const changed = new Map(sources); changed.set(name, Buffer.from('changed'));
     assert.throws(() => verifyOwner('agentic-os', changed), /Owner bytes/);
   }
-  for (const name of ['toolbar', 'floating-panel', 'panel-section', 'skills-commands', 'collection-layout']) {
-    assert.ok(assets.get('index.html').toString().includes(`href="./owners/design/site/${name}.css"`));
+  for (const path of ['index.html', 'desk.html']) {
+    const html = assets.get(path).toString();
+    assert.ok(html.includes('href="./owners/design/site/toolbar.css"'));
+    assert.ok(html.includes('href="./trading.css"'));
+    assert.ok(html.includes('src="./src/skills-toolbar.mjs"'));
+    assert.ok(html.includes('href="./owners/design/site/collection-layout.css"'));
   }
   const view = assets.get('src/skills-panel.mjs').toString();
   assert.match(view, /import \{ mountFloatingPanel \} from '\.\.\/owners\/design\/site\/floating-panel\.js'/);

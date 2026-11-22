@@ -66,7 +66,8 @@ export function readArtifact(dir, receipt) {
 export function runArtifact({ directory, artifactDir, input, range, id }) {
   const venue = input.venue ?? 'uniswap-v3-500';
   const parts = partitionInventory(directory).filter(
-    (p) => p.venue === venue || (p.venue === input.spotVenue && p.marketType === 'spot' && p.kind === 'ohlcv')
+    (p) => p.venue === venue || (p.venue === input.spotVenue && p.marketType === 'spot' && p.kind === 'ohlcv') ||
+      (p.venue === input.carryVenue && p.symbol === 'BTC.USDT' && ['ohlcv', 'funding', 'liquidity'].includes(p.kind))
   );
   const data = loadData(directory, range, { parts }),
     inputHash = sha({ engine, input, range, sources: data.sources });

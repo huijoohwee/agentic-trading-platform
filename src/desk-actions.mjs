@@ -144,12 +144,13 @@ export const deskActions = [
   ),
   action(
     'research.suite',
-    'Queue all 20 hypotheses with an optional spot venue and basket for rows 8 and 19',
-    { ...parameters, basket, spotVenue: venue },
+    'Queue all 20 hypotheses with optional venues for spot and matched carry research',
+    { ...parameters, basket, spotVenue: venue, carryVenue: venue },
     [],
     false
   ),
-  action('research.get', 'Read research progress and scientific results', { id: string(64) }, ['id']),
+  action('research.get', 'Read run results or its selected hypothesis chart',
+    { id: string(64), hypothesis: integer(1, 20) }, ['id']),
   action(
     'research.overlay',
     'Apply historical signals on their bound chart',

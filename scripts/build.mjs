@@ -69,11 +69,19 @@ export async function assemble({ devDocumentPolicy } = {}) {
       assets.set('owners/' + pin.prefix + '/' + output, body);
     }
   }
-  const files = ['web/observe.html','src/observer-view.mjs','web/desk.html', 'web/desk.css', ...['desk-lab','research-catalog','desk-actions','landing-tools','contracts','market','market-reads','indicators','chart','experiment','strategy-language','scientific-packages','strategy-example','experiment-worker',
+  const files = ['web/observe.html','src/observer-view.mjs','web/desk.html', 'web/trading.css', 'web/desk.css', ...['desk-lab','research-catalog','desk-actions','landing-tools','contracts','market','market-reads','indicators','chart','experiment','strategy-language','scientific-packages','strategy-example','experiment-worker',
     'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
-    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/skills-panel.mjs'];
+    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/skills-toolbar.mjs', 'src/skills-panel.mjs'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
+  const toolbar = await readFile(join(root, 'web/trading-toolbar.html'), 'utf8');
+  for (const [document, page] of [['index.html', 'journal'], ['desk.html', 'desk']]) {
+    const html = assets.get(document).toString();
+    const slot = '<!-- trading-toolbar -->';
+    const active = 'data-page="' + page + '"';
+    if (!html.includes(slot) || !toolbar.includes(active)) throw new Error('Missing toolbar binding for ' + document);
+    assets.set(document, Buffer.from(html.replace(slot, toolbar.trimEnd().replace(active, active + ' aria-current="page"'))));
+  }
   if (devDocumentPolicy !== undefined) {
     for (const document of ['index.html','desk.html','observe.html']) {
       const template = assets.get(document).toString();

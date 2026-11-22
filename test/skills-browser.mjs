@@ -9,7 +9,8 @@ const summaries = [
 ];
 
 export async function verifyTradingSkills(page, mobile) {
-  const trigger = page.getByRole('button', { name: 'Skills & Commands', exact: true });
+  const toolbar = page.getByRole('navigation', { name: 'Trading tools', exact: true });
+  const trigger = toolbar.getByRole('button', { name: 'Skills & Commands', exact: true });
   const root = page.locator('#trading-skills-panel');
   const dialog = page.getByRole('dialog', { name: 'Agentic Trading Skills', exact: true });
   const panel = dialog.getByRole('tabpanel', { name: 'Skills & Commands', exact: true });
@@ -19,7 +20,20 @@ export async function verifyTradingSkills(page, mobile) {
   const titles = panel.locator('.agentic-collection-title');
   const activate = control => mobile ? control.tap() : control.click();
   const focused = control => control.evaluate(element => element === document.activeElement);
-  const ticketBefore = await page.locator('#ticket').innerText();
+  const ticketValues = () => page.locator('#ticket').evaluate(form =>
+    [...form.querySelectorAll('input, select, textarea')].map(field => [field.name, field.value, field.checked]));
+  await trigger.waitFor();
+  assert.equal(await toolbar.count(), 1);
+  assert.deepEqual(await toolbar.locator(':scope > .agentic-toolbar-item').allTextContents(),
+    ['Open paper trading desk', 'Decision journal', 'Skills & Commands']);
+  const deskLink = toolbar.getByRole('link', { name: 'Open paper trading desk', exact: true });
+  const journalLink = toolbar.getByRole('link', { name: 'Decision journal', exact: true });
+  assert.equal(await deskLink.getAttribute('href'), './desk.html');
+  assert.equal(await journalLink.getAttribute('href'), './');
+  assert.equal(await toolbar.locator('[aria-current="page"]').count(), 1);
+  const current = new URL(page.url()).pathname.endsWith('/desk.html') ? deskLink : journalLink;
+  assert.equal(await current.getAttribute('aria-current'), 'page');
+  const ticketBefore = await ticketValues();
   assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
   assert.equal(await trigger.getAttribute('aria-haspopup'), 'dialog');
   assert.equal(await trigger.getAttribute('aria-controls'), 'trading-skills-panel');
@@ -220,7 +234,7 @@ export async function verifyTradingSkills(page, mobile) {
     await tab.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
     assert.equal(await focused(trigger), true);
-    assert.equal(await page.locator('#ticket').innerText(), ticketBefore, 'Reference browsing leaves the ticket unchanged');
+    assert.deepEqual(await ticketValues(), ticketBefore, 'Reference browsing preserves ticket inputs');
     assert.deepEqual(effects, [], 'Reference browsing never sends a mutation request');
   } finally {
     page.off('request', onRequest);

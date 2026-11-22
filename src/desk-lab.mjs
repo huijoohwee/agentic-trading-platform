@@ -3,17 +3,21 @@ import { hypotheses } from './research-catalog.mjs';
 import { bindWorkbookExport } from './rehearsal-workbook.mjs';
 import { renderTable } from './desk-panels.mjs';
 const el = (id) => document.getElementById(id);
-export function bindLab(client, onOverlay) {
-  let active, interval, request, trace, reference;
+export function bindLab(client, onOverlay, displayRunChart) {
+  let active, interval, request, trace, reference, pendingHypothesis, chartVersion = 0, queueVersion = 0;
   const err = (error) => (el('lab-status').textContent = error.message);
   async function call(op, input = {}, requestId, actor = 'human') {
+    const queued = op === 'research.start' || op === 'research.suite';
+    const version = queued && ++queueVersion;
+    const hypothesis = queued && actor === 'human' ? Number(input.hypothesis ?? h.value) : null;
     const r = await client.invoke(op, input, requestId, actor);
     if (r.status === 'OK') {
       if (r.data?.session) await client.reload();
-      if (op === 'research.overlay') onOverlay(r.data);
-      if (op === 'research.start' || op === 'research.suite') {
-        selectRun(r.data.id);
+      if (op === 'research.overlay') {
+        dismissChart();
+        onOverlay(r.data);
       }
+      if (queued && version === queueVersion) selectRun(r.data.id, hypothesis);
     }
     return r;
   }
@@ -72,7 +76,41 @@ export function bindLab(client, onOverlay) {
     history.disabled = false;
     history.value = active ?? '';
   }
-  function selectRun(id) {
+  function dismissChart() {
+    chartVersion++;
+    pendingHypothesis = null;
+    el('view-run-chart').hidden = true;
+    displayRunChart(null);
+  }
+  async function showChart(id, hypothesis, share = false) {
+    const version = ++chartVersion;
+    try {
+      const data = await human('research.get', { id, hypothesis });
+      if (version !== chartVersion || active !== id) return;
+      if (!data.bars.length) {
+        dismissChart();
+        el('lab-status').textContent += ' · No chart for hypothesis ' + hypothesis + ' · ' +
+          (data.reason || 'No archived candles for this run');
+        return;
+      }
+      displayRunChart(data);
+      el('view-run-chart').hidden = false;
+      const current = client.data.session;
+      if (share && Object.entries(data.market).every(([k, v]) => current[k] === v)) {
+        const shared = await client.invoke('research.overlay', { id, hypothesis }, crypto.randomUUID(), 'human');
+        if (shared.status !== 'OK' && version === chartVersion)
+          el('lab-status').textContent += ' · Observer overlay unavailable · ' + shared.error.code;
+      }
+    } catch (e) {
+      if (version === chartVersion) {
+        dismissChart();
+        el('lab-status').textContent += ' · Chart unavailable · ' + e.message;
+      }
+    }
+  }
+  function selectRun(id, hypothesis) {
+    dismissChart();
+    pendingHypothesis = hypothesis;
     active = id;
     reference = null;
     history.value = id;
@@ -87,7 +125,10 @@ export function bindLab(client, onOverlay) {
   history.onchange = () => {
     const selected = history.selectedOptions[0];
     if (selected?.dataset.hypothesis) h.value = selected.dataset.hypothesis;
-    if (selected) selectRun(selected.value);
+    if (selected) {
+      queueVersion++;
+      selectRun(selected.value);
+    }
   };
   async function listSaved() {
     const list = await human('research.strategies');
@@ -207,6 +248,11 @@ export function bindLab(client, onOverlay) {
     if (!['running', 'queued'].includes(run.status)) {
       clearTimeout(interval);
       el('cancel-run').disabled = true;
+      if (run.rows && pendingHypothesis) {
+        const hypothesis = pendingHypothesis;
+        pendingHypothesis = null;
+        await showChart(id, hypothesis);
+      }
     } else {
       el('cancel-run').disabled = false;
       clearTimeout(interval);
@@ -227,6 +273,8 @@ export function bindLab(client, onOverlay) {
         venue: form.venue.value
       };
     const spotVenue = form.spotVenue.value.trim();
+    const carryVenue = form.carryVenue.value.trim();
+    if (suite && carryVenue) input.carryVenue = carryVenue;
     if (suite && spotVenue) input.spotVenue = spotVenue;
     if (!suite) {
       input.hypothesis = Number(h.value);
@@ -234,6 +282,7 @@ export function bindLab(client, onOverlay) {
       input.symbol = form.symbol.value.trim() || chosen.base + '.USDT';
       input.frame = form.frame.value || chosen.frame;
       input.marketType = chosen.marketType;
+      if (chosen.id === 12 && carryVenue) input.venue = carryVenue;
       if ([8, 19].includes(chosen.id) && spotVenue) input.venue = spotVenue;
     }
     if ((suite || input.hypothesis === 19) && form.basket.value.trim())
@@ -256,8 +305,7 @@ export function bindLab(client, onOverlay) {
   el('cancel-run').onclick = () =>
     active && human('research.cancel', { id: active }, crypto.randomUUID()).then(watch).catch(err);
   el('overlay-run').onclick = () =>
-    active &&
-    human('research.overlay', { id: active, hypothesis: Number(h.value) }, crypto.randomUUID()).catch(err);
+    active && showChart(active, Number(h.value), true);
   el('export-run').onclick = () =>
     reference && download(JSON.stringify(reference, null, 2), 'historical-run.json');
   el('observer-open').onclick = async () => {
@@ -314,5 +362,5 @@ export function bindLab(client, onOverlay) {
     listSaved().catch(err);
     tab();
   }
-  return { human };
+  return { human, dismissChart };
 }

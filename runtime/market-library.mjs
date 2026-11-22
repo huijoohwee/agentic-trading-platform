@@ -65,39 +65,42 @@ export function marketLibrary(directory) {
       );
       if (current && !hasArchive) return live.query('desk.chart', input);
       need(entry, 'MARKET_BINDING_UNAVAILABLE');
-      const { market, parts } = entry,
-        frame = input.frame ?? market.frame,
-        count = input.count ?? 100;
-      const matches = parts.filter((p) => compatible(p.frame, frame));
-      need(matches.length, 'INTERVAL_UNAVAILABLE');
-      const before = input.before ?? Math.max(...matches.map((p) => bucket(p.last, p.frame, 1)));
-      const start = bucket(before - 1, frame, -count + 1);
-      const data = loadData(directory, { start, end: before }, { parts: matches, warmup: 0 });
-      const series = composeBars([...data.series.values()], frame);
-      const bars = (series?.rows ?? []).filter((b) => bucket(b.time, frame, 1) <= before).slice(-count);
-      const sources = data.sources;
-      const publishers = [...new Map(sources.map((p) => [p.source, p])).values()];
-      const first = publishers[0] ?? market;
-      const source = {
-        id: publishers.length > 1 ? publishers.map((p) => p.source).join(', ') : first.source,
-        creator: [...new Set((publishers.length ? publishers : [market]).map((p) => p.creator))].join(', '),
-        license: [...new Set((publishers.length ? publishers : [market]).map((p) => p.license))].join(', '),
-        ...(publishers.length === 1 && first.upstreamInventorySha256
-          ? { upstreamInventorySha256: first.upstreamInventorySha256, licenseUrl: first.licenseUrl }
-          : {}),
-        sha256: (publishers.length === 1 && first.upstreamSha256) || sha(sources.map((p) => p.sha256))
-      };
-      return {
-        market: { ...market, frame, creator: source.creator, license: source.license, source: source.id },
-        source,
-        frame,
-        bars,
-        nextBefore: bars[0]?.time ?? null,
-        asOf: bars.length ? bucket(bars.at(-1).time, frame, 1) : null,
-        quality: 'historical',
-        warnings: ['Archived observations', ...(bars.length < count ? ['Partial candle window'] : [])],
-        gaps: series?.gaps ?? 0
-      };
+      return readArchiveChart(directory, entry, input);
     }
+  };
+}
+
+export function readArchiveChart(directory, { market, parts }, input) {
+  const frame = input.frame ?? market.frame,
+    count = input.count ?? 100;
+  const matches = parts.filter((p) => compatible(p.frame, frame));
+  need(matches.length, 'INTERVAL_UNAVAILABLE');
+  const before = input.before ?? Math.max(...matches.map((p) => bucket(p.last, p.frame, 1)));
+  const start = bucket(before - 1, frame, -count + 1);
+  const data = loadData(directory, { start, end: before }, { parts: matches, warmup: 0 });
+  const series = composeBars([...data.series.values()], frame);
+  const bars = (series?.rows ?? []).filter((b) => bucket(b.time, frame, 1) <= before).slice(-count);
+  const sources = data.sources;
+  const publishers = [...new Map(sources.map((p) => [p.source, p])).values()];
+  const first = publishers[0] ?? market;
+  const source = {
+    id: publishers.length > 1 ? publishers.map((p) => p.source).join(', ') : first.source,
+    creator: [...new Set((publishers.length ? publishers : [market]).map((p) => p.creator))].join(', '),
+    license: [...new Set((publishers.length ? publishers : [market]).map((p) => p.license))].join(', '),
+    ...(publishers.length === 1 && first.upstreamInventorySha256
+      ? { upstreamInventorySha256: first.upstreamInventorySha256, licenseUrl: first.licenseUrl }
+      : {}),
+    sha256: (publishers.length === 1 && first.upstreamSha256) || sha(sources.map((p) => p.sha256))
+  };
+  return {
+    market: { ...market, frame, creator: source.creator, license: source.license, source: source.id },
+    source,
+    frame,
+    bars,
+    nextBefore: bars[0]?.time ?? null,
+    asOf: bars.length ? bucket(bars.at(-1).time, frame, 1) : null,
+    quality: 'historical',
+    warnings: ['Archived observations', ...(bars.length < count ? ['Partial candle window'] : [])],
+    gaps: series?.gaps ?? 0
   };
 }

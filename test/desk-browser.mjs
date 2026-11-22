@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '../scripts/serve.mjs';
+import { verifyTradingSkills } from './skills-browser.mjs';
 export async function verifyDesk(browser) {
   const dir = await mkdtemp(join(tmpdir(), 'desk-browser-')),
     server = await serve(0, { practiceDirectory: dir });
@@ -25,6 +26,10 @@ export async function verifyDesk(browser) {
         await page.getByRole('link', { name: 'Open paper trading desk' }).click();
         await page.locator('#storage').filter({ hasText: 'Saved on loopback' }).waitFor();
         await page.locator('#stream').filter({ hasText: 'Synthetic event stream' }).waitFor();
+        await page.getByRole('navigation', { name: 'Desk sections' }).getByRole('link', { name: 'Market', exact: true }).click();
+        assert.ok(await page.locator('#market').evaluate(section => section.getBoundingClientRect().top >=
+          document.querySelector('.agentic-toolbar').getBoundingClientRect().bottom), 'Market anchor clears the toolbar');
+        await verifyTradingSkills(page, mobile);
         const read = () => page.evaluate(() => fetch('/api/practice/session').then((r) => r.json()));
         const wait = (predicate) => page.waitForFunction(predicate, null, { timeout: 8000 });
         // A failed stream can use the independently readable local snapshot, then recover.
@@ -100,6 +105,7 @@ export async function verifyDesk(browser) {
         await page.reload();
         await page.locator('#storage').filter({ hasText: 'cached revision' }).waitFor();
         await page.locator('#stream').filter({ hasText: 'sealed synthetic replay' }).waitFor();
+        await verifyTradingSkills(page, mobile);
         await page.locator('#run').click();
         await page.locator('#report').filter({ hasText: 'closed' }).waitFor();
         assert.equal(await page.locator('#symbol').textContent(), 'BIR.USD');

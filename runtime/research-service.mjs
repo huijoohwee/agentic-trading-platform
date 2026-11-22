@@ -2,6 +2,8 @@ import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { sha, requireThat as need } from './core.mjs';
+import { bucket } from '../src/market.mjs';
+import { readArchiveChart } from './market-library.mjs';
 import { dateRange } from './research-data.mjs';
 import { hypotheses } from '../src/research-catalog.mjs';
 import { compileStrategy } from '../src/strategy-language.mjs';
@@ -114,7 +116,25 @@ export function researchService({ store, directory, now }) {
       };
     if (op === 'research.get') {
       const run = view(scope, inputs.id);
-      if (run.receipt) readArtifact(artifactDir(scope), run.receipt);
+      const artifact = run.receipt && readArtifact(artifactDir(scope), run.receipt);
+      if (inputs.hypothesis !== undefined) {
+        need(artifact, 'RUN_NOT_READY');
+        const row = artifact.rows.find((r) => r.id === inputs.hypothesis);
+        need(row, 'HYPOTHESIS_OUTSIDE_RUN');
+        const { id, name, market, status } = row;
+        const result = { id: run.id, hypothesis: id, name, market, status, reason: row.reason, bars: [], markers: [] };
+        if (status === 'blocked' || !row.actual) return result;
+        const { symbol, venue, marketType, frame } = market;
+        const signals = row.signals.filter((s) => !s.symbol || [symbol, symbol.split('.')[0]].includes(s.symbol));
+        const before = signals.length ? bucket(signals.at(-1).time, frame, 1) : row.actual[1];
+        const parts = artifact.sources.filter((p) => p.kind === 'ohlcv' &&
+          p.symbol === symbol && p.venue === venue && p.marketType === marketType);
+        const chart = readArchiveChart(directory, { market, parts }, { frame, before, count: 300 });
+        const bars = chart.bars.filter((b) => b.time >= bucket(row.actual[0], frame));
+        const times = new Set(bars.map((b) => b.time));
+        const inWindow = signals.filter((s) => times.has(bucket(s.time, frame)));
+        return { ...result, source: chart.source, bars, markers: inWindow.slice(-1000), signalCount: inWindow.length };
+      }
       const { lease, leaseUntil, ...publicRun } = run;
       return publicRun;
     }

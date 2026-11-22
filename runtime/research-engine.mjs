@@ -150,7 +150,7 @@ export function historicalReport({ input, range, data, engine }) {
   }
   for (const strategy of hypotheses.filter((h) => !input.hypothesis || input.hypothesis === h.id)) {
     const { id, requires, base } = strategy,
-      venue = [8, 19].includes(id) ? input.spotVenue ?? primaryVenue : primaryVenue,
+      venue = (id === 12 ? input.carryVenue : [8, 19].includes(id) ? input.spotVenue : undefined) ?? primaryVenue,
       symbol =
         input.hypothesis && input.symbol
           ? input.symbol
@@ -326,7 +326,18 @@ export function historicalReport({ input, range, data, engine }) {
         frames[frame] * 60000
       );
     } else if ([12, 13, 14, 16, 19].includes(id)) {
-      const plans = portfolioSignals(id, markets, source.rows, frames[frame] * 60000, aux);
+      const carry = id === 12 ? { ...range, capital, observations: 0, turnoverObservations: 0 } : undefined;
+      const plans = portfolioSignals(id, markets, source.rows, frames[frame] * 60000, aux, carry);
+      if (carry) {
+        if (!carry.observations) {
+          rows.push(blocked('No simultaneous spot, perpetual, settled funding and liquidity observations'));
+          continue;
+        }
+        common.actual = [carry.first, carry.last];
+        common.matchedObservations = carry.observations;
+        if (carry.turnoverObservations)
+          warnings.push('Modeled liquidity requires 1% of the prior closed hour’s observed turnover on each leg to cover initial capital');
+      }
       report = executePortfolio(
         source.rows,
         markets,
