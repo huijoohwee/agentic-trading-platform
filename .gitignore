@@ -1,3 +1,5 @@
 node_modules/
 .local-build/
 .DS_Store
+.runtime-private/
+__pycache__/

@@ -8,12 +8,30 @@ export function utcMillis(value) {
   return ms;
 }
 
-export async function readFixture(bytes) {
+export async function digest(input) {
+  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
   const hash = await crypto.subtle.digest('SHA-256', bytes);
-  const digest = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
-  if (digest !== FIXTURE_DIGEST) throw new Error('Fixture integrity check failed.');
+  return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export function canonical(value) {
+  return JSON.stringify(value, (_, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    return Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]));
+  });
+}
+export const positive = value => Number.isFinite(value) && value > 0;
+
+export function limitEvidence(side, limit, executionPrice) {
+  if (!positive(executionPrice)) return 'UNKNOWN_FILL_PRICE';
+  return (side === 'BUY' ? executionPrice <= limit : executionPrice >= limit) ? 'AT_LIMIT_OR_BETTER' : 'OFF_LIMIT';
+}
+
+export async function readFixture(bytes) {
+  const sourceDigest = await digest(bytes);
+  if (sourceDigest !== FIXTURE_DIGEST) throw new Error('Fixture integrity check failed.');
   const fixture = JSON.parse(new TextDecoder().decode(bytes));
-  return Object.freeze({ ...fixture, digest, quote: Object.freeze(fixture.quote), policy: Object.freeze(fixture.policy) });
+  return Object.freeze({ ...fixture, digest: sourceDigest, quote: Object.freeze(fixture.quote), policy: Object.freeze(fixture.policy) });
 }
 
 export function evaluateFreshness(quote, policy, evaluationAt) {

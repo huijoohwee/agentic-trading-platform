@@ -1,0 +1,366 @@
+import { registerActions, deskActions } from './desk-actions.mjs';
+import { hypotheses } from './research-catalog.mjs';
+import { bindWorkbookExport } from './rehearsal-workbook.mjs';
+import { renderTable } from './desk-panels.mjs';
+const el = (id) => document.getElementById(id);
+export function bindLab(client, onOverlay, displayRunChart) {
+  let active, interval, request, trace, reference, pendingHypothesis, chartVersion = 0, queueVersion = 0;
+  const err = (error) => (el('lab-status').textContent = error.message);
+  async function call(op, input = {}, requestId, actor = 'human') {
+    const queued = op === 'research.start' || op === 'research.suite';
+    const version = queued && ++queueVersion;
+    const hypothesis = queued && actor === 'human' ? Number(input.hypothesis ?? h.value) : null;
+    const r = await client.invoke(op, input, requestId, actor);
+    if (r.status === 'OK') {
+      if (r.data?.session) await client.reload();
+      if (op === 'research.overlay') {
+        dismissChart();
+        onOverlay(r.data);
+      }
+      if (queued && version === queueVersion) selectRun(r.data.id, hypothesis);
+    }
+    return r;
+  }
+  registerActions(deskActions, (op, input, id) => {
+    if (
+      ['practice.order', 'practice.cancel', 'practice.funds', 'practice.prediction', 'practice.reset'].includes(
+        op
+      ) &&
+      (!input.explicitIntent || !window.confirm('Confirm paper effect ' + op + ' ' + JSON.stringify(input)))
+    )
+      return {
+        status: 'REFUSED',
+        error: { code: 'EXPLICIT_INTENT_REQUIRED', retryable: false },
+        missing: ['direct owner intent']
+      };
+    return call(op, input, id, 'agent');
+  });
+  async function human(op, input = {}, id) {
+    const out = await call(op, input, id);
+    if (out.status !== 'OK') throw Error(out.error.code);
+    return out.data;
+  }
+  const history = el('run-history'), h = el('hypothesis'),
+    form = el('historical').elements;
+  for (const s of hypotheses) h.add(new Option(s.id + '. ' + s.name + ' · ' + s.base + ' ' + s.marketType + ' · ' + s.frame + ' · v' + s.version, s.id));
+  const date = new Date();
+  form.start.value = '2021-01-01';
+  form.end.value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 0)).toISOString().slice(0, 10);
+  el('save-source').onclick = async () => {
+    try {
+      const strategy = await human(
+        'research.save',
+        { name: el('strategy-name').value, code: el('code').value },
+        crypto.randomUUID()
+      );
+      el('lab-status').textContent = 'Saved ' + strategy.name + ' · ' + strategy.hash;
+      await listSaved();
+    } catch (e) {
+      err(e);
+    }
+  };
+  function updateRunOption({ id, status, created, hypothesis, venue }) {
+    const name = hypotheses.find((row) => row.id === hypothesis)?.name ?? 'All 20 hypotheses';
+    const label = [new Date(created).toISOString().slice(0, 19).replace('T', ' ') + ' UTC',
+      name, venue, status, id.slice(0, 8)].join(' · ');
+    let option = Array.from(history.options).find((row) => row.value === id);
+    if (!option) {
+      if (!history.options[0]?.value) history.replaceChildren();
+      option = new Option(label, id);
+      option.dataset.created = created;
+      option.dataset.hypothesis = hypothesis ?? '';
+      const before = Array.from(history.options).find((row) => Number(row.dataset.created) < created);
+      history.add(option, before ?? null);
+      if (history.length > 30) history.remove(history.length - 1);
+    } else if (option.textContent !== label) option.textContent = label;
+    history.disabled = false;
+    history.value = active ?? '';
+  }
+  function dismissChart() {
+    chartVersion++;
+    pendingHypothesis = null;
+    el('view-run-chart').hidden = true;
+    displayRunChart(null);
+  }
+  async function showChart(id, hypothesis, share = false) {
+    const version = ++chartVersion;
+    try {
+      const data = await human('research.get', { id, hypothesis });
+      if (version !== chartVersion || active !== id) return;
+      if (!data.bars.length) {
+        dismissChart();
+        el('lab-status').textContent += ' · No chart for hypothesis ' + hypothesis + ' · ' +
+          (data.reason || 'No archived candles for this run');
+        return;
+      }
+      displayRunChart(data);
+      el('view-run-chart').hidden = false;
+      const current = client.data.session;
+      if (share && Object.entries(data.market).every(([k, v]) => current[k] === v)) {
+        const shared = await client.invoke('research.overlay', { id, hypothesis }, crypto.randomUUID(), 'human');
+        if (shared.status !== 'OK' && version === chartVersion)
+          el('lab-status').textContent += ' · Observer overlay unavailable · ' + shared.error.code;
+      }
+    } catch (e) {
+      if (version === chartVersion) {
+        dismissChart();
+        el('lab-status').textContent += ' · Chart unavailable · ' + e.message;
+      }
+    }
+  }
+  function selectRun(id, hypothesis) {
+    dismissChart();
+    pendingHypothesis = hypothesis;
+    active = id;
+    reference = null;
+    history.value = id;
+    for (const key of ['cancel-run', 'overlay-run', 'research-sheets', 'export-run']) el(key).disabled = true;
+    el('export-artifact').hidden = true;
+    el('lab-status').textContent = 'Loading run…';
+    el('run-trace').textContent = '';
+    el('run-detail').textContent = '';
+    renderTable('run-results', [], []);
+    watch();
+  }
+  history.onchange = () => {
+    const selected = history.selectedOptions[0];
+    if (selected?.dataset.hypothesis) h.value = selected.dataset.hypothesis;
+    if (selected) {
+      queueVersion++;
+      selectRun(selected.value);
+    }
+  };
+  async function listSaved() {
+    const list = await human('research.strategies');
+    el('saved-source').replaceChildren(
+      new Option('Choose a saved version', ''),
+      ...list.saved.map((s) => new Option(s.name + ' · ' + s.hash.slice(0, 10), s.hash))
+    );
+    el('saved-source').onchange = () => {
+      const s = list.saved.find((s) => s.hash === el('saved-source').value);
+      if (s) {
+        el('code').value = s.code;
+        el('code').dispatchEvent(new Event('input'));
+      }
+    };
+    for (const run of list.runs) updateRunOption(run);
+    if (!active && list.runs.length) selectRun(list.runs[0].id);
+  }
+  function download(text, name) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })),
+      a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function refresh() {
+    if (!active) return;
+    const id = active,
+      run = await human('research.get', { id });
+    if (id !== active) return;
+    updateRunOption({ ...run.input, id, status: run.status, created: run.created });
+    el('lab-status').textContent =
+      run.status +
+      ' · ' +
+      id +
+      (run.error ? ' · ' + run.error : '') +
+      (run.receipt
+        ? ' · ' +
+          (run.receipt.cached ? 'cached from ' + run.receipt.originalRun : 'cold run') +
+          ' · ' +
+          run.receipt.scientificHash
+        : '');
+    el('run-trace').textContent = run.trace.map((t) => new Date(t.at).toISOString() + ' ' + t.status).join('\n');
+    el('export-artifact').hidden = !run.receipt;
+    if (run.rows) {
+      el('export-artifact').href = '/api/practice/artifact?id=' + encodeURIComponent(run.id);
+      reference = run;
+      for (const key of ['research-sheets', 'export-run', 'overlay-run']) el(key).disabled = false;
+      const headers = [
+        'Hypothesis',
+        'Quality',
+        'Actual UTC dates',
+        'Return',
+        'Drawdown',
+        'Trades',
+        'Profitability',
+        'Reason'
+      ];
+      const rows = run.rows.map((r) => [
+        r.id + '. ' + r.name,
+        r.status,
+        r.actual ? r.actual.map((t) => new Date(t).toISOString().slice(0, 10)).join(' – ') : 'Unknown',
+        r.return === null ? 'Unknown' : (r.return * 100).toFixed(2) + '%',
+        r.metrics ? (r.metrics.maxDrawdown * 100).toFixed(2) + '%' : '—',
+        r.metrics?.tradeCount ?? '—',
+        r.profitability,
+        r.reason ?? r.warnings.join(' · ')
+      ]);
+      renderTable('run-results', headers, rows);
+      el('run-detail').textContent = JSON.stringify(
+        run.rows.map(({ id, market, metrics, annual, walkForward, costs }) => ({
+          id,
+          market,
+          metrics,
+          annual,
+          walkForward,
+          costs
+        })),
+        null,
+        2
+      );
+      bindWorkbookExport(
+        el('research-sheets'),
+        el('lab-status'),
+        {
+          workbookId: 'historical-research',
+          sheetId: 'results',
+          name: 'Historical research',
+          headers: [
+            'Hypothesis',
+            'Quality',
+            'Actual UTC dates',
+            'Return (fraction)',
+            'Drawdown (fraction)',
+            'Trades',
+            'Profitability',
+            'Reason'
+          ],
+          records: run.rows.map((r, i) => ({
+            id: 'hypothesis-' + r.id,
+            values: [
+              rows[i][0],
+              r.status,
+              r.actual ? rows[i][2] : undefined,
+              r.return ?? undefined,
+              r.metrics?.maxDrawdown,
+              r.metrics?.tradeCount,
+              r.profitability,
+              rows[i][7]
+            ]
+          })),
+          filename: 'research-results.json'
+        },
+        download
+      );
+    }
+    if (!['running', 'queued'].includes(run.status)) {
+      clearTimeout(interval);
+      el('cancel-run').disabled = true;
+      if (run.rows && pendingHypothesis) {
+        const hypothesis = pendingHypothesis;
+        pendingHypothesis = null;
+        await showChart(id, hypothesis);
+      }
+    } else {
+      el('cancel-run').disabled = false;
+      clearTimeout(interval);
+      interval = setTimeout(() => refresh().catch(err), 600);
+    }
+  }
+  function watch() {
+    clearTimeout(interval);
+    void refresh().catch(err);
+  }
+  el('historical').onsubmit = async (e) => {
+    e.preventDefault();
+    const suite = e.submitter?.value === 'suite',
+      input = {
+        start: form.start.value,
+        end: form.end.value,
+        capital: Number(form.capital.value),
+        venue: form.venue.value
+      };
+    const spotVenue = form.spotVenue.value.trim();
+    const carryVenue = form.carryVenue.value.trim();
+    if (suite && carryVenue) input.carryVenue = carryVenue;
+    if (suite && spotVenue) input.spotVenue = spotVenue;
+    if (!suite) {
+      input.hypothesis = Number(h.value);
+      const chosen = hypotheses[input.hypothesis - 1];
+      input.symbol = form.symbol.value.trim() || chosen.base + '.USDT';
+      input.frame = form.frame.value || chosen.frame;
+      input.marketType = chosen.marketType;
+      if (chosen.id === 12 && carryVenue) input.venue = carryVenue;
+      if ([8, 19].includes(chosen.id) && spotVenue) input.venue = spotVenue;
+    }
+    if ((suite || input.hypothesis === 19) && form.basket.value.trim())
+      input.basket = [
+        input.symbol ?? (form.symbol.value.trim().toUpperCase() || 'BTC.USDT'),
+        ...form.basket.value
+          .trim()
+          .toUpperCase()
+          .split(/[,\s]+/)
+      ];
+    const bytes = JSON.stringify([suite, input]);
+    if (request?.bytes !== bytes) request = { bytes, id: crypto.randomUUID() };
+    try {
+      await human(suite ? 'research.suite' : 'research.start', input, request.id);
+      request = null;
+    } catch (e) {
+      err(e);
+    }
+  };
+  el('cancel-run').onclick = () =>
+    active && human('research.cancel', { id: active }, crypto.randomUUID()).then(watch).catch(err);
+  el('overlay-run').onclick = () =>
+    active && showChart(active, Number(h.value), true);
+  el('export-run').onclick = () =>
+    reference && download(JSON.stringify(reference, null, 2), 'historical-run.json');
+  el('observer-open').onclick = async () => {
+    try {
+      const data = await human('desk.observer'),
+        link = el('observer-link');
+      link.href = new URL(data.path, data.origin ?? location.origin).href;
+      link.hidden = false;
+      link.textContent = 'Open read-only observer · expires ' + new Date(data.expires).toISOString();
+    } catch (e) {
+      err(e);
+    }
+  };
+  async function activity() {
+    clearTimeout(trace);
+    if (!el('console').open) return;
+    try {
+      const data = await human('desk.activity');
+      el('activity-log').replaceChildren(
+        ...data.activity.map((e) =>
+          Object.assign(document.createElement('li'), {
+            textContent:
+              new Date(e.at).toISOString() +
+              ' · ' +
+              e.actor +
+              ' · ' +
+              e.operation +
+              ' · ' +
+              e.outcome +
+              ' · ' +
+              e.elapsed +
+              ' ms' +
+              (e.runId ? ' · ' + e.runId : '')
+          })
+        )
+      );
+    } catch (e) {
+      err(e);
+    }
+    trace = setTimeout(activity, 2500);
+  }
+  el('console').ontoggle = activity;
+  const tab = () => {
+    const key = location.hash === '#historical-research' ? 'research' : location.hash.slice(1);
+    if (['market', 'portfolio', 'research', 'predictions'].includes(key))
+      void human('desk.tab', { tab: key }).catch(err);
+  };
+  window.addEventListener('hashchange', tab);
+  window.addEventListener('pagehide', () => {
+    clearTimeout(trace);
+    clearTimeout(interval);
+  });
+  if (client.online) {
+    listSaved().catch(err);
+    tab();
+  }
+  return { human, dismissChart };
+}

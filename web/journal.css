@@ -1,7 +1,4 @@
-* { box-sizing: border-box; }
-body { margin: 0; color: CanvasText; background: Canvas; font: var(--agentic-font-size-body)/var(--agentic-line-height-body) var(--agentic-font-sans); }
 .session, .measure > div, .facts > div { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--agentic-control-padding-inline); }
-#offline-status, .scale { font-size: .75rem; }
 h2 { margin: 0; font-size: 1.125rem; }
 p { margin: 0; }
 #journal:has([data-state="PASS"]) { --freshness-color: var(--agentic-dashboard-success); }
@@ -10,12 +7,10 @@ p { margin: 0; }
 #state { display: block; font-size: 2rem; line-height: 1.2; }
 #state, #fatal { color: var(--freshness-color); }
 #verdict, .measure, #fields, .facts { margin-block: var(--agentic-control-padding-inline); }
-#age, .scale, dd { font-family: var(--agentic-font-mono); font-variant-numeric: tabular-nums; }
 progress { accent-color: var(--freshness-color); display: block; width: 100%; height: .6rem; margin-block: var(--agentic-control-padding-block); }
 .facts { margin-inline: 0; }
 .facts > div { padding-block: var(--agentic-control-padding-block); border-block-start: var(--agentic-panel-border); }
 dd { margin: 0; overflow-wrap: anywhere; }
-#digest { font-size: .75rem; }
 fieldset { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: var(--agentic-control-padding-inline); }
 .field { display: grid; gap: var(--agentic-control-padding-block); }
 label { font-weight: 600; }
@@ -25,4 +20,35 @@ input, select { width: 100%; min-width: 0; }
 .time-row input { flex: 1 1 8rem; }
 #feedback:not(:empty), #notional:not(:empty) { margin-block-start: var(--agentic-control-padding-inline); }
 .sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
-[hidden] { display: none !important; }
+
+#audit > summary {
+  min-block-size: var(--agentic-control-height);
+  padding-block: calc((var(--agentic-control-height) - var(--agentic-line-height-body)) / 2);
+  cursor: pointer;
+}
+#rehearsal-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; }
+#rehearsal-body :is(li, summary, code) { overflow-wrap: anywhere; }
+#runtime-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; overflow-wrap: anywhere; }
+:is(#rehearsal-body, #runtime-body) .agentic-dashboard-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
+:is(#rehearsal-body, #runtime-body) .agentic-dashboard-actions label { display: grid; gap: .25rem; max-width: 100%; }
+#replay-worksheets { min-width: 0; container: worksheets / inline-size; }
+#replay-worksheets [role="tablist"] { border-block-end: var(--agentic-panel-border); padding-block: var(--agentic-control-padding-block); }
+#replay-worksheets [role="tabpanel"] { min-width: 0; }
+.worksheet-body { display: grid; gap: var(--agentic-dashboard-card-gap); align-items: start; padding-block: var(--agentic-dashboard-card-gap); }
+.worksheet-stage, .worksheet-fields { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: var(--agentic-dashboard-card-gap); }
+.worksheet-body aside { min-width: 0; border: var(--agentic-panel-border); border-radius: var(--agentic-panel-radius); padding: var(--agentic-control-padding-inline); }
+.worksheet-fields { padding-block: var(--agentic-control-padding-inline); }
+.worksheet-fields label { display: grid; gap: var(--agentic-control-padding-block); }
+.worksheet-fields label:has(input[type="checkbox"]) { display: flex; align-items: center; }
+.worksheet-fields input[type="checkbox"] { width: auto; }
+.worksheet-stage h3 { margin: 0; }
+.worksheet-stage [role="alert"]:empty { display: none; }
+.worksheet-stage [role="status"] { margin-block-start: var(--agentic-control-padding-inline); }
+.worksheet-series > svg { display: block; width: 100%; height: auto; max-height: 20rem; }
+@container worksheets (min-width: 44rem) {
+  .worksheet-body { grid-template-columns: minmax(0, 2fr) minmax(14rem, 1fr); }
+}
+.rehearsal-table-content { display: grid; min-inline-size: 0; gap: var(--agentic-control-padding-inline); }
+.rehearsal-table-content > [role="alert"]:empty { display: none; }
+.rehearsal-table { min-inline-size: 0; block-size: min(40dvh, 19rem); border: var(--agentic-panel-border); border-radius: var(--agentic-control-radius); overflow: hidden; }
+.rehearsal-table::part(mount) { block-size: 100%; }

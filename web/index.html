@@ -9,20 +9,25 @@
   <link rel="icon" href="./owners/design/site/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./owners/design/profile.css">
   <link rel="stylesheet" href="./owners/design/site/collection-layout.css">
+  <link rel="stylesheet" href="./owners/design/site/toolbar.css">
+  <link rel="stylesheet" href="./trading.css">
   <link rel="stylesheet" href="./journal.css">
+  <script type="module" src="./src/landing-tools.mjs"></script>
   <script type="module" src="./src/browser.mjs"></script>
+  <script type="module" src="./src/skills-toolbar.mjs"></script>
 </head>
-<body>
+<body data-agentic-typography>
+  <!-- trading-toolbar -->
   <main id="journal" aria-label="Decision journal">
     <noscript>Enable JavaScript to open the offline trading journal.</noscript>
   </main>
   <template id="session-slot">
-    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" role="status">Opening local workspace…</span></div>
+    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" class="agentic-text-detail" role="status">Opening local workspace…</span></div>
   </template>
   <template id="age-slot">
-    <div class="measure"><div><span>Quote age</span><strong id="age">—</strong></div>
+    <div class="measure"><div><span>Quote age</span><strong id="age" class="agentic-mono-detail">—</strong></div>
     <progress id="window" aria-label="Quote age within the five-minute policy window" value="0" max="300"></progress>
-    <div class="scale"><span>0 s</span><span>5 min threshold</span></div></div>
+    <div class="scale agentic-mono-detail"><span>0 s</span><span>5 min threshold</span></div></div>
   </template>
   <template id="quote-slot">
     <section id="quote" aria-labelledby="check-heading">
@@ -61,6 +66,28 @@
     </div>
   </template>
   <template id="evidence-slot">
+    <details id="audit" data-dashboard-primitive="disclosure"><summary>Private cash-policy audit · synthetic fixture</summary>
+      <p id="audit-status" role="status">Opening the fixture…</p>
+      <dl class="facts" id="audit-results"></dl>
+      <fieldset id="audit-files" disabled class="agentic-form-controls"><legend>Manual synthetic runs</legend>
+        <label for="audit-input">Paste snapshot JSON</label><textarea id="audit-input" rows="3"></textarea>
+        <div class="agentic-dashboard-actions">
+          <button type="button" id="audit-accept">Import run</button>
+          <button type="button" id="audit-export">Export audit</button>
+          <button type="button" id="audit-witness">Save witness</button>
+        </div>
+        <label>Audit archive<input type="file" accept=".json" id="audit-archive"></label>
+        <label>Retained witness<input type="file" accept=".json" id="audit-proof"></label>
+        <button type="button" id="audit-restore">Verify and restore</button>
+      </fieldset>
+      <p id="audit-feedback" role="status"></p>
+    </details>
+    <details id="rehearsal" data-dashboard-primitive="disclosure"><summary>Moomoo × Qoder competition rehearsal</summary>
+      <div id="rehearsal-body"><p role="status">Opening the offline rehearsal…</p></div>
+    </details>
+    <details id="runtime-readback" data-agentic-section="runtime" data-dashboard-primitive="disclosure"><summary>Runtime readback · private SIMULATE observations</summary>
+      <div id="runtime-body"><p role="status">Open to read the isolated local runtime or its last saved redacted observation.</p></div>
+    </details>
     <details id="evidence" hidden data-dashboard-primitive="disclosure"><summary>Source evidence and calculation</summary>
       <dl class="facts"><div><dt>Fixture ID</dt><dd id="fixture-id"></dd></div>
       <div><dt>Policy</dt><dd id="saved-policy"></dd></div><div><dt>Fixture SHA-256</dt><dd id="digest"></dd></div></dl>

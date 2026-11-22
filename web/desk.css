@@ -1,0 +1,230 @@
+#desk {
+  max-width: 92rem;
+  margin: auto;
+  padding: clamp(0.75rem, 2vw, 2rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  min-inline-size: 0;
+}
+#desk section[id] {
+  scroll-margin-block-start: var(--agentic-toolbar-dock-height, 0px);
+}
+footer,
+.sections {
+  color: var(--agentic-base-muted, GrayText);
+}
+h1 {
+  line-height: 1.12;
+  margin: 0.7rem 0 0.1rem;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: -0.035em;
+}
+h2,
+h3,
+p,
+dl {
+  margin: 0;
+}
+h2 {
+  font-size: 1.25rem;
+}
+h3 {
+  font-size: 1rem;
+}
+.actions,
+.heading,
+footer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+.heading,
+footer {
+  justify-content: space-between;
+}
+.heading strong {
+  display: block;
+  line-height: 1.15;
+  margin-top: 0.25rem;
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-variant-numeric: tabular-nums;
+}
+.market-controls,
+.pair,
+.workspace {
+  display: grid;
+  gap: 0.8rem;
+  min-width: 0;
+}
+.market-controls {
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+  align-items: end;
+}
+.workspace {
+  grid-template-columns: minmax(0, 2.8fr) minmax(15rem, 1fr);
+  align-items: start;
+}
+.pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#desk > section,
+#desk > details,
+.workspace > section {
+  gap: 0.8rem;
+  padding: clamp(0.8rem, 1.5vw, 1.25rem);
+}
+label,
+form {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+form {
+  gap: 0.75rem;
+}
+input,
+select,
+textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+summary,
+button {
+  cursor: pointer;
+}
+:where(#desk) summary {
+  padding: 0.25rem 0;
+}
+:where(#desk) details[open] > :not(summary) {
+  margin-top: 0.65rem;
+}
+.study-list,
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+  gap: 0.6rem;
+}
+.study-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.chart-pane {
+  overflow: hidden;
+  resize: vertical;
+  height: 8rem;
+  min-height: 4.5rem;
+  max-height: 50vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-bottom: var(--agentic-panel-border);
+}
+.chart-pane[data-pane='price'] {
+  height: clamp(15rem, 28vw, 27rem);
+  min-height: 10rem;
+}
+.chart-pane canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  --candle-up: #168764;
+  --candle-down: #bb5944;
+}
+.chart-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: auto;
+  background: Canvas;
+}
+.chart-expanded .chart-pane[data-pane='price'] {
+  height: 55vh;
+  max-height: 70vh;
+}
+#ticker,
+#ohlc,
+.metrics dd,
+#estimate {
+  font-variant-numeric: tabular-nums;
+}
+.metrics dt {
+  color: var(--agentic-base-muted, GrayText);
+  font-size: 0.85rem;
+}
+.metrics dd {
+  margin: 0;
+  font-size: 1.12rem;
+}
+#flow {
+  display: block;
+  overflow: hidden;
+}
+#flow section {
+  min-width: 0;
+}
+.table-view {
+  height: 13rem;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+#bids .table-view,
+#asks .table-view {
+  height: calc(15 * var(--agentic-row-height) + 1rem);
+}
+.table-view::part(mount) {
+  height: 100%;
+}
+.editor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  border: var(--agentic-panel-border);
+}
+.editor pre,
+.editor textarea {
+  margin: 0;
+  padding: 0.5rem;
+  line-height: 1.5rem;
+  font-family: var(--agentic-font-mono, monospace);
+  font-size: 0.9rem;
+  border: 0;
+}
+.editor pre {
+  text-align: right;
+  overflow: hidden;
+  color: GrayText;
+  height: 14.5rem;
+  user-select: none;
+}
+.editor textarea {
+  resize: vertical;
+  height: 14.5rem;
+}
+#logs {
+  white-space: pre-wrap;
+  max-height: 12rem;
+  overflow: auto;
+}
+#run-detail, #run-trace, #activity-log { overflow:auto; max-height:20rem; max-width:100%; overflow-wrap:anywhere; }
+#lab-status { display:block; overflow-wrap:anywhere; }
+#notice:empty,
+#logs:empty {
+  display: none;
+}
+footer {
+  padding: 1rem 0;
+  border-top: var(--agentic-panel-border);
+}
+@media (max-width: 48rem) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #flow .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

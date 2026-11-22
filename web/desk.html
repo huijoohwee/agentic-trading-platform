@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>Paper trading desk · Agentic Trading</title>
+  <link rel="icon" href="./owners/design/site/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./owners/design/profile.css"><link rel="stylesheet" href="./owners/design/site/collection-layout.css">
+  <link rel="stylesheet" href="./owners/design/site/toolbar.css">
+  <link rel="stylesheet" href="./trading.css">
+  <link rel="stylesheet" href="./desk.css"><script type="module" src="./src/desk.mjs"></script>
+  <script type="module" src="./src/skills-toolbar.mjs"></script>
+</head>
+<body data-agentic-typography>
+  <!-- trading-toolbar -->
+<main id="desk" class="agentic-form-controls">
+  <header>
+    <h1>Paper trading desk</h1><p>Local paper trading · market source shown with each chart</p></header>
+  <section class="market-controls agentic-collection-item">
+    <label>Find an instrument<input id="search" type="search" placeholder="Symbol or name"></label>
+    <label>Venue<select id="venue"><option value="synthetic">Local replay</option></select></label>
+    <label>Market type<select id="market-type"><option value="spot">Spot</option><option value="perpetual">USD perpetual</option></select></label>
+    <label>Market<select id="instrument"></select></label>
+    <div><span class="agentic-text-detail">Recent markets</span><div id="watch" class="actions"></div></div>
+  </section>
+  <nav class="actions sections" aria-label="Desk sections">
+    <a href="#market">Market</a><a href="#portfolio">Portfolio</a><a href="#research">Strategy</a><a href="#historical-research">Historical research</a><a href="#predictions">Predictions</a>
+  </nav>
+  <div class="workspace">
+    <section id="market" class="agentic-collection-item">
+      <div class="heading" id="desk-quote"><div><h2 id="symbol">Market</h2><strong id="price">—</strong></div><p id="ticker"></p></div>
+      <div id="run-chart" hidden><h2 id="run-chart-title"></h2><p id="run-chart-info" role="status"></p><button id="resume-chart" class="agentic-form-control">Return to current market</button></div>
+      <div class="actions"><label id="market-frame">Timeframe<select id="frame"></select></label><label>Indicator preset<select id="preset"></select></label><button class="agentic-form-control" id="expand" aria-pressed="false">Expand chart</button></div>
+      <details><summary>Indicator library</summary><div id="studies" class="study-list"></div></details>
+      <div id="chart" tabindex="0" aria-label="Candlestick chart. Scroll to zoom, drag to move, or use the arrow and plus or minus keys."></div>
+      <output id="ohlc" class="agentic-mono-detail"></output>
+    </section>
+    <section class="agentic-collection-item"><h2>Paper ticket<span id="ticket-market"></span></h2>
+      <form id="ticket"><div class="pair"><label>Side<select name="side"><option>BUY</option><option>SELL</option></select></label>
+        <label>Order type<select name="type"><option>MARKET</option><option>LIMIT</option><option>STOP</option></select></label></div>
+        <div id="contract-options" hidden><label>Leverage<select name="leverage"><option>1</option><option>2</option></select></label><label><input type="checkbox" name="reduceOnly"> Reduce only</label></div>
+        <label>Quantity<input type="number" name="qty" min=".000001" step=".000001" value="1" required></label>
+        <label id="trigger-label" hidden>Trigger price (USD)<input type="number" name="trigger" min=".0001" step="any"></label>
+        <div class="actions" id="allocation" aria-label="Allocation shortcuts"></div>
+        <output id="estimate"></output><button class="agentic-form-control" id="place">Place paper order</button>
+      </form><p class="agentic-text-detail">Fee estimate 0.10%. Conditional orders are checked while their market is open on this desk.</p>
+      <output id="notice" role="status"></output><h3>Working orders</h3><div id="working"></div>
+    </section>
+  </div>
+  <details id="flow" class="agentic-collection-item"><summary>Order book and trade tape</summary><p id="spread"></p>
+    <div class="pair"><section><h3>Bids</h3><div id="bids"></div></section><section><h3>Asks</h3><div id="asks"></div></section></div>
+    <h3>Aggregated trades</h3><div id="tape"></div></details>
+  <section id="portfolio" class="agentic-collection-item"><h2>Portfolio</h2><dl id="balances" class="metrics"></dl>
+    <h3>Holdings</h3><div id="holdings"></div><h3>Trade journal</h3><div id="fills"></div>
+    <div class="actions"><button class="agentic-form-control" id="csv">Export journal CSV</button><button class="agentic-form-control" id="sheets">Export to Sheets</button></div>
+    <details><summary>Practice funds</summary><form id="funds" class="actions"><label>Add USD<input name="amount" type="number" min=".01" step=".01" required></label>
+      <button class="agentic-form-control">Add paper funds</button></form><button class="agentic-form-control" id="reset">Reset practice session…</button></details>
+  </section>
+  <section id="research" class="agentic-collection-item"><h2>Strategy experiment</h2><p>Run a bounded Python strategy over closed candles. Signals stay in this report and on the chart.</p>
+    <label for="code">Strategy source</label><div class="editor"><pre id="numbers" aria-hidden="true"></pre><textarea id="code" rows="9" maxlength="8192" spellcheck="false" wrap="off"></textarea></div>
+    <div class="actions"><button class="agentic-form-control" id="run">Run experiment</button><button class="agentic-form-control" id="sample">Load crossover example</button></div>
+    <details><summary>Language and report assumptions</summary><p>Define strategy(candles). The sealed offline scientific subset supports named functions, module-level imports from math, statistics and numpy, including mean, std, diff and vector arithmetic. Use lists, dictionaries, comprehensions, for loops, conditions, print, sma, ema, crossed_above and crossed_below. Return a list of signals with a candle time in Unix seconds and a side of buy, sell, short or cover. Price and label are optional. The isolated worker limits each run to five seconds. The estimate pairs closing signals at candle closes, one unit per trade, before fees. Return compounds closed trades. Drawdown uses their closing equity.</p></details>
+    <div class="actions"><label>Strategy name<input id="strategy-name" maxlength="64"></label><button class="agentic-form-control" id="save-source">Save version</button><label>Saved source<select id="saved-source"></select></label></div>
+    <output id="report" role="status"></output><pre id="logs"></pre></section>
+  <section id="historical-research" class="agentic-collection-item"><h2>Historical research</h2>
+    <form id="historical"><div class="pair"><label>Hypothesis<select id="hypothesis"></select></label><label>Research capital (quote units)<input name="capital" type="number" value="100000" min="1" max="1000000000" required></label>
+    <label>Start UTC<input name="start" type="date" required></label><label>End UTC (inclusive)<input name="end" type="date" required></label>
+    <label>Venue<input name="venue" list="research-venues" maxlength="45" value="uniswap-v3-500" required></label><label>Instrument or spot basket leader<input name="symbol" placeholder="Catalog default"></label>
+    <label>Matched carry venue for hypothesis 12<input name="carryVenue" maxlength="45" placeholder="Same as venue" list="research-venues"></label>
+    <label>Spot venue for hypotheses 8 and 19<input name="spotVenue" maxlength="45" placeholder="Same as venue" list="research-venues"></label>
+    <label>Spot rotation peers (optional)<input name="basket" placeholder="Two symbols with the same quote"></label><label>Single-run interval<select name="frame"><option value="">Catalog default</option></select></label></div>
+    <div class="actions"><button class="agentic-form-control" value="single">Queue hypothesis</button><button class="agentic-form-control" value="suite">Queue all 20</button></div><datalist id="research-venues"></datalist></form>
+    <label>Run history<select id="run-history" disabled><option value="">No runs in this session</option></select></label>
+    <div class="actions"><button disabled id="cancel-run" class="agentic-form-control" disabled>Cancel run</button><a id="view-run-chart" href="#market" hidden>View hypothesis on chart</a><button disabled id="overlay-run" class="agentic-form-control">Overlay selected hypothesis</button></div>
+    <output id="lab-status" role="status"></output><pre id="run-trace"></pre><div id="run-results"></div><details><summary>Metrics and calendar windows</summary><pre id="run-detail"></pre></details>
+    <div class="actions"><button disabled id="research-sheets" class="agentic-form-control">Export results to Sheets</button><button disabled id="export-run" class="agentic-form-control">Export run summary</button><a id="export-artifact" hidden download>Download verified research artifact</a></div></section>
+  <section class="agentic-collection-item"><h2>Shared observation</h2><button id="observer-open" class="agentic-form-control">Get 24-hour observer link</button> <a id="observer-link" rel="noreferrer" hidden></a>
+    <details id="console"><summary>Activity console</summary><ol id="activity-log"></ol></details></section>
+  <section id="predictions" class="agentic-collection-item"><h2>Prediction journal</h2>
+    <form id="prediction"><div class="pair"><label>Direction<select name="direction"><option value="up">Up</option><option value="down">Down</option></select></label>
+      <label>Horizon<select name="horizon"></select></label></div>
+      <label>Confidence <output id="confidence-readout">50%</output><input type="range" name="confidence" min="0" max="100" value="50"></label>
+      <label>Hypothesis or model version<input name="note" maxlength="240"></label><button class="agentic-form-control">Record prediction</button></form>
+    <p id="hit-rate"></p><div id="calls"></div></section>
+  <footer><span id="stream" role="status">Opening market…</span><span id="storage" role="status">Opening session…</span></footer>
+</main>
+</body></html>
+

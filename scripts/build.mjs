@@ -7,15 +7,21 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: '1323ed2d223ef0356293baf1c86eb4f28138150a',
-    digest: '26495bae8a77de8727b731c1886c0bfc8e8387ad38e022b0306c2d0d4af7398c',
-    paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs')] },
-  { repo: 'agentic-sheets', prefix: 'sheets', revision: '370b0698523b92ef569f27175a74c34a52c4a3f4',
-    digest: 'e4e22c9918554853470984847528440dedbb4f099214e867284fcf2bcd17817d',
+  { repo: 'agentic-base', prefix: 'base', revision: '2f891a6193b2f937275bd04f6b28dd8e67a98454',
+    digest: 'd34cad984f1eb00fdfd2730d5be836f92368aabea4ec87f6510d53edc75a7614',
+    paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
+      'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
+  { repo: 'agentic-sheets', prefix: 'sheets', revision: '349b43ccadbec4edf107cfef9f0c09fc1715f9f2',
+    digest: '067f22546a65190f7010830ba6b9d9d66b70dd1a67b1c9a32c504c128fb95c69',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
-  { repo: 'agentic-design-system', prefix: 'design', revision: '55af790e365915fe1bde17ea8d4d887f80365f1a',
-    digest: '7e25628d3c6bac670bdc5efd262b80a6053f5fe392fa86ebf5f9bab83235bec2',
-    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/THIRD-PARTY-NOTICES.txt'] },
+  { repo: 'agentic-design-system', prefix: 'design', revision: '83de261f8f3ddf66ed41e5370b6811f498788b40',
+    digest: 'c062e4a7ea4d2fac6eade9d7ac3fe71564606c16aaceb3b4af1b644ffc50436b',
+    paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/dashboard-range.mjs', 'site/dashboard-range.css', 'site/THIRD-PARTY-NOTICES.txt',
+      'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js', 'site/floating-panel.js', 'site/floating-panel.css', 'site/hover.css',
+      'site/skills-commands.js', 'site/skills-commands.css', 'site/collection-layout.js', 'site/toolbar.css'] },
+  { repo: 'agentic-os', prefix: 'os', revision: 'eed72ec7597c94c95669cb537dda81c59596a0ed',
+    digest: '95ae3322b49b5ae1475b692c477fbf5e9b33e5fafb2d23656b0c76ddc3889869',
+    paths: ['LICENSE', 'catalog/invocation.json', 'skills/trading/SKILL.md'] },
 ];
 
 export function ownerRoot() {
@@ -31,13 +37,18 @@ export function verifyOwner(repo, sources) {
 }
 
 export function verifyImports(assets) {
-  for (const [path, bytes] of assets) {
-    if (!path.endsWith('.mjs')) continue;
-    const source = bytes.toString();
-    // The sealed modules use literal ESM specifiers exclusively.
-    const references = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)(['"])([^'"]+)\1/g;
+  const modules = [...assets].filter(([path]) => /\.m?js$/.test(path)).map(([path, bytes]) => [path, bytes.toString()]);
+  // Ask the same Node parser that loads our modules. Parsing never executes the source.
+  const inspect = `const {SourceTextModule}=require('node:vm'),fs=require('node:fs');
+    const modules=JSON.parse(fs.readFileSync(0,'utf8'));
+    process.stdout.write(JSON.stringify(modules.map(([name,src])=>new SourceTextModule(src,{identifier:name}).dependencySpecifiers)));`;
+  const imports = JSON.parse(execFileSync(process.execPath, ['--no-warnings','--experimental-vm-modules','-e',inspect], {
+    input: JSON.stringify(modules), maxBuffer: 2000000
+  }));
+  for (const [index,[path,source]] of modules.entries()) {
     if (/\bimport\s*\(\s*(?!\s*['"])/.test(source)) throw new Error('Computed import in ' + path);
-    for (const [, , ref] of source.matchAll(references)) {
+    const dynamic = [...source.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g)].map(match => match[2]);
+    for (const ref of [...imports[index],...dynamic]) {
       const target = new URL(ref, 'https://fixture.invalid/' + path);
       if (!ref.startsWith('.') || target.origin !== 'https://fixture.invalid' || !assets.has(target.pathname.slice(1))) {
         throw new Error('Unowned module in ' + path + ': ' + ref);
@@ -46,7 +57,7 @@ export function verifyImports(assets) {
   }
 }
 
-export async function assemble() {
+export async function assemble({ devDocumentPolicy } = {}) {
   const assets = new Map();
   const workspace = ownerRoot();
   for (const pin of pins) {
@@ -58,8 +69,29 @@ export async function assemble() {
       assets.set('owners/' + pin.prefix + '/' + output, body);
     }
   }
-  const files = ['web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json'];
+  const files = ['web/observe.html','src/observer-view.mjs','web/desk.html', 'web/trading.css', 'web/desk.css', ...['desk-lab','research-catalog','desk-actions','landing-tools','contracts','market','market-reads','indicators','chart','experiment','strategy-language','scientific-packages','strategy-example','experiment-worker',
+    'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
+    'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
+    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/skills-toolbar.mjs', 'src/skills-panel.mjs'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
+  const toolbar = await readFile(join(root, 'web/trading-toolbar.html'), 'utf8');
+  for (const [document, page] of [['index.html', 'journal'], ['desk.html', 'desk']]) {
+    const html = assets.get(document).toString();
+    const slot = '<!-- trading-toolbar -->';
+    const active = 'data-page="' + page + '"';
+    if (!html.includes(slot) || !toolbar.includes(active)) throw new Error('Missing toolbar binding for ' + document);
+    assets.set(document, Buffer.from(html.replace(slot, toolbar.trimEnd().replace(active, active + ' aria-current="page"'))));
+  }
+  if (devDocumentPolicy !== undefined) {
+    for (const document of ['index.html','desk.html','observe.html']) {
+      const template = assets.get(document).toString();
+      const policyTag = /(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/g;
+      if ([...template.matchAll(policyTag)].length !== 1) throw new Error('Expected one document policy');
+      // frame-ancestors is HTTP-only. Seal the effective Dev meta policy into the offline build ID.
+      const metaPolicy = devDocumentPolicy.split('; ').filter(rule => !rule.startsWith('frame-ancestors ')).join('; ');
+      assets.set(document, Buffer.from(template.replace(policyTag, (_, open, close) => open + metaPolicy + close)));
+    }
+  }
   verifyImports(assets);
   const template = await readFile(join(root, 'web/sw.js'), 'utf8');
   const digests = Object.fromEntries([...assets].map(([path, bytes]) => [path, sha(bytes)]));

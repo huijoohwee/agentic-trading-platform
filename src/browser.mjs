@@ -4,7 +4,21 @@ import { createTicketStore } from './tickets.mjs';
 import { mountTradingDashboard } from './dashboard.mjs';
 
 mountTradingDashboard(document);
+// Native toggle covers pointer, touch and keyboard, including rehearsal tables added after startup.
+document.addEventListener('toggle', ({ target }) => {
+  if (!target.matches('details#audit, details[data-agentic-section]')) return;
+  const summary = target.querySelector(':scope > summary');
+  if (target.open) summary.dataset.agenticAnnotationTarget = 'true';
+  else delete summary.dataset.agenticAnnotationTarget;
+}, true);
 const byId = id => document.getElementById(id);
+let runtimeOpened = false;
+byId('runtime-readback').addEventListener('toggle', async event => {
+  if (!event.target.open || runtimeOpened) return;
+  runtimeOpened = true;
+  try { const { mountRuntimeView } = await import('./runtime-view.mjs'); await mountRuntimeView(byId('runtime-body')); }
+  catch { byId('runtime-body').textContent = 'Runtime projection unavailable. The offline rehearsal is unchanged.'; }
+});
 const form = byId('ticket');
 const fields = byId('fields');
 const feedback = byId('feedback');
@@ -182,4 +196,31 @@ start().catch(error => {
   fields.disabled = true;
   byId('fatal').hidden = false;
   byId('fatal').textContent = error.message;
+});
+
+const rehearsal = byId('rehearsal');
+let opening;
+function loadRehearsal() {
+  opening ??= import('./rehearsal-view.mjs')
+    .then(module => module.mountRehearsal(byId('rehearsal-body')))
+    .catch(error => { opening = null; byId('rehearsal-body').textContent = error.message; });
+  return opening;
+}
+rehearsal.addEventListener('toggle', () => { if (rehearsal.open) void loadRehearsal(); });
+async function openLinkedDashboard() {
+  if (location.hash !== '#replay-dashboard') return;
+  rehearsal.open = true;
+  const view = await loadRehearsal();
+  if (location.hash === '#replay-dashboard' && rehearsal.open) await view?.showDashboard();
+}
+window.addEventListener('hashchange', openLinkedDashboard);
+void openLinkedDashboard();
+
+byId('audit').addEventListener('toggle', async function openAudit() {
+  if (!this.open) return;
+  this.removeEventListener('toggle', openAudit);
+  try {
+    const { mountAudit } = await import('./audit-view.mjs');
+    await mountAudit(this);
+  } catch (error) { byId('audit-status').textContent = error.message; }
 });

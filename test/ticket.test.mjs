@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -71,20 +72,24 @@ test('the sealed graph rejects legacy Sheets imports and modified UI projection 
   const bad = new Map(assets);
   bad.set('src/browser.mjs',Buffer.from("import '@agentic-base/views-react/sheets';"));
   assert.throws(() => verifyImports(bad),/Unowned module/);
-  const designSources = new Map([
-    ['LICENSE',assets.get('owners/design/LICENSE')],
-    ['site/favicon.svg',assets.get('owners/design/site/favicon.svg')],
-    ['site/THIRD-PARTY-NOTICES.txt',assets.get('owners/design/site/THIRD-PARTY-NOTICES.txt')],
-    ['site/vendor/shared-ui-profile.css',assets.get('owners/design/profile.css')],
-    ['site/collection-layout.css',assets.get('owners/design/site/collection-layout.css')],
-    ['site/dashboard.mjs',assets.get('owners/design/site/dashboard.mjs')],
-  ]);
+  const designSources = new Map();
+  for (const [asset, bytes] of assets) {
+    if (!asset.startsWith('owners/design/')) continue;
+    const relative = asset.slice('owners/design/'.length);
+    designSources.set(relative === 'profile.css' ? 'site/vendor/shared-ui-profile.css' : relative, bytes);
+  }
   verifyOwner('agentic-design-system',designSources);
-  for (const path of ['site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs']) {
+  for (const path of ['site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/key-type-value.js', 'site/panel-section.js',
+    'site/floating-panel.js', 'site/floating-panel.css', 'site/skills-commands.js', 'site/skills-commands.css', 'site/collection-layout.js', 'site/toolbar.css']) {
     const changed = new Map(designSources);
     changed.set(path, Buffer.from('body {}'));
     assert.throws(() => verifyOwner('agentic-design-system',changed),/Owner bytes/);
   }
+  const basePrefix = 'owners/base/';
+  const baseSources = new Map([...assets].filter(([path]) => path.startsWith(basePrefix)).map(([path, bytes]) => [path.slice(basePrefix.length), bytes]));
+  verifyOwner('agentic-base', baseSources);
+  baseSources.set('packages/views-react/dist/browser-data-view.js', Buffer.from('export const mountDataView = () => {};'));
+  assert.throws(() => verifyOwner('agentic-base', baseSources), /Owner bytes/);
   assert.equal([...assets.keys()].filter(key => key.endsWith('profile.css')).length,1);
 });
 
@@ -98,4 +103,65 @@ test('the journal obtains its shell and cards from the executable Design System 
   const withoutRenderer = new Map(assets);
   withoutRenderer.delete('owners/design/site/dashboard.mjs');
   assert.throws(() => verifyImports(withoutRenderer), /Unowned module/);
+});
+
+test('Trading Skills project the pinned OS catalog through the shared FloatingPanel', async () => {
+  const { tradingSkill, tradingSkillEntries } = await load('src/skills-panel.mjs');
+  const catalog = JSON.parse(assets.get('owners/os/catalog/invocation.json'));
+  assert.deepEqual(tradingSkill, catalog.entries.find(entry => entry.token === '@skill:').descriptor);
+  assert.deepEqual(tradingSkillEntries.map(entry => entry.token).sort(), ['#read-only', '/skill.discover', '/skill.load', '@skill:trading']);
+  assert.equal(tradingSkill.digest, 'sha256:' + createHash('sha256').update(assets.get('owners/os/skills/trading/SKILL.md')).digest('hex'));
+  for (const entry of tradingSkillEntries.filter(entry => entry.token.startsWith('/'))) {
+    const source = catalog.entries.find(item => item.token === entry.token);
+    assert.equal(source.semantic, 'read-only');
+    assert.equal(entry.summary, source.summary);
+  }
+  const prefix = 'owners/os/';
+  const sources = new Map([...assets].filter(([path]) => path.startsWith(prefix)).map(([path, bytes]) => [path.slice(prefix.length), bytes]));
+  verifyOwner('agentic-os', sources);
+  for (const name of ['catalog/invocation.json', 'skills/trading/SKILL.md']) {
+    const changed = new Map(sources); changed.set(name, Buffer.from('changed'));
+    assert.throws(() => verifyOwner('agentic-os', changed), /Owner bytes/);
+  }
+  for (const path of ['index.html', 'desk.html']) {
+    const html = assets.get(path).toString();
+    assert.ok(html.includes('href="./owners/design/site/toolbar.css"'));
+    assert.ok(html.includes('href="./trading.css"'));
+    assert.ok(html.includes('src="./src/skills-toolbar.mjs"'));
+    assert.ok(html.includes('href="./owners/design/site/collection-layout.css"'));
+  }
+  const view = assets.get('src/skills-panel.mjs').toString();
+  assert.match(view, /import \{ mountFloatingPanel \} from '\.\.\/owners\/design\/site\/floating-panel\.js'/);
+  assert.match(view, /import \{ mountSkillsCommandsReference \} from '\.\.\/owners\/design\/site\/skills-commands\.js'/);
+  assert.doesNotMatch(view, /innerHTML|localStorage|sessionStorage|fetch\(|\.invoke\(|\.execute\(/);
+  for (const path of ['owners/design/site/skills-commands.js', 'owners/design/site/collection-layout.js', 'owners/os/catalog/invocation.json']) {
+    const missing = new Map(assets); missing.delete(path);
+    assert.throws(() => verifyImports(missing), /Unowned module/);
+  }
+});
+
+test('manual audit commits one complete run per identity and retains the accepted pointer on conflict', async () => {
+  const { auditStore } = await load('src/audit-view.mjs');
+  const { auditSnapshot } = await load('src/local-audit.mjs');
+  const source = JSON.parse(await readFile(join(destination,'src/audit-fixture.json')));
+  const other = structuredClone(source);
+  other.run_id = 'manual-B';
+  for (const key of ['IN_Quotes','IN_Positions','IN_Balance','IN_Orders','executions'])
+    other[key].forEach(row=>{row.run_id=other.run_id;});
+  const pack = async input => ({ input, audit:await auditSnapshot(input) });
+  const adapter = new MemoryAdapter(), tabA = auditStore(adapter), tabB = auditStore(adapter);
+  const [{revision}, second] = await Promise.all([tabA.latest(),tabB.latest()]);
+  assert.equal(second.revision,revision);
+  const a = await pack(source), b = await pack(other);
+  const both = await Promise.allSettled([tabA.accept(a,revision),tabB.accept(b,revision)]);
+  assert.equal(both.filter(r=>r.status==='fulfilled').length,1);
+  const current = await tabA.latest(), accepted = current.pack;
+  const stale = accepted.input.run_id === a.input.run_id ? b : a;
+  await assert.rejects(tabB.accept(stale,revision),/Another tab/);
+  await tabB.accept(accepted,revision);
+  assert.deepEqual(await tabB.latest(),current);
+  const invalid = structuredClone(stale.input);
+  invalid.IN_Balance[0].cash = '=1';
+  await assert.rejects(tabB.accept(await pack(invalid),current.revision),/invalid landing rows/);
+  assert.deepEqual(await tabA.latest(),current);
 });

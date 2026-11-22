@@ -29,6 +29,7 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const address = new URL(event.request.url);
+  address.hash = ''; // Document fragments identify locations in the same sealed asset.
   if (event.request.method !== 'GET' || !address.href.startsWith(self.registration.scope)) return;
   const path = address.href.slice(self.registration.scope.length);
   const name = path === '' ? 'index.html' : path;

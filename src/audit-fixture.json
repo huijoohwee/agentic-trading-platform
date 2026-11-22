@@ -1,0 +1,129 @@
+{
+  "schema": "trading-local-audit/v1",
+  "source": "SYNTHETIC",
+  "run_id": "manual-A",
+  "account_alias": "fixture-owner",
+  "evaluated_utc": "2026-11-19T09:05:00Z",
+  "halt": "RUN",
+  "policy": {
+    "revision": "fixture-cash-1",
+    "maxAgeMinutes": 5,
+    "maxPositionPct": 40,
+    "maxRiskPct": 2,
+    "minCashPct": 10,
+    "maxPositions": 3,
+    "maxDailyLoss": 100,
+    "priceBandPct": 5,
+    "reconGraceMinutes": 2,
+    "feePerOrder": 1
+  },
+  "fx": {
+    "USD": 1
+  },
+  "IN_Quotes": [
+    {
+      "run_id": "manual-A",
+      "symbol_key": "TEST.DEMO",
+      "market": "TEST",
+      "ccy": "USD",
+      "last": 25,
+      "prev_close": 24,
+      "quote_ts_utc": "2026-11-19T09:00:00Z",
+      "source_id": "MANUAL",
+      "delay_class": "realtime"
+    }
+  ],
+  "IN_Positions": [
+    {
+      "run_id": "manual-A",
+      "account_alias": "fixture-owner",
+      "symbol_key": "TEST.DEMO",
+      "qty": 20,
+      "avg_cost": 24,
+      "ccy": "USD",
+      "as_of_utc": "2026-11-19T09:00:00Z"
+    }
+  ],
+  "IN_Balance": [
+    {
+      "run_id": "manual-A",
+      "account_alias": "fixture-owner",
+      "ccy": "USD",
+      "cash": 9500,
+      "total_assets": 10000,
+      "as_of_utc": "2026-11-19T09:00:00Z"
+    }
+  ],
+  "IN_Orders": [
+    {
+      "run_id": "manual-A",
+      "account_alias": "fixture-owner",
+      "broker_order_id": "order-1",
+      "symbol_key": "TEST.DEMO",
+      "side": "BUY",
+      "order_type": "LIMIT",
+      "qty": 10,
+      "limit_price": 25,
+      "status_src": "FILLED",
+      "filled_qty": 10,
+      "avg_fill_price": 25,
+      "created_utc": "2026-11-19T09:00:00Z",
+      "updated_utc": "2026-11-19T09:05:00Z"
+    },
+    {
+      "run_id": "manual-A",
+      "account_alias": "fixture-owner",
+      "broker_order_id": "order-unbound",
+      "symbol_key": "TEST.DEMO",
+      "side": "BUY",
+      "order_type": "LIMIT",
+      "qty": 10,
+      "limit_price": 25,
+      "status_src": "WORKING",
+      "filled_qty": 0,
+      "avg_fill_price": null,
+      "created_utc": "2026-11-19T09:00:00Z",
+      "updated_utc": "2026-11-19T09:05:00Z"
+    }
+  ],
+  "tickets": [
+    {
+      "ticket_id": "T-20261119-001",
+      "created_utc": "2026-11-19T09:00:00Z",
+      "account_alias": "fixture-owner",
+      "symbol_key": "TEST.DEMO",
+      "side": "BUY",
+      "order_type": "LIMIT",
+      "qty": 10,
+      "limit_price": 25,
+      "stop_price": 23,
+      "ccy": "USD",
+      "expiry_utc": "2026-11-19T10:00:00Z",
+      "rationale": "Synthetic limit and stop check",
+      "submitted_utc": "2026-11-19T09:05:00Z",
+      "broker_order_id": "order-1"
+    }
+  ],
+  "executions": [
+    {
+      "id": "fill-1",
+      "broker_order_id": "order-1",
+      "account_alias": "fixture-owner",
+      "run_id": "manual-A",
+      "at": "2026-11-19T09:05:00Z",
+      "price": 24,
+      "qty": 5,
+      "ccy": "USD"
+    },
+    {
+      "id": "fill-2",
+      "broker_order_id": "order-1",
+      "account_alias": "fixture-owner",
+      "run_id": "manual-A",
+      "at": "2026-11-19T09:05:00Z",
+      "price": 26,
+      "qty": 5,
+      "ccy": "USD"
+    }
+  ]
+}
