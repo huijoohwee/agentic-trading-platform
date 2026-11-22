@@ -19,11 +19,53 @@ jobs:
     name: Integration Gate
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TRADING_OWNER_ROOT: ${{ github.workspace }}/owners
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+
+      - name: Checkout agentic-base owner bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: huijoohwee/agentic-base
+          ref: 2f891a6193b2f937275bd04f6b28dd8e67a98454
+          path: owners/agentic-base
+          fetch-depth: 1
+
+      - name: Checkout agentic-sheets owner bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: huijoohwee/agentic-sheets
+          ref: 349b43ccadbec4edf107cfef9f0c09fc1715f9f2
+          path: owners/agentic-sheets
+          fetch-depth: 1
+
+      - name: Checkout agentic-design-system owner bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: huijoohwee/agentic-design-system
+          ref: 83de261f8f3ddf66ed41e5370b6811f498788b40
+          path: owners/agentic-design-system
+          fetch-depth: 1
+
+      - name: Checkout agentic-os owner bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: huijoohwee/agentic-os
+          ref: eed72ec7597c94c95669cb537dda81c59596a0ed
+          path: owners/agentic-os
+          fetch-depth: 1
+
+      - name: Checkout agentic-commerce-os owner bytes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: huijoohwee/agentic-commerce-os
+          ref: aa4151f82816c0e18796549a2be0e861d0e772d7
+          path: owners/agentic-commerce-os
+          fetch-depth: 1
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7

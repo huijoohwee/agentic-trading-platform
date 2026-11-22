@@ -2,16 +2,12 @@ import { observerEnvironment } from './observer-server.mjs';
 import { serveAssets } from './local-server.mjs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { assemble, gitExec, ownerRoot, root } from './build.mjs';
+import { assemble, ownerRoot, readPinnedBytes, root } from './build.mjs';
 
 export async function loadCommercePolicies() {
   const revision = 'aa4151f82816c0e18796549a2be0e861d0e772d7';
   const path = 'src/local-first/content-security-policy.ts';
-  // This pinned owner module is standalone ESM. Read committed bytes even in a dirty checkout.
-  const source = gitExec(['show', revision + ':' + path], {
-    cwd: join(ownerRoot(), 'agentic-commerce-os'),
-    maxBuffer: 8192
-  });
+  const source = readPinnedBytes(join(ownerRoot(), 'agentic-commerce-os'), revision, path, 8192);
   return import('data:text/javascript;base64,' + source.toString('base64'));
 }
 
