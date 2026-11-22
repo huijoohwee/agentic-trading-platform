@@ -10,23 +10,29 @@
       "id": "git",
       "version": "1"
     },
-    "provider": null
+    "provider": {
+      "id": "github",
+      "version": "1"
+    }
   },
-  "requiredChecks": [],
+  "requiredChecks": [
+    "Integration Gate"
+  ],
   "capabilities": [
-    "retain-all-cleanup"
+    "protected-integration:pull-request",
+    "remove-clean-worktree-cleanup-opt-in"
   ],
   "authority": {
     "runtime": "consumer",
     "release": "consumer"
   },
   "cleanup": {
-    "worktreeProjection": "retain",
-    "worktreeRegistration": "retain",
+    "worktreeProjection": "remove-clean",
+    "worktreeRegistration": "remove-clean",
     "remoteTrackingRef": "retain",
     "localBranch": "retain",
     "remoteBranch": "retain",
     "unreachableObjects": "retain"
   },
-  "profileDigest": "7588eb3fe8748eeb360cb1220315ce6c2c816b08ec9efbb71008ac1804e76724"
+  "profileDigest": "18532cf7225a0a8e8d7bc844e652333a1a4c335b77782021ff1f27eb3cba66e5"
 }

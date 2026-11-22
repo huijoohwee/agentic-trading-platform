@@ -5,6 +5,15 @@
   "type": "module",
   "engines": { "node": ">=22.22.0" },
   "scripts": {
+    "doctor": "agentic-os doctor",
+    "lane": "agentic-os start",
+    "land": "agentic-os land",
+    "successor": "agentic-os successor",
+    "status": "agentic-os status",
+    "reap": "agentic-os reap",
+    "finish": "agentic-os finish",
+    "release:common": "agentic-os release-common",
+    "sync:canonical": "agentic-os canonical-sync",
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "check": "node --test test/*.test.mjs",
@@ -18,5 +27,8 @@
     "package:replay": "python3 scripts/package-replay.py",
     "audit:local": "node scripts/audit.mjs",
     "rehearsal": "node scripts/rehearse.mjs"
+  },
+  "devDependencies": {
+    "agentic-os": "https://codeload.github.com/huijoohwee/agentic-os/tar.gz/122c6b7e860c4d007131ef11facf2842f2440f34"
   }
 }
