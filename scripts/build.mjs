@@ -1,11 +1,27 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+const gitCommand = (() => {
+  const configured = process.env.GIT?.trim();
+  const candidates = [
+    configured,
+    '/usr/bin/git',
+    '/usr/local/bin/git',
+    '/opt/homebrew/bin/git',
+    'git',
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (candidate === 'git' || existsSync(candidate)) return candidate;
+  }
+  return 'git';
+})();
+export const gitExec = (args, options) => execFileSync(gitCommand, args, options);
 const pins = [
   { repo: 'agentic-base', prefix: 'base', revision: '2f891a6193b2f937275bd04f6b28dd8e67a98454',
     digest: 'd34cad984f1eb00fdfd2730d5be836f92368aabea4ec87f6510d53edc75a7614',
@@ -26,7 +42,7 @@ const pins = [
 
 export function ownerRoot() {
   if (process.env.TRADING_OWNER_ROOT) return resolve(process.env.TRADING_OWNER_ROOT);
-  const common = execFileSync('git', ['rev-parse','--path-format=absolute','--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim();
+  const common = gitExec(['rev-parse','--path-format=absolute','--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim();
   return dirname(dirname(common));
 }
 
@@ -61,7 +77,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   const assets = new Map();
   const workspace = ownerRoot();
   for (const pin of pins) {
-    const sources = new Map(pin.paths.map(path => [path, execFileSync('git', ['show', pin.revision + ':' + path],
+    const sources = new Map(pin.paths.map(path => [path, gitExec(['show', pin.revision + ':' + path],
       { cwd: join(workspace, pin.repo), maxBuffer: 500000 })]));
     verifyOwner(pin.repo, sources);
     for (const [name, body] of sources) {
