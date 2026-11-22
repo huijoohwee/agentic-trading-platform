@@ -2,10 +2,10 @@ import { createHmac, createPrivateKey, sign } from 'node:crypto';
 import { SHEETS } from './ingestion.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
 
-const endpoint = 'https://mcp.moomoo.com/mcp';
-const protocols = ['2025-03-26', '2025-06-18', '2025-11-25'];
+export const endpoint = 'https://mcp.moomoo.com/mcp';
+export const protocols = ['2025-03-26', '2025-06-18', '2025-11-25'];
 const numbers = new Set(['last', 'prev_close', 'qty', 'avg_cost', 'cash', 'total_assets', 'limit_price', 'filled_qty', 'avg_fill_price']);
-const ownPath = (object, path) => {
+export const ownPath = (object, path) => {
   requireThat(Array.isArray(path) && path.length > 0 && path.length <= 12, 'INVALID_MAPPING');
   let value = object;
   for (const key of path) {
@@ -15,7 +15,7 @@ const ownPath = (object, path) => {
   }
   return value;
 };
-async function rpcResponse(response, requestId) {
+export async function rpcResponse(response, requestId) {
   const type = response.headers.get('content-type')?.split(';')[0];
   requireThat(['application/json', 'text/event-stream'].includes(type), 'INVALID_RESPONSE');
   const reader = response.body?.getReader();

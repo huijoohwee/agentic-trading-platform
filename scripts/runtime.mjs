@@ -10,6 +10,8 @@ import { createGatewayApi } from '../runtime/gateway-http.mjs';
 import { createGatewayMcp } from '../runtime/gateway-mcp.mjs';
 import { createReadImporter, recoverReadImport } from '../runtime/ingestion.mjs';
 import { createMcpReadAdapter } from '../runtime/mcp-read.mjs';
+import { createMcpMarketReadAdapter, MARKET_READ_OPERATIONS } from '../runtime/mcp-market-read.mjs';
+import { createMarketReadBoundary } from '../runtime/market-ingestion.mjs';
 import { createPaperGuard } from '../runtime/paper-guard.mjs';
 import { createPaperBroker } from '../runtime/paper-broker.mjs';
 import { projectRuntime } from '../runtime/projection.mjs';
@@ -62,9 +64,16 @@ export async function runtimeCommand(args) {
         'GATEWAY_CONFIGURATION_REQUIRED');
       const port = Number(rest[0] ?? 4182);
       requireThat(port > 0 && port <= 65535, 'INVALID_PORT');
-      const readers = Object.fromEntries(marketOperations.map(operation=>[operation,({capability,inputs})=>{
-        requireThat(capability.source==='MOCK','UNSUPPORTED');
-        return marketRead(operation,inputs,Date.now());
+      const marketAdapter = config.moomoo?.mapping?.operations ? createMcpMarketReadAdapter({ token: config.moomoo.token,
+        mapping: config.moomoo.mapping, attestation: config.moomoo.attestation, scope: config.scope, candidate: config.candidate }) : null;
+      const marketBoundary = marketAdapter ? createMarketReadBoundary({ ...common, adapter: marketAdapter }) : null;
+      const readers = Object.fromEntries(marketOperations.map(operation=>[operation, async ({capability,inputs})=>{
+        if (capability.source==='MOCK') return marketRead(operation,inputs,Date.now());
+        requireThat(capability.source==='PROVIDER' && marketBoundary && MARKET_READ_OPERATIONS.includes(operation),'UNSUPPORTED');
+        const result = await marketBoundary({ operation, inputs, grant: inputs.grant });
+        return { source: result.source, at: Date.parse(result.observed_utc), rows: result.rows, decimals: result.decimals,
+          market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null },
+          cost: result.cost, digest: result.digest };
       }]));
       if (config.gateway.capabilities.some(cap => cap.source === 'MOCK' && cap.operations?.includes('read.fixture'))) {
         readers['read.fixture'] = async () => ({ source: 'MOCK', fixture: true,
