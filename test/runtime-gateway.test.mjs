@@ -10,6 +10,7 @@ import { createGatewayApi } from '../runtime/gateway-http.mjs';
 import { createGatewayMcp } from '../runtime/gateway-mcp.mjs';
 import { openStore } from '../runtime/store.mjs';
 import { canonical, sha } from '../runtime/core.mjs';
+import { createProviderRegistry } from '../runtime/provider-mapping.mjs';
 
 // MOCK admission plus signed-grant verification. These tests prove gateway decision parity,
 // isolation, durability and admission authority; they qualify no live provider or credential.
@@ -35,10 +36,12 @@ function fixture(t) {
     return { key_id: key, payload, signature: sign(null, Buffer.from(canonical(payload)), f.privateKeys[key]).toString('base64url') };
   };
   f.proofs = kinds => kinds.map(kind => ({ kind, digest: sha('MOCK-' + kind), expires_utc: iso(f.time + 300_000) }));
+  f.providerMapping = { protocol: '2025-11-25', account_identity: 'private-account',
+    sheets: { IN_Quotes: { tool: 'read_quotes', rows_path: ['data'], fields: { symbol_key: { path: ['symbol'] } } } } };
   f.paperGrant = (fields = {}) => f.sign('operator', 'paper', { provider: 'mock-broker', source: 'MOCK',
     proofs: f.proofs(['cost', 'rights', 'account', 'isolation']),
     cost: { hard_cap_usd: 0, deny_at_exhaustion: true, remaining_calls: 20 }, ...fields });
-  f.readGrant = (fields = {}) => f.sign('operator', 'read', { mapping_digest: sha('PROVIDER-mapping'),
+  f.readGrant = (fields = {}) => f.sign('operator', 'read', { mapping_digest: sha(f.providerMapping),
     tools: [{ sheet: 'IN_Quotes', name: 'read_quotes', effect: 'read', schema_digest: sha('IN_Quotes') }],
     proofs: f.proofs(['cost', 'rights', 'account']),
     cost: { hard_cap_usd: 0, deny_at_exhaustion: true, remaining_calls: 12 }, ...fields });
@@ -51,8 +54,14 @@ function fixture(t) {
     qualification: { status: 'QUALIFIED', receipt_digest: sha('MOCK-receipt'), expires_utc: iso(BASE + 300_000) } };
   f.capDigest = sha(f.capability);
   f.providerCap = { ...f.capability, provider: 'provider-broker', source: 'PROVIDER', operations: ['read.snapshot'],
-    allowlist: ['read_quotes'], schema_digest: sha('PROVIDER-schema'), mapping_digest: sha('PROVIDER-mapping') };
+    allowlist: ['read_quotes'], adapter_digest: sha('PROVIDER-adapter'), schema_digest: sha('PROVIDER-schema'), mapping_digest: sha(f.providerMapping) };
   f.providerDigest = sha(f.providerCap);
+  f.providerDefinition = { schema: 'trading-provider-definition/v1', provider: 'provider-broker', adapter_version: '1',
+    transport: { kind: 'MCP', origin: 'https://provider.example/mcp', protocol: '2025-11-25' }, adapter_digest: sha('PROVIDER-adapter'),
+    schema_digest: sha('PROVIDER-schema'), mapping_digest: sha(f.providerMapping), mapping: f.providerMapping,
+    operations: ['read.snapshot'], allowlist: ['read_quotes'], mode: 'account', source: 'PROVIDER',
+    cost: { hard_cap_usd: 0, deny_at_exhaustion: true }, qualification: { status: 'QUALIFIED', receipt_digest: sha('PROVIDER-receipt'), expires_utc: iso(BASE + 300_000) } };
+  f.providers = createProviderRegistry([f.providerDefinition]);
   f.readers = { 'read.fixture': async ({ capability, inputs }) => {
     f.calls.read++;
     if (capability.schema_digest !== sha('MOCK-schema')) { const e = new Error('SCHEMA_DRIFT'); e.code = 'SCHEMA_DRIFT'; throw e; }
@@ -68,7 +77,7 @@ function fixture(t) {
     async halt() { f.calls.halt++; return { status: 'HALTED', reason: 'OPERATOR_HALT' }; },
   };
   f.gateway = (capabilities = [f.capability], store = f.store) => createGateway({ store, scope: f.scope, candidate: f.candidate,
-    capabilities, readers: f.readers, guard: f.guard, keys: f.keys, audienceToken: AUDIENCE, now: () => f.time });
+    capabilities, readers: f.readers, guard: f.guard, keys: f.keys, audienceToken: AUDIENCE, now: () => f.time, providers: f.providers });
   f.request = (operation = 'read.fixture', adjust = {}) => ({ contract_version: '1', request_id: 'req-1', capability_digest: f.capDigest,
     operation, scope: structuredClone(f.scope), inputs: {}, deadline_utc: iso(f.time + 60_000), ...adjust });
   f.finalEvent = (requestId, store = f.store) => store.read(f.scope).events.find(event => event.type === 'gateway-finalized' && event.data.request_id === requestId)?.data;
@@ -220,6 +229,7 @@ test('PROVIDER reads admit only signed allowlisted grants and ledger the cost pr
   assert.equal(admitted.status, 'OK');
   assert.equal(admitted.data.cost.tool_calls, 4);
   assert.equal(admitted.provenance.source, 'PROVIDER');
+  assert.equal(admitted.provenance.definition_digest, sha(f.providerDefinition));
   const event = f.finalEvent('req-provider');
   assert.equal(event.cost_proof, sha('MOCK-cost'));
   assert.equal(event.charged_calls, 4);
@@ -264,7 +274,7 @@ test('writes demand a paper-kind grant with isolation proof; read grants cannot 
 test('a gateway without trusted keys cannot admit connected reads or writes', async t => {
   const f = fixture(t);
   const keyless = createGateway({ store: f.store, scope: f.scope, candidate: f.candidate, capabilities: [f.providerCap],
-    readers: f.readers, guard: f.guard, audienceToken: AUDIENCE, now: () => f.time });
+    readers: f.readers, guard: f.guard, audienceToken: AUDIENCE, now: () => f.time, providers: f.providers });
   const read = await keyless.admit(f.request('read.snapshot', { capability_digest: f.providerDigest, request_id: 'req-keyless',
     inputs: { run_id: 'run-1', grant: f.readGrant() } }), AUTH);
   assert.equal(read.error.code, 'UNQUALIFIED');

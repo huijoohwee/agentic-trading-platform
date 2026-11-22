@@ -15,6 +15,9 @@ const REFUSAL_MAP = {
   ADMISSION_PROOF: 'UNQUALIFIED', GRANT_LIMITS: 'UNQUALIFIED', RISK_VETO: 'UNQUALIFIED',
   STALE_EVIDENCE: 'STALE', STALE_OBSERVATION: 'STALE', STALE_INPUT: 'STALE', WINDOW_CLOSED: 'STALE',
   INTENT_EXPIRED: 'STALE', CUTOFF: 'STALE', PRECISION_LOSS: 'PRECISION_UNKNOWN',
+  PROVIDER_UNKNOWN: 'UNQUALIFIED', ADAPTER_DRIFT: 'SCHEMA_DRIFT', MAPPING_DRIFT: 'SCHEMA_DRIFT', PROTOCOL_DRIFT: 'SCHEMA_DRIFT',
+  PROVIDER_ISOLATION: 'UNQUALIFIED', DUPLICATE_PROVIDER: 'UNQUALIFIED', INVALID_PROVIDER_DEFINITION: 'UNQUALIFIED',
+  INVALID_TRANSPORT_PIN: 'UNQUALIFIED', INVALID_PROVIDER_REGISTRY: 'UNQUALIFIED',
 };
 const refusalCode = code => REFUSALS.has(code) ? code : (REFUSAL_MAP[code] ?? 'UNQUALIFIED');
 const only = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
@@ -23,12 +26,13 @@ const only = (value, keys) => value && typeof value === 'object' && !Array.isArr
 // One admission boundary shared by every frontend. Readers map semantic reads to reviewed provider
 // adapters; the single injected guard owns approved writes. The gateway never proxies raw tools or
 // endpoints, never forwards incoming credentials downstream and never falls back across accounts.
-export function createGateway({ store, scope, candidate, capabilities, readers = {}, guard = null, keys = null, audienceToken, now = Date.now, practice = null }) {
+export function createGateway({ store, scope, candidate, capabilities, readers = {}, guard = null, keys = null, audienceToken, now = Date.now, practice = null, providers = null }) {
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
   requireThat(hash(candidate) && typeof now === 'function', 'CANDIDATE_BINDING');
   requireThat(typeof audienceToken === 'string' && audienceToken.length >= 32 && !/\s/.test(audienceToken), 'VIEWER_CREDENTIAL_REQUIRED');
   requireThat(store?.read && store?.transaction, 'HOST_TRANSPORT_REQUIRED');
+  requireThat(providers === null || (providers && typeof providers.bind === 'function' && typeof providers.discover === 'function'), 'INVALID_PROVIDER_REGISTRY');
   const expectedAudience = digest('Bearer ' + audienceToken);
   const records = (Array.isArray(capabilities) ? capabilities : []).map(record => {
     const body = boundedJson(record);
@@ -44,9 +48,9 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
     !records[0].operations.some(op=>WRITE_OPERATIONS.has(op)) && !keys && !guard && typeof practice.invoke==='function','ACCOUNT_BINDING');
   const byDigest = new Map(records.map(record => [record.capability_digest, record]));
   const authenticate = authorization => timingSafeEqual(expectedAudience, digest(typeof authorization === 'string' ? authorization : ''));
-  const provenance = (record, operation) => ({ capability_digest: record.capability_digest, provider: record.provider,
+  const provenance = (record, operation, binding = null) => ({ capability_digest: record.capability_digest, provider: record.provider,
     adapter_version: record.adapter_version, source: record.source, operation, schema_digest: record.schema_digest,
-    mapping_digest: record.mapping_digest, observed_utc: instant(now()) });
+    mapping_digest: record.mapping_digest, observed_utc: instant(now()), ...(binding ? { definition_digest: binding.definition_digest } : {}) });
   const key = request => 'gateway:' + request.request_id;
 
   const wellFormed = body => only(body, REQUEST_KEYS) && body.contract_version === '1' && id(body.request_id) &&
@@ -63,7 +67,9 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
     requireThat(record.qualification.status === 'QUALIFIED', 'UNQUALIFIED');
     requireThat(utcMillis(record.qualification.expires_utc) !== null && now() < utcMillis(record.qualification.expires_utc), 'STALE');
     requireThat(practice || (WRITE_OPERATIONS.has(body.operation) ? guard : typeof readers[body.operation] === 'function'), 'UNSUPPORTED');
-    return record;
+    let binding = null;
+    if (record.source === 'PROVIDER') { requireThat(providers, 'UNQUALIFIED'); binding = providers.bind(record); }
+    return { record, binding };
   }
 
   async function dispatch({ body, record }) {
@@ -84,7 +90,7 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
     if (!wellFormed(body)) return refused(id(body?.request_id) ? body.request_id : null, 'UNQUALIFIED');
     if (practice) {
       try {
-        const record=resolveCapability(body);
+        const { record }=resolveCapability(body);
         const {data,revision}=await practice.invoke(body);
         return {request_id:body.request_id,status:'OK',data,ledger_revision:revision,warnings:data?.warnings??[],provenance:{...provenance(record,body.operation),...(data?.market?{market:data.market}:{}),...(data?.source?{data_source:data.source}:{})}};
       } catch(error) {
@@ -111,7 +117,7 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
       if (reserved.cached) return reserved.cached;
       let result, authority = null;
       try {
-        const record = resolveCapability(body);
+        const { record, binding: providerBinding } = resolveCapability(body);
         const halted = store.read(scope);
         requireThat(!halted.halted, halted.haltReason === 'RELEASE_UNKNOWN' ? 'RELEASE_UNKNOWN' : 'HALTED');
         // Connected reads and every write carry a signed operator grant; the domain boundary owns the
@@ -126,7 +132,7 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
               record.allowlist.includes(tool.name)), 'SCOPE_DENIED');
         }
         const data = boundedJson(await dispatch({ body, record }));
-        result = { request_id, status: 'OK', data, provenance: provenance(record, body.operation) };
+        result = { request_id, status: 'OK', data, provenance: provenance(record, body.operation, providerBinding) };
       } catch (error) {
         result = { request_id, status: 'REFUSED', error: { code: refusalCode(error.code ?? '') }, provenance: null };
       }

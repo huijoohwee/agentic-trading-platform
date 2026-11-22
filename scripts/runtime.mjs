@@ -12,6 +12,7 @@ import { createReadImporter, recoverReadImport } from '../runtime/ingestion.mjs'
 import { createMcpReadAdapter } from '../runtime/mcp-read.mjs';
 import { createMcpMarketReadAdapter, MARKET_READ_OPERATIONS } from '../runtime/mcp-market-read.mjs';
 import { createMarketReadBoundary } from '../runtime/market-ingestion.mjs';
+import { createProviderRegistry } from '../runtime/provider-mapping.mjs';
 import { createPaperGuard } from '../runtime/paper-guard.mjs';
 import { createPaperBroker } from '../runtime/paper-broker.mjs';
 import { projectRuntime } from '../runtime/projection.mjs';
@@ -51,11 +52,15 @@ export async function runtimeCommand(args) {
       console.log(JSON.stringify(recoverReadImport({ ...common, permit: readPrivateJson(rest[0]) }))); return;
     }
     if (command === 'read') {
-      requireThat(rest.length === 2 && config.moomoo, 'READ_CONFIGURATION_REQUIRED');
-      const grant = readPrivateJson(rest[1]);
-      const adapter = createMcpReadAdapter({ token: config.moomoo.token, mapping: config.moomoo.mapping,
-        attestation: config.moomoo.attestation, aliasSecret: config.moomoo.alias_secret, scope: config.scope, candidate: config.candidate });
-      const snapshot = await createReadImporter({ ...common, adapter })({ run_id: rest[0], grant });
+      requireThat(rest.length === 3, 'READ_CONFIGURATION_REQUIRED');
+      const [runId, grantPath, providerId] = rest;
+      const definition = (config.providers ?? []).find(item => item.provider === providerId);
+      const credential = config.provider_credentials?.[providerId];
+      requireThat(definition && credential, 'READ_CONFIGURATION_REQUIRED');
+      const grant = readPrivateJson(grantPath);
+      const adapter = createMcpReadAdapter({ provider: definition, token: credential.token, mapping: definition.mapping,
+        attestation: credential.attestation, aliasSecret: credential.alias_secret, scope: config.scope, candidate: config.candidate });
+      const snapshot = await createReadImporter({ ...common, adapter })({ run_id: runId, grant });
       console.log(JSON.stringify({ status: 'SNAPSHOT_ACCEPTED', digest: snapshot.digest, cost: snapshot.cost, runtime_ready: false })); return;
     }
     if (command === 'gateway') {
@@ -64,13 +69,28 @@ export async function runtimeCommand(args) {
         'GATEWAY_CONFIGURATION_REQUIRED');
       const port = Number(rest[0] ?? 4182);
       requireThat(port > 0 && port <= 65535, 'INVALID_PORT');
-      const marketAdapter = config.moomoo?.mapping?.operations ? createMcpMarketReadAdapter({ token: config.moomoo.token,
-        mapping: config.moomoo.mapping, attestation: config.moomoo.attestation, scope: config.scope, candidate: config.candidate }) : null;
-      const marketBoundary = marketAdapter ? createMarketReadBoundary({ ...common, adapter: marketAdapter }) : null;
+      const registry = createProviderRegistry(config.providers ?? []);
+      const credentials = config.provider_credentials ?? {};
+      const marketBoundaries = new Map(), snapshotImporters = new Map();
+      for (const definition of config.providers ?? []) {
+        const credential = credentials[definition.provider];
+        if (!credential) continue;
+        if (definition.mapping?.operations) {
+          const adapter = createMcpMarketReadAdapter({ provider: definition, token: credential.token, mapping: definition.mapping,
+            attestation: credential.attestation, scope: config.scope, candidate: config.candidate });
+          marketBoundaries.set(definition.provider, createMarketReadBoundary({ ...common, adapter }));
+        }
+        if (definition.mapping?.sheets) {
+          const adapter = createMcpReadAdapter({ provider: definition, token: credential.token, mapping: definition.mapping,
+            attestation: credential.attestation, aliasSecret: credential.alias_secret, scope: config.scope, candidate: config.candidate });
+          snapshotImporters.set(definition.provider, createReadImporter({ ...common, adapter }));
+        }
+      }
       const readers = Object.fromEntries(marketOperations.map(operation=>[operation, async ({capability,inputs})=>{
         if (capability.source==='MOCK') return marketRead(operation,inputs,Date.now());
-        requireThat(capability.source==='PROVIDER' && marketBoundary && MARKET_READ_OPERATIONS.includes(operation),'UNSUPPORTED');
-        const result = await marketBoundary({ operation, inputs, grant: inputs.grant });
+        const boundary = marketBoundaries.get(capability.provider);
+        requireThat(capability.source==='PROVIDER' && boundary && MARKET_READ_OPERATIONS.includes(operation),'UNSUPPORTED');
+        const result = await boundary({ operation, inputs, grant: inputs.grant });
         return { source: result.source, at: Date.parse(result.observed_utc), rows: result.rows, decimals: result.decimals,
           market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null },
           cost: result.cost, digest: result.digest };
@@ -83,11 +103,9 @@ export async function runtimeCommand(args) {
       // Connected reads reuse the reviewed adapter and the single hardened importer; the gateway
       // verifies the signed grant at admission and the importer owns the durable $0 counter.
       if (config.gateway.capabilities.some(cap => cap.source === 'PROVIDER' && cap.operations?.includes('read.snapshot'))) {
-        requireThat(config.moomoo, 'READ_CONFIGURATION_REQUIRED');
-        const adapter = createMcpReadAdapter({ token: config.moomoo.token, mapping: config.moomoo.mapping,
-          attestation: config.moomoo.attestation, aliasSecret: config.moomoo.alias_secret, scope: config.scope, candidate: config.candidate });
-        const importer = createReadImporter({ ...common, adapter });
-        readers['read.snapshot'] = async ({ inputs }) => {
+        readers['read.snapshot'] = async ({ capability, inputs }) => {
+          const importer = snapshotImporters.get(capability.provider);
+          requireThat(importer, 'READ_CONFIGURATION_REQUIRED');
           const snapshot = await importer({ run_id: inputs.run_id, grant: inputs.grant });
           return { run_id: snapshot.run_id, digest: snapshot.digest, source: snapshot.source, observed_utc: snapshot.observed_utc,
             cost: snapshot.cost, symbols: new Set(snapshot.input.IN_Quotes.map(row => row.symbol_key)).size };
@@ -102,7 +120,7 @@ export async function runtimeCommand(args) {
         guard = createPaperGuard({ store, scope: config.scope, candidate: config.candidate, keys: config.keys, broker });
       }
       const gateway = createGateway({ store, scope: config.scope, candidate: config.candidate,
-        capabilities: config.gateway.capabilities, readers, guard, keys: config.keys, audienceToken: config.gateway.audience_token });
+        capabilities: config.gateway.capabilities, readers, guard, keys: config.keys, audienceToken: config.gateway.audience_token, providers: registry });
       const gatewayApi = createGatewayApi({ gateway, mcp: createGatewayMcp({ gateway }) });
       const runtimeApi = createRuntimeApi({ ...common, viewerToken: config.viewer_token });
       const server = await serve(port, { runtimeApi: (request, response) => gatewayApi(request, response) || runtimeApi(request, response) });

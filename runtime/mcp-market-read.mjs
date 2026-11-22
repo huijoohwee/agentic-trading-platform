@@ -1,5 +1,6 @@
 import { createPrivateKey, sign } from 'node:crypto';
-import { endpoint, protocols, ownPath, rpcResponse } from './mcp-read.mjs';
+import { ownPath, rpcResponse } from './mcp-read.mjs';
+import { validateProviderDefinition } from './provider-mapping.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
@@ -9,14 +10,16 @@ export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.tic
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 
-export function createMcpMarketReadAdapter({ token, mapping, attestation, scope, candidate, fetchImpl = fetch, now = Date.now }) {
+export function createMcpMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, fetchImpl = fetch, now = Date.now }) {
+  const { definition } = validateProviderDefinition(provider);
+  const endpoint = definition.transport.origin;
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
   requireThat(typeof token === 'string' && token.length >= 16 && !/[\r\n]/.test(token), 'READ_CREDENTIAL_REQUIRED');
   requireThat(id(attestation?.key_id) && id(attestation.principal) && id(attestation.runtime), 'ATTESTATION_REQUIRED');
   const privateKey = createPrivateKey(attestation.privateKey);
   requireThat(privateKey.asymmetricKeyType === 'ed25519', 'ATTESTATION_REQUIRED');
-  requireThat(protocols.includes(mapping?.protocol) && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
+  requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
     requireThat(MARKET_READ_OPERATIONS.includes(operation) && id(spec.tool) && Array.isArray(spec.rows_path), 'INVALID_MAPPING');
     requireThat(!writeBan.test(spec.tool), 'SCOPE_DENIED');
