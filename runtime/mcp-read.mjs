@@ -1,9 +1,8 @@
 import { createHmac, createPrivateKey, sign } from 'node:crypto';
 import { SHEETS } from './ingestion.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
+import { validateProviderDefinition } from './provider-mapping.mjs';
 
-export const endpoint = 'https://mcp.moomoo.com/mcp';
-export const protocols = ['2025-03-26', '2025-06-18', '2025-11-25'];
 const numbers = new Set(['last', 'prev_close', 'qty', 'avg_cost', 'cash', 'total_assets', 'limit_price', 'filled_qty', 'avg_fill_price']);
 export const ownPath = (object, path) => {
   requireThat(Array.isArray(path) && path.length > 0 && path.length <= 12, 'INVALID_MAPPING');
@@ -55,7 +54,9 @@ export async function rpcResponse(response, requestId) {
     return found.result;
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
-export function createMcpReadAdapter({ token, mapping, attestation, aliasSecret, scope, candidate, fetchImpl = fetch, now = Date.now }) {
+export function createMcpReadAdapter({ provider, token, mapping, attestation, aliasSecret, scope, candidate, fetchImpl = fetch, now = Date.now }) {
+  const { definition } = validateProviderDefinition(provider);
+  const endpoint = definition.transport.origin;
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
   requireThat(typeof token === 'string' && token.length >= 16 && !/[\r\n]/.test(token), 'READ_CREDENTIAL_REQUIRED');
@@ -63,7 +64,7 @@ export function createMcpReadAdapter({ token, mapping, attestation, aliasSecret,
   requireThat(id(attestation?.key_id) && id(attestation.principal) && id(attestation.runtime), 'ATTESTATION_REQUIRED');
   const privateKey = createPrivateKey(attestation.privateKey);
   requireThat(privateKey.asymmetricKeyType === 'ed25519', 'ATTESTATION_REQUIRED');
-  requireThat(protocols.includes(mapping?.protocol) && SHEETS.every(sheet => mapping.sheets?.[sheet]), 'INVALID_MAPPING');
+  requireThat(mapping?.protocol === definition.transport.protocol && SHEETS.every(sheet => mapping.sheets?.[sheet]), 'INVALID_MAPPING');
   let session, version, sequence = 0, calls = 0, grant, beforeCall;
   const issue = (kind, data) => {
     const issued_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');

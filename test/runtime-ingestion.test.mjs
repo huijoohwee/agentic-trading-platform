@@ -21,6 +21,12 @@ function signed(role, kind, extra = {}) {
   return { key_id: role, payload, signature: sign(null, Buffer.from(canonical(payload)), pairs[role].privateKey).toString('base64url') };
 }
 const tools = SHEETS.map(sheet => ({ sheet, name: 'read_' + sheet, effect: 'read', schema_digest: sha(sheet) }));
+const readMapping = { protocol: '2025-11-25', account_identity: 'private-account', sheets: {} };
+const readDefinition = { schema: 'trading-provider-definition/v1', provider: 'labelled-read-adapter', adapter_version: '1',
+  transport: { kind: 'MCP', origin: 'https://provider.example/mcp', protocol: '2025-11-25' }, adapter_digest: sha('read-adapter'),
+  schema_digest: sha('read-schema'), mapping_digest: sha(readMapping), mapping: readMapping, operations: ['read.snapshot'],
+  allowlist: ['read_quotes'], mode: 'account', source: 'PROVIDER', cost: { hard_cap_usd: 0, deny_at_exhaustion: true },
+  qualification: { status: 'QUALIFIED', receipt_digest: sha('read-receipt'), expires_utc: '2026-11-20T16:00:00Z' } };
 function grant(nonce = 'grant-one', budget = nonce) {
   return signed('operator', 'read', { nonce, tools, limits: { max_calls: 12, timeout_ms: 100 },
     proofs: ['cost', 'rights', 'account'].map(kind => ({ kind, digest: sha(kind === 'cost' ? 'cost:' + budget : kind), expires_utc: '2026-11-20T16:00:00Z' })),
@@ -205,7 +211,7 @@ test('reserved budget aliases cannot be used as actual read accounts', async t =
   const { store } = await fixture(t);
   const target = { ...scope, account_alias: 'runtime-budget/' + sha(scope.account_alias) };
   assert.throws(() => createReadImporter({ store, scope: target, candidate, keys, adapter: adapter(), now }), /ACCOUNT_BINDING/);
-  assert.throws(() => createMcpReadAdapter({ scope: target }), /ACCOUNT_BINDING/);
+  assert.throws(() => createMcpReadAdapter({ provider: readDefinition, scope: target }), /ACCOUNT_BINDING/);
 });
 
 test('revoked grants and admission proofs fail before setup', async t => {
@@ -349,12 +355,17 @@ function mcpFixture({ clock = now, rows = {}, onRequest = () => {}, encode = JSO
     tool: 'read_' + sheet, parameters: {}, rows_path: ['rows'], account_path: ['account'],
     fields: Object.fromEntries(Object.keys(providerRows[sheet][0] ?? {}).filter(field => field !== 'account').map(field => [field, { path: [field] }])),
   }])) };
+  const definition = { schema: 'trading-provider-definition/v1', provider: 'labelled-read-adapter', adapter_version: '1',
+    transport: { kind: 'MCP', origin: 'https://provider.example/mcp', protocol: '2025-11-25' }, adapter_digest: sha('read-adapter'),
+    schema_digest: sha('read-schema'), mapping_digest: sha(mapping), mapping, operations: ['read.snapshot'],
+    allowlist: SHEETS.map(sheet => 'read_' + sheet), mode: 'account', source: 'PROVIDER', cost: { hard_cap_usd: 0, deny_at_exhaustion: true },
+    qualification: { status: 'QUALIFIED', receipt_digest: sha('read-receipt'), expires_utc: '2026-11-20T16:00:00Z' } };
   const received = [];
-  const source = createMcpReadAdapter({ token: 'fixture-token-not-a-real-secret', aliasSecret: 'x'.repeat(32), scope, candidate, mapping,
+  const source = createMcpReadAdapter({ provider: definition, token: 'fixture-token-not-a-real-secret', aliasSecret: 'x'.repeat(32), scope, candidate, mapping,
     attestation: { key_id: 'integration', principal: keys.integration.principal, runtime: keys.integration.runtime,
       privateKey: pairs.integration.privateKey.export({ type: 'pkcs8', format: 'pem' }) }, now: clock,
     fetchImpl: async (url, options) => {
-      assert.equal(url, 'https://mcp.moomoo.com/mcp'); assert.equal(options.redirect, 'error');
+      assert.equal(url, definition.transport.origin); assert.equal(options.redirect, 'error');
       const request = JSON.parse(options.body); received.push(request.method);
       await onRequest(request);
       if (request.method === 'notifications/initialized') return new Response(null, { status: 202 });
@@ -367,7 +378,7 @@ function mcpFixture({ clock = now, rows = {}, onRequest = () => {}, encode = JSO
   return { source, received, mapping, permission: () => signed('operator', 'read', { ...grant().payload, tools: mappedTools, mapping_digest: sha(mapping) }) };
 }
 
-test('MCP read transport pins protocol/schema/mapping and keeps credentials on the official origin', async () => {
+test('MCP read transport pins protocol/schema/mapping and keeps credentials on the pinned reviewed origin', async () => {
   const { source, received, permission } = mcpFixture();
   const admitted = permission().payload;
   const opened = await source.open({ grant: admitted, signal: new AbortController().signal });
