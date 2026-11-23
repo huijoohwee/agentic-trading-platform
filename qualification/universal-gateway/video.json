@@ -1,0 +1,24 @@
+{
+  "id": "media/timeline-render",
+  "owner": "agentic-graph",
+  "operation": "render",
+  "input": "local-timeline",
+  "output": "video",
+  "fidelity": "flattened",
+  "mode": "local-effect",
+  "routes": [
+    "browser",
+    "mcp"
+  ],
+  "features": [
+    "seek"
+  ],
+  "losses": [
+    "editability"
+  ],
+  "major": 1,
+  "locality": "device",
+  "revision": "4f0d9d98daa270a851cdce6365146c61d2d114d5",
+  "schemaSource": "canvas/src/features/html-video-renderer/htmlVideoRendererSsot.ts",
+  "schemaDigest": "a73dc2ac48084ace65bff4ac4d6deecbce2464ecaa19492a689ce13e51df52ec"
+}
