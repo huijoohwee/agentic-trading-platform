@@ -68,7 +68,7 @@ export async function runtimeCommand(args) {
       requireThat(config.gateway && typeof config.gateway.audience_token === 'string' && Array.isArray(config.gateway.capabilities),
         'GATEWAY_CONFIGURATION_REQUIRED');
       const port = Number(rest[0] ?? 4182);
-      requireThat(port > 0 && port <= 65535, 'INVALID_PORT');
+      requireThat(port >= 0 && port <= 65535, 'INVALID_PORT');
       const registry = createProviderRegistry(config.providers ?? []);
       const credentials = config.provider_credentials ?? {};
       const marketBoundaries = new Map(), snapshotImporters = new Map();
@@ -124,8 +124,15 @@ export async function runtimeCommand(args) {
       const gatewayApi = createGatewayApi({ gateway, mcp: createGatewayMcp({ gateway }) });
       const runtimeApi = createRuntimeApi({ ...common, viewerToken: config.viewer_token });
       const server = await serve(port, { runtimeApi: (request, response) => gatewayApi(request, response) || runtimeApi(request, response) });
-      server.once('close', () => store.close()); retained = true;
-      for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close());
+      const stop = () => server.close();
+      process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);
+      server.once('close', () => {
+        process.off('SIGINT', stop);
+        process.off('SIGTERM', stop);
+        store.close();
+      });
+      retained = true;
       console.log('Provider-neutral gateway · http://127.0.0.1:' + server.address().port);
       return server;
     }

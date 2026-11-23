@@ -204,6 +204,12 @@ npm run runtime -- telemetry /absolute/private/config.json /absolute/private/per
 
 Open **Runtime readback** in the same loopback origin, enter the local viewer token and choose **Read local runtime**. Its authenticated GET exposes a redacted projection only. The token is cleared after each attempted read, including failures, and is never persisted. Base stores the last validated observation independently from execution state; offline use is labelled as stored evidence. Unknown equity, FX or usage stays unknown. Observed-mark drawdown is not an official competition result. Completion, delivery, main-session coverage and child-thread usage remain distinct. Corrupt data, failed reads and competing tab saves do not replace the last accepted observation.
 
+### Export a synthetic ticker for Graph
+
+Run `node scripts/export-ticker-fixture.mjs ./ticker-receipt.json` with a new output filename. The exporter opens an isolated loopback gateway with one synthetic `read.ticker` capability. It checks the HTTP and MCP results against the same request and ledger revision before writing the receipt. The quote has a fixed market time, a capture time, a four-decimal USD price and an unknown feed delay.
+
+Transfer the JSON file to the device running Graph. Under **MainPanel → Integrations → Trading ticker fixture**, choose **Open synthetic receipt**. While online, choose **Install offline workspace**, then **Open verified offline workspace**. Save that revision-specific URL. To replay after closing the tab, reopen the saved URL on the same device and origin and select **MainPanel → Integrations**. The SHA-256 covers the display fields and ledger reference. It checks file integrity. The receipt contains synthetic data and carries no broker identity or execution rights.
+
 ### Authenticated market/account reads
 
 Only the following explicitly invoked command contacts a reviewed provider; do not run it before provider rights, account identity, runtime isolation and a zero-cost deny-at-exhaustion allowance have been independently reviewed.
