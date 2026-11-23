@@ -1,17 +1,17 @@
 ---
 title: "Agentic Trading Skills: native gateway consumer"
 doc_type: "PRD-TAD-ADR-MVP-GTM"
-version: "0.16.1"
+version: "0.16.2"
 date: "2026-11-24"
 lang: "en-US"
 frontmatter_contract: "required"
 owner: "Product function"
 continuity_id: "AGENTIC-TRADING-SKILLS-001"
-prd_revision: "0.16.1"
-tad_revision: "0.16.1"
-adr_revision: "0.16.1"
-mvp_revision: "0.16.1"
-gtm_revision: "0.16.1"
+prd_revision: "0.16.2"
+tad_revision: "0.16.2"
+adr_revision: "0.16.2"
+mvp_revision: "0.16.2"
+gtm_revision: "0.16.2"
 local_rung: "dev-proven"
 delivered_rung: "undocumented"
 lane: "authoring"
@@ -49,7 +49,7 @@ source_docs:
 
 # Agentic Trading Skills: native gateway consumer
 
-`AGENTIC-TRADING-SKILLS-001@0.16.1` accompanies [Trading 0.20.1](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests.
+`AGENTIC-TRADING-SKILLS-001@0.16.2` accompanies [Trading 0.20.2](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests.
 
 Trading admits API and MCP through one signed-grant boundary (Product E-42/E-44). Outbound mappings, connected rights and host binding require independent qualification. Graph Integrations can present admitted capabilities through Design System. The skill discovers and explains them with `authority: false`. Product-local scope and S1 ownership continue to apply.
 
@@ -505,7 +505,7 @@ consumes execution receipts by exact reference; E-11/12 record engineering outco
 | C11 | Organization and obligations | covered | one native instruction owner; package rights and documented provider-interface/data terms; no entity/IP change | TAD+ADR | adoption |
 | C12 | Financial viability | deferred | economics unknown; $0 scope; no statements yet | GTM+TAD | H3 |
 | C13 | Capital and milestones | not-applicable | bootstrap $0/FOSS; no funding ask; reviewer: Product | GTM+ADR | if funding sought |
-| C14 | ADLC execution | covered | Historical S1 integration E-11/12 is separate from native lanes E-18; Product E-49/E-50 record landed Graph/Trading integration and the provider-mapping registry landing. This 0.16.1 draft updates the admitted authoring lane. Hosted delivery remains unqualified. | ADLC | current validation/handoff |
+| C14 | ADLC execution | covered | Historical S1 integration E-11/12 is separate from native lanes E-18; Product E-49/E-50 record landed Graph/Trading integration and the provider-mapping registry landing. This 0.16.2 draft updates the admitted authoring lane. Hosted delivery remains unqualified. | ADLC | current validation/handoff |
 | C15 | Audience projections | deferred | deck/BP/FM not needed for an integrator decision yet | Venture | audience handoff |
 | C16 | Learning and next increment | covered | N1 landed (E-50); N2–N7 roadmap toward full moomoo OpenAPI coverage; separate R-GW conformance, R1–R4 package/host/run and S1→S3 adoption gates; risk register/stop thresholds | MVP+GTM | each increment |
 
@@ -543,6 +543,7 @@ E-01–30 refer to earlier candidates. E-31 verifies the current audit-lane sour
 | E-35 | REST-only calendar consumer and coverage inventory, 23 November 2026 (Product E-56) | Trading `4db0b21` admitted REST protocol `1.0` and mapped `read.calendar`; the loopback gateway returned three synthetic rows (null EPS preserved) and refused an over-window request. Graph `33c955a4e` replays the 532-byte receipt under MainPanel → Integrations, re-verifies its SHA-256 in browser and restores it after reload. The 25-family inventory (305 sources) renders in both surfaces. | Live Chrome on desktop, 360 px and 390 px showed no overflow and zero non-loopback requests; live moomoo calls numbered zero. Connected reads still require N3 operator receipts; the inventory states mapping readiness, not connected readiness. [Calendar fixture tests](https://github.com/huijoohwee/agentic-trading-platform/blob/4db0b21d45c07cc89dead27d2dea13cacf7514bb/test/runtime-calendar-fixture.test.mjs) · [Graph receipt tests](https://github.com/huijoohwee/agentic-graph/blob/33c955a4e24d62b4fbd7323d52c689037320ef9a/canvas/src/__tests__/tradingCalendarReceipt.test.ts) |
 | E-36 | Connector and consumer review, 24 November 2026 (Product E-57) | The Trading owner pins Gateway `563dab2`. Selected Trading fixtures passed 41 tests and Gateway connectors passed five. Existing local qualification records HK and US single-symbol OpenD display reads. | Hosted MCP was unavailable in this review. The desktop OpenD evidence, signed conformance ticker and REST calendar each qualify only the documented path. The next external test is N3. [Trading baseline](https://github.com/huijoohwee/agentic-trading-platform/blob/afb60fbbc966010767adf5ac8e201d3bea06e214/qualification/moomoo/README.md) · [Gateway profile](https://github.com/huijoohwee/agentic-gateway/blob/563dab262dd6a7debd8d4e643505ec64666893e0/connectors/profiles.json) |
 | E-37 | Gateway pin, coexistence and streaming acceptance, 24 November 2026 (Product E-58) | Trading lane `gateway-acceptance` (base `7fe8590`, branch-local, unpushed) pins the exact Gateway tarball revision, lock integrity and installed connector/profile digests; edited bytes, forks and local overrides fail typed. The registry proves distinct pinned MCP/REST coexistence with isolation; the new `runtime/stream-recovery.mjs` verifies separate quote/trade-event profiles, heartbeat, bounded buffer, dedupe, disconnect/re-auth/re-subscribe, unsubscribe and snapshot/REST-history cursor reconcile. Focused reproduction passed 60/60; full check 433 pass/0 fail/8 optional-parser skips; the browser harness passed on desktop and mobile. | The laboratory harness now proves navigation removes all 23 WebMCP actions (pagehide) and pageshow re-registers them; offline reopen, tamper and expiry refusal remain as E-34/E-35. Provider calls: 0. The hosted N3 read, live watchlist `quote:write` maintenance and connected account reads remain open. |
+| E-38 | Entitled $0 Desktop capture replay + Gateway depth/tape/kline, 24 November 2026 (Product E-59) | The `moomoo-capture` lane (`078f760`, base `7fe8590`, branch-local unpushed) fixes four entitled $0 Desktop `mcp://moomoo` reads for `HK.00700` (last 344; captured `2026-11-23T23:17:44Z`) and projects them to exact round-trip decimals; the same `request_id` over HTTP `/api/gateway` and MCP `/mcp` returns identical digest and ledger revision with four provider calls and no replay charge. A lazy dashboard disclosure shows the capture online/offline. Trading `npm run check` 419 pass/0 fail/8 optional-parser skips; the desktop+360px browser harness and live Chrome pass with zero non-loopback requests. The Gateway `moomoo-depth-replay` lane (`8f6302e`, base `563dab2`) adds documented ORDER_BOOK/TICKER/KLINE replay projections (12/12 tests); Trading's Gateway pin stays `563dab2` until release. | Desktop capture is distinct evidence, not the hosted N3 OAuth receipt, which remains open. Currency, delay class, per-quote attribution and trade sequence beyond 2^53 stay unknown. No push/deploy/live orders. |
 
 [Previous Trading owner edition](https://github.com/huijoohwee/agentic-trading-platform/blob/afb60fbbc966010767adf5ac8e201d3bea06e214/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md) preserves the earlier owner text. The prior register retains exact commands, hashes, skipped tests, owner-supplied observations and historical lane dispositions for E-01–29. Product E-50 holds the N1 release evidence. [Archived skills register](https://github.com/huijoohwee/joohwee/blob/4bad2d7e0c0ce4cb753a108f62176fdb19d4d567/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md#evidence-register) · [Audited native instruction](https://github.com/huijoohwee/agentic-os/blob/f5cca6b1cd0d7bd16a0dd57abba35996262c481f/skills/trading/SKILL.md)
 
@@ -571,4 +572,4 @@ E-01–30 refer to earlier candidates. E-31 verifies the current audit-lane sour
 
 **Historical 0.8.0 handoff.** The original lane, candidate pins and receipt boundaries remain recorded in the 0.8.0 revision of this document at Trading `94ee095`. E-19–27 retain the historical validation results.
 
-**0.16.0 handoff.** Start from the E-34 signed ticker and E-35 REST calendar. Use E-36 to explain the bounded OpenD evidence and N3 to qualify the first hosted quote through Trading’s ledger. Record the resulting operation, host and expiry before expanding coverage. **0.16.1 handoff (E-37).** The `gateway-acceptance` lane proves the Gateway pin, multi-transport coexistence, streaming recovery and WebMCP navigation removal locally with zero provider calls; N3 hosted qualification is unchanged and open. [Product roadmap](./prd-tad-adr-mvp-gtm-agentic-trading.md#moomoo-integration-roadmap)
+**0.16.0 handoff.** Start from the E-34 signed ticker and E-35 REST calendar. Use E-36 to explain the bounded OpenD evidence and N3 to qualify the first hosted quote through Trading’s ledger. Record the resulting operation, host and expiry before expanding coverage. **0.16.1 handoff (E-37).** The `gateway-acceptance` lane proves the Gateway pin, multi-transport coexistence, streaming recovery and WebMCP navigation removal locally with zero provider calls; N3 hosted qualification is unchanged and open. **0.16.2 handoff (E-38).** The `moomoo-capture` lane (`078f760`) replays the entitled $0 Desktop capture across HTTP and MCP with identical digest/ledger revision and surfaces it in the dashboard; the Gateway `moomoo-depth-replay` lane (`8f6302e`) adds documented depth/tape/kline replay projections. Both are branch-local and unpushed; Trading's Gateway pin stays `563dab2` until release. N3 hosted qualification is unchanged and open. [Product roadmap](./prd-tad-adr-mvp-gtm-agentic-trading.md#moomoo-integration-roadmap)
