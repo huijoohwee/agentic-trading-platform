@@ -28,12 +28,13 @@
     "package:skill": "python3 scripts/package-skill.py",
     "package:replay": "python3 scripts/package-replay.py",
     "audit:local": "node scripts/audit.mjs",
-    "rehearsal": "node scripts/rehearse.mjs"
+    "rehearsal": "node scripts/rehearse.mjs",
+    "quote:moomoo": "node scripts/moomoo-quote.mjs"
   },
   "devDependencies": {
     "agentic-os": "https://codeload.github.com/huijoohwee/agentic-os/tar.gz/140d9b1977ba0f304350e2aea7ab543642fc9a27"
   },
   "dependencies": {
-    "agentic-gateway": "https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/af9e8cb5121737678e89d98c68e7025ed7a57726"
+    "agentic-gateway": "https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/118397c60c9ea97290d638d24319fc6ee8c589cc"
   }
 }
