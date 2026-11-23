@@ -1,0 +1,32 @@
+{
+  "retType": 0,
+  "retMsg": "",
+  "errCode": 0,
+  "s2c": {
+    "snapshotList": [
+      {
+        "basic": {
+          "security": {
+            "market": 1,
+            "code": "00700"
+          },
+          "type": 3,
+          "isSuspend": false,
+          "listTime": "2004-06-16",
+          "lotSize": 100,
+          "priceSpread": 0.2,
+          "updateTime": "2023-11-15 06:13:20",
+          "highPrice": 303,
+          "openPrice": 300,
+          "lowPrice": 298,
+          "lastClosePrice": 301,
+          "curPrice": 302.25,
+          "volume": "100",
+          "turnover": 30225,
+          "turnoverRate": 0.01,
+          "updateTimestamp": 1700000000.125
+        }
+      }
+    ]
+  }
+}
