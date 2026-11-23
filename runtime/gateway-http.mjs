@@ -1,3 +1,4 @@
+import { discoverPortableQuotes } from './portable-quote.mjs';
 import { requireThat } from './core.mjs';
 
 const MAX_BODY = 480_000;
@@ -36,7 +37,8 @@ export function createGatewayApi({ gateway, mcp = null }) {
       if (!gateway.authenticate(authorization)) { send(401, { error: 'UNAUTHORIZED' }); return; }
       if (path === '/api/gateway/capabilities') {
         if (!['GET', 'HEAD'].includes(request.method)) { send(405, { error: 'READ_ONLY' }); return; }
-        send(200, { capabilities: gateway.discover() }); return;
+        const capabilities = gateway.discover();
+        send(200, { capabilities, portableQuotes: discoverPortableQuotes(capabilities) }); return;
       }
       if (path === '/api/gateway') {
         if (request.method !== 'POST') { send(405, { error: 'METHOD_NOT_ALLOWED' }); return; }

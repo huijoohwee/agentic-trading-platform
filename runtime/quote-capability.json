@@ -1,0 +1,28 @@
+{
+  "id": "trading/quote-read",
+  "owner": "agentic-trading-platform",
+  "operation": "read.fixture",
+  "input": "local-quote-fixture",
+  "output": "quote",
+  "fidelity": "native",
+  "mode": "read",
+  "routes": [
+    "direct",
+    "http",
+    "mcp"
+  ],
+  "features": [
+    "decimal-text"
+  ],
+  "losses": [],
+  "major": 1,
+  "locality": "device",
+  "revision": "d4c6c5569d574897f6ae495a636c5acfba7dbf57",
+  "schemaSource": "runtime/gateway.mjs",
+  "schemaDigest": "755dc307b28dce4061965b2cd83efbfa332573c7b8272555c188cebb0f4e5a5e",
+  "qualifiedBinding": {
+    "adapterDigest": "1d1ac4794ea62b78141e3512a60a29d31fc435ed8a46a64b6960d144b944ceca",
+    "schemaDigest": "b5fa00e85908543acfe8bb113e3168fc53e30bb3e11eecd8953def12d3f7b50e",
+    "mappingDigest": "45a47b0175457632df901275c79bde277fd2a7c212010eb743617a373ee9fde5"
+  }
+}

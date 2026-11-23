@@ -1,3 +1,4 @@
+import { discoverPortableQuotes } from './portable-quote.mjs';
 import { boundedJson, id, requireThat } from './core.mjs';
 
 import {actionFor} from '../src/desk-actions.mjs';
@@ -24,9 +25,12 @@ const rpcError = (requestId, code, message) => ({ jsonrpc: '2.0', id: requestId 
 export function createGatewayMcp({ gateway }) {
   requireThat(gateway?.admit && gateway?.discover && gateway?.authenticate, 'GATEWAY_REQUIRED');
   const tools = () => {
-    const operations = [...new Set(gateway.discover().flatMap(record => record.operations))];
+    const records = gateway.discover();
+    const operations = [...new Set(records.flatMap(record => record.operations))];
+    const quotes = discoverPortableQuotes(records);
     return operations.map(operation => {const a=actionFor(operation);
-      return {name:operation,description:a?.description??('Semantic '+operation+' over reviewed capabilities'),
+      return {name:operation,...(operation === 'read.fixture' && quotes.length
+        ? {_meta: {'agentic-gateway/portableQuotes': quotes}} : {}),description:a?.description??('Semantic '+operation+' over reviewed capabilities'),
         ...(a?{annotations:a.annotations}:{}),inputSchema:a?{...SEMANTIC_SCHEMA,properties:{...SEMANTIC_SCHEMA.properties,inputs:a.inputSchema}}:SEMANTIC_SCHEMA};});
   };
   async function callTool(params, authorization) {

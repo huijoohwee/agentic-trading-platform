@@ -3,7 +3,9 @@
   "version": "0.14.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.22.0" },
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "doctor": "agentic-os doctor",
     "lane": "agentic-os start",
@@ -30,5 +32,8 @@
   },
   "devDependencies": {
     "agentic-os": "https://codeload.github.com/huijoohwee/agentic-os/tar.gz/140d9b1977ba0f304350e2aea7ab543642fc9a27"
+  },
+  "dependencies": {
+    "agentic-gateway": "https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/af9e8cb5121737678e89d98c68e7025ed7a57726"
   }
 }
