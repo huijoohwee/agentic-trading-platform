@@ -18,7 +18,7 @@
   ],
   "major": 1,
   "locality": "device",
-  "revision": "4f0d9d98daa270a851cdce6365146c61d2d114d5",
+  "revision": "8e81238f913deae459b91432faa59004b515a86d",
   "schemaSource": "canvas/src/features/html-video-renderer/htmlVideoRendererSsot.ts",
   "schemaDigest": "a73dc2ac48084ace65bff4ac4d6deecbce2464ecaa19492a689ce13e51df52ec"
 }
