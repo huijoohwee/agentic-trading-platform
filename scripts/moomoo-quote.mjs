@@ -2,15 +2,19 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { bindMoomooSnapshot, replayMoomooSnapshot } from 'agentic-gateway/connectors/moomoo';
 import { boundedText } from './local-file.mjs';
 
 const execute = promisify(execFile);
-const usage = 'Usage: quote:moomoo replay SYMBOL FILE | snapshot SYMBOL --entitled-zero-cost --port=PORT';
+const usage = 'Usage: quote:moomoo discover | replay SYMBOL FILE | snapshot SYMBOL --entitled-zero-cost --port=PORT';
 
 export async function moomooQuote(args) {
   const [command, symbol, input, option] = args;
+  if (command === 'discover' && args.length === 1) {
+    const { discoverProviderProfiles } = await import('agentic-gateway/provider-profiles');
+    return discoverProviderProfiles(['snapshot-replay', 'opend-reader']);
+  }
   if (command === 'replay' && args.length === 3) {
+    const { replayMoomooSnapshot } = await import('agentic-gateway/connectors/moomoo');
     return replayMoomooSnapshot(symbol, JSON.parse(await boundedText(input, 128000)));
   }
   if (command !== 'snapshot' || args.length !== 4 || input !== '--entitled-zero-cost' ||
@@ -33,6 +37,7 @@ export async function moomooQuote(args) {
       }
     },
   };
+  const { bindMoomooSnapshot } = await import('agentic-gateway/connectors/moomoo');
   return bindMoomooSnapshot(client, {
     symbol, entitled:true, costUsd:0, maxCalls:1, expiresAt:Date.now() + 25000,
   })();
