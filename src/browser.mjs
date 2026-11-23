@@ -26,6 +26,13 @@ byId('provider-coverage').addEventListener('toggle', async event => {
   try { const { mountCoverageView } = await import('./coverage-view.mjs'); await mountCoverageView(byId('coverage-body')); }
   catch { byId('coverage-body').textContent = 'Coverage inventory unavailable. The offline rehearsal is unchanged.'; }
 });
+let captureOpened = false;
+byId('provider-capture').addEventListener('toggle', async event => {
+  if (!event.target.open || captureOpened) return;
+  captureOpened = true;
+  try { const { mountCaptureView } = await import('./capture-view.mjs'); await mountCaptureView(byId('capture-body')); }
+  catch { byId('capture-body').textContent = 'Provider capture unavailable. The offline rehearsal is unchanged.'; }
+});
 const form = byId('ticket');
 const fields = byId('fields');
 const feedback = byId('feedback');

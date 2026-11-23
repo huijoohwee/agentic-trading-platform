@@ -109,6 +109,11 @@ try {
     await page.waitForFunction(() => !document.querySelector('#fields').disabled);
     await checkDashboard(page, mobile ? 1 : 3);
     await verifyTradingSkills(page, mobile);
+    await page.locator('#provider-capture summary').click();
+    await page.waitForFunction(() => document.querySelector('#capture-status')?.textContent.includes('HK.00700'));
+    assert.ok((await page.locator('#capture-status').innerText()).includes('desktop-mcp'));
+    assert.ok((await page.locator('#capture-status').innerText()).includes('hosted N3 open'));
+    assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/capture-view.mjs'))), true);
     console.log(name + ': online lazy Skills & Commands reference, controls, source digest and focus passed.');
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource')
       .some(e => e.name.endsWith('/src/rehearsal-view.mjs'))),false);
@@ -176,6 +181,9 @@ try {
     console.log(name + ': first offline Skills & Commands load after server shutdown, controls and verified instructions passed.');
     await reopened.locator('#evidence summary').click();
     await reopened.waitForFunction(() => document.querySelector('#notional').textContent.includes('$100.00'));
+    await reopened.locator('#provider-capture summary').click();
+    await reopened.waitForFunction(() => document.querySelector('#capture-status')?.textContent.includes('HK.00700'));
+    assert.ok((await reopened.locator('#capture-status').innerText()).includes('hosted N3 open'));
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     await reopened.locator('#rehearsal summary').first().click();
     await reopened.getByRole('button',{name:'Replay run'}).click();
