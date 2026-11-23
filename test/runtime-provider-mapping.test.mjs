@@ -29,6 +29,10 @@ const capability = (def, overrides = {}) => ({ provider: def.provider, adapter_v
 const distinctB = () => definition({ provider: 'provider-b', transport: { kind: 'MCP', origin: 'https://b.example/mcp', protocol: '2025-11-25' },
   adapter_digest: sha('adapter-b'), schema_digest: sha('schema-b'), mapping_digest: sha(mappingB), mapping: mappingB,
   allowlist: ['read_candles_b'], qualification: { status: 'QUALIFIED', receipt_digest: sha('receipt-b'), expires_utc: '2026-11-20T16:00:00Z' } });
+const mappingRest = { protocol: '1.0', operations: { 'read.candles': { path: '/v1/candles', rows_path: ['data'] } } };
+const restDefinition = () => definition({ transport: { kind: 'REST', origin: 'https://a.example/rest', protocol: '1.0' },
+  adapter_digest: sha('adapter-a-rest'), schema_digest: sha('schema-a-rest'), mapping_digest: sha(mappingRest), mapping: mappingRest,
+  allowlist: ['read_candles_rest'] });
 
 test('a reviewed definition binds its capability and discovery exposes metadata only', () => {
   const def = definition(), registry = createProviderRegistry([def]);
@@ -99,10 +103,10 @@ test('definition validation fails closed on mapping drift, cost, source and shap
 const pairs = Object.fromEntries(['operator', 'integration'].map(role => [role, generateKeyPairSync('ed25519')]));
 const keys = Object.fromEntries(Object.entries(pairs).map(([role, pair]) => [role, { role, principal: role + '-fixture',
   runtime: role + '-fixture', publicKey: pair.publicKey.export({ type: 'spki', format: 'pem' }) }]));
-function readGrant(def, nonce = 'grant-one') {
+function readGrant(def, nonce = 'grant-one', tool = 'read_candles') {
   const payload = { schema: 'trading-runtime-envelope/v1', kind: 'read', scope, candidate, principal: keys.operator.principal,
     runtime: keys.operator.runtime, issued_utc: at, expires_utc: '2026-11-20T16:00:00Z', nonce, mapping_digest: def.mapping_digest,
-    tools: [{ operation: 'read.candles', name: 'read_candles', effect: 'read', schema_digest: def.schema_digest }],
+    tools: [{ operation: 'read.candles', name: tool, effect: 'read', schema_digest: def.schema_digest }],
     limits: { max_calls: 12, timeout_ms: 1000 }, proofs: ['cost', 'rights', 'account'].map(kind => ({ kind, digest: sha(kind), expires_utc: '2026-11-20T16:00:00Z' })),
     cost: { hard_cap_usd: 0, deny_at_exhaustion: true, remaining_calls: 12 } };
   return { key_id: 'operator', payload, signature: sign(null, Buffer.from(canonical(payload)), pairs.operator.privateKey).toString('base64url') };
@@ -148,4 +152,45 @@ test('registry pin drift and unknown providers refuse typed before dispatch', as
   const absent = await gateway.admit(request(unknown), 'Bearer fixture-audience-token-0000000000');
   assert.equal(absent.status, 'REFUSED'); assert.equal(absent.error.code, 'UNQUALIFIED');
   assert.equal(dispatched(), 0);
+});
+
+test('distinct pinned MCP and REST bindings coexist for one provider', () => {
+  const mcp = definition(), rest = restDefinition(), registry = createProviderRegistry([mcp, rest]);
+  assert.equal(registry.size, 2);
+  const mcpBinding = registry.bind(capability(mcp)), restBinding = registry.bind(capability(rest));
+  assert.equal(mcpBinding.definition_digest, sha(mcp));
+  assert.equal(restBinding.definition_digest, sha(rest));
+  assert.equal(mcpBinding.transport.kind, 'MCP');
+  assert.equal(restBinding.transport.kind, 'REST');
+  assert.deepEqual(registry.discover().map(item => item.transport.kind).sort(), ['MCP', 'REST']);
+  assert.throws(() => createProviderRegistry([rest, restDefinition()]), /DUPLICATE_PROVIDER/);
+});
+
+test('cross-transport pin reuse and unreviewed transports refuse typed', () => {
+  const sharedAdapter = restDefinition(); sharedAdapter.adapter_digest = sha('adapter-a');
+  assert.throws(() => createProviderRegistry([definition(), sharedAdapter]), /PROVIDER_ISOLATION/);
+  const sharedOrigin = restDefinition(); sharedOrigin.transport = { kind: 'REST', origin: 'https://a.example/mcp', protocol: '1.0' };
+  assert.throws(() => createProviderRegistry([definition(), sharedOrigin]), /PROVIDER_ISOLATION/);
+  const registry = createProviderRegistry([definition(), restDefinition()]);
+  // Isolation gives each transport its own adapter pin, so a cross-transport claim drifts typed before binding.
+  assert.throws(() => registry.bind(capability(definition(), { transport: 'REST' })), /ADAPTER_DRIFT/);
+  assert.throws(() => registry.bind(capability(restDefinition(), { transport: 'MCP' })), /ADAPTER_DRIFT/);
+  const mcpOnly = createProviderRegistry([definition()]);
+  assert.throws(() => mcpOnly.bind(capability(restDefinition())), /PROTOCOL_DRIFT/);
+});
+
+test('the gateway admits both transports of one provider with distinct definition ledgers', async t => {
+  const mcp = definition(), rest = restDefinition();
+  const { gateway, request, dispatched } = await gatewayFixture(t, { capabilities: [capability(mcp), capability(rest)], providers: createProviderRegistry([mcp, rest]) });
+  const viaMcp = await gateway.admit(request(capability(mcp)), 'Bearer fixture-audience-token-0000000000');
+  const viaRest = await gateway.admit(request(capability(rest), { inputs: { grant: readGrant(rest, 'grant-rest', 'read_candles_rest') } }), 'Bearer fixture-audience-token-0000000000');
+  assert.equal(viaMcp.status, 'OK'); assert.equal(viaRest.status, 'OK');
+  assert.equal(viaMcp.provenance.definition_digest, sha(mcp));
+  assert.equal(viaRest.provenance.definition_digest, sha(rest));
+  assert.equal(viaRest.ledger_revision, viaMcp.ledger_revision + 2);
+  assert.equal(dispatched(), 2);
+  const mcpOnly = await gatewayFixture(t, { capabilities: [capability(rest)], providers: createProviderRegistry([mcp]) });
+  const refused = await mcpOnly.gateway.admit(mcpOnly.request(capability(rest), { inputs: { grant: readGrant(rest, 'grant-rest', 'read_candles_rest') } }), 'Bearer fixture-audience-token-0000000000');
+  assert.equal(refused.status, 'REFUSED'); assert.equal(refused.error.code, 'SCHEMA_DRIFT');
+  assert.equal(mcpOnly.dispatched(), 0);
 });

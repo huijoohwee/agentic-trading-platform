@@ -54,6 +54,7 @@ export async function verifyLaboratory(browser) {
     await ctx.addInitScript(() => {
       const tools = new Map();
       window.testTools = tools;
+      window.unregisteredTools = [];
       Object.defineProperty(document, 'modelContext', {
         configurable: true,
         value: {
@@ -62,6 +63,10 @@ export async function verifyLaboratory(browser) {
             tools.set(tool.name, tool);
             signal.addEventListener('abort', () => tools.delete(tool.name));
             return Promise.resolve();
+          },
+          unregisterTool(name) {
+            window.unregisteredTools.push(name);
+            tools.delete(name);
           }
         }
       });
@@ -316,6 +321,15 @@ export async function verifyLaboratory(browser) {
     assert.equal(records.length, 2);
     assert.deepEqual(records[0], records[1]);
     assert.equal((await ok('practice_portfolio')).ledger_revision, 10);
+    // N5: navigation removes every WebMCP action; returning to the page re-registers them.
+    const hidden = await page.evaluate(() => {
+      window.dispatchEvent(new Event('pagehide'));
+      return { tools: window.testTools.size, unregistered: window.unregisteredTools.length };
+    });
+    assert.equal(hidden.tools, 0);
+    assert.equal(hidden.unregistered, 23);
+    await page.evaluate(() => window.dispatchEvent(new Event('pageshow')));
+    await page.waitForFunction(() => window.testTools.size === 23);
     assert.deepEqual(errors, []);
   } finally {
     await guest.close();

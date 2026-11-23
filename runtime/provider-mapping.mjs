@@ -71,18 +71,23 @@ export function createProviderRegistry(definitions) {
   const seenAdapter = new Set(), seenSchema = new Set(), seenMapping = new Set(), seenOrigin = new Set();
   for (const entry of entries) {
     const d = entry.definition;
-    // Each provider is admitted once with isolated pins: a second provider must carry its own adapter,
-    // schema, mapping and origin, never reuse another provider's reviewed artifacts.
-    requireThat(!byProvider.has(d.provider), 'DUPLICATE_PROVIDER');
+    // A provider binds once per transport kind, so distinct pinned MCP and REST bindings coexist.
+    // Every binding carries isolated pins: a second transport or provider must use its own adapter,
+    // schema, mapping and origin, never reuse another binding's reviewed artifacts.
+    const transports = byProvider.get(d.provider) ?? new Map();
+    requireThat(!transports.has(d.transport.kind), 'DUPLICATE_PROVIDER');
     requireThat(!seenAdapter.has(d.adapter_digest) && !seenSchema.has(d.schema_digest) &&
       !seenMapping.has(d.mapping_digest) && !seenOrigin.has(d.transport.origin), 'PROVIDER_ISOLATION');
-    byProvider.set(d.provider, entry);
+    transports.set(d.transport.kind, entry);
+    byProvider.set(d.provider, transports);
     seenAdapter.add(d.adapter_digest); seenSchema.add(d.schema_digest);
     seenMapping.add(d.mapping_digest); seenOrigin.add(d.transport.origin);
   }
   const bind = capability => {
-    const entry = byProvider.get(capability?.provider);
-    requireThat(entry, 'PROVIDER_UNKNOWN');
+    const transports = byProvider.get(capability?.provider);
+    requireThat(transports, 'PROVIDER_UNKNOWN');
+    const entry = transports.get(capability.transport);
+    requireThat(entry, 'PROTOCOL_DRIFT');
     return bindDefinition(entry, capability);
   };
   // Discovery exposes reviewed metadata only; it grants no admission, dispatch or credential access.
