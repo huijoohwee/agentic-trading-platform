@@ -11,6 +11,7 @@ import { createGatewayMcp } from '../runtime/gateway-mcp.mjs';
 import { createReadImporter, recoverReadImport } from '../runtime/ingestion.mjs';
 import { createMcpReadAdapter } from '../runtime/mcp-read.mjs';
 import { createMcpMarketReadAdapter, MARKET_READ_OPERATIONS } from '../runtime/mcp-market-read.mjs';
+import { createRestMarketReadAdapter } from '../runtime/rest-market-read.mjs';
 import { createMarketReadBoundary } from '../runtime/market-ingestion.mjs';
 import { createProviderRegistry } from '../runtime/provider-mapping.mjs';
 import { createPaperGuard } from '../runtime/paper-guard.mjs';
@@ -76,8 +77,9 @@ export async function runtimeCommand(args) {
         const credential = credentials[definition.provider];
         if (!credential) continue;
         if (definition.mapping?.operations) {
-          const adapter = createMcpMarketReadAdapter({ provider: definition, token: credential.token, mapping: definition.mapping,
-            attestation: credential.attestation, scope: config.scope, candidate: config.candidate });
+          const shared = { provider: definition, token: credential.token, mapping: definition.mapping,
+            attestation: credential.attestation, scope: config.scope, candidate: config.candidate };
+          const adapter = definition.transport?.kind === 'REST' ? createRestMarketReadAdapter(shared) : createMcpMarketReadAdapter(shared);
           marketBoundaries.set(definition.provider, createMarketReadBoundary({ ...common, adapter }));
         }
         if (definition.mapping?.sheets) {

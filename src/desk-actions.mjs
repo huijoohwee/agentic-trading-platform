@@ -67,6 +67,13 @@ export const deskActions = [
   action('desk.chart', 'Inspect chart bars, source and matching markers', { ...bindings, before, count }),
   action('read.depth', 'Inspect book, spread and imbalance', { ...bindings, ...page }, ['symbol']),
   action('read.tape', 'Inspect aggressor trades and volumes', { ...bindings, ...page }, ['symbol']),
+  action('read.calendar', 'Inspect earnings calendar entries by market and date window', {
+    market: choice('HK', 'US', 'SH', 'SZ', 'CN', 'SG', 'JP', 'AU', 'CA', 'MY'),
+    begin_date: string(10),
+    end_date: string(10),
+    sort_type: choice('HOT', 'MARKET_CAP', 'OPTION_VOLUME', 'IV', 'IV_RANK', 'IV_PERCENTILE', 'RT_MARKET_CAP'),
+    count: integer(1, 1000)
+  }, ['market']),
   action('practice.portfolio', 'Inspect spot and contract account, fees, margin and funding'),
   action('desk.history', 'Page closed paper fills newest first', page),
   action(

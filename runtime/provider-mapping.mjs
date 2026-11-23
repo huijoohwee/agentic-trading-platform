@@ -7,6 +7,11 @@ import { boundedJson, hash, id, requireThat, sha, utcMillis } from './core.mjs';
 // any dispatch. No provider endpoint, tool name or credential lives in this reusable contract; those are
 // supplied by the reviewed definition and private credential slots, never by a caller-selected request.
 export const MCP_PROTOCOLS = ['2025-03-26', '2025-06-18', '2025-11-25'];
+// REST-only provider features (for example the earnings calendar) are admitted as reviewed
+// transport-specific mappings under the same schema, isolation and $0 pins as MCP. The protocol
+// token is the reviewed REST API version, never a caller-selected value.
+export const REST_PROTOCOLS = ['1.0'];
+const TRANSPORT_PROTOCOLS = { MCP: MCP_PROTOCOLS, REST: REST_PROTOCOLS };
 const DEFINITION_KEYS = 'schema,provider,adapter_version,transport,adapter_digest,schema_digest,mapping_digest,mapping,operations,allowlist,mode,source,cost,qualification';
 const TRANSPORT_KEYS = 'kind,origin,protocol';
 const only = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
@@ -28,8 +33,8 @@ export function validateProviderDefinition(candidate) {
   const c = boundedJson(candidate);
   requireThat(only(c, DEFINITION_KEYS) && c.schema === 'trading-provider-definition/v1' &&
     id(c.provider) && id(c.adapter_version), 'INVALID_PROVIDER_DEFINITION');
-  requireThat(only(c.transport, TRANSPORT_KEYS) && c.transport.kind === 'MCP' &&
-    validOrigin(c.transport.origin) && MCP_PROTOCOLS.includes(c.transport.protocol), 'INVALID_TRANSPORT_PIN');
+  requireThat(only(c.transport, TRANSPORT_KEYS) && Object.hasOwn(TRANSPORT_PROTOCOLS, c.transport.kind) &&
+    validOrigin(c.transport.origin) && TRANSPORT_PROTOCOLS[c.transport.kind].includes(c.transport.protocol), 'INVALID_TRANSPORT_PIN');
   requireThat(hash(c.adapter_digest) && hash(c.schema_digest) && hash(c.mapping_digest), 'INVALID_PIN');
   requireThat(c.mapping && typeof c.mapping === 'object' && !Array.isArray(c.mapping) &&
     sha(c.mapping) === c.mapping_digest, 'MAPPING_DRIFT');

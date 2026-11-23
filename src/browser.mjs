@@ -19,6 +19,13 @@ byId('runtime-readback').addEventListener('toggle', async event => {
   try { const { mountRuntimeView } = await import('./runtime-view.mjs'); await mountRuntimeView(byId('runtime-body')); }
   catch { byId('runtime-body').textContent = 'Runtime projection unavailable. The offline rehearsal is unchanged.'; }
 });
+let coverageOpened = false;
+byId('provider-coverage').addEventListener('toggle', async event => {
+  if (!event.target.open || coverageOpened) return;
+  coverageOpened = true;
+  try { const { mountCoverageView } = await import('./coverage-view.mjs'); await mountCoverageView(byId('coverage-body')); }
+  catch { byId('coverage-body').textContent = 'Coverage inventory unavailable. The offline rehearsal is unchanged.'; }
+});
 const form = byId('ticket');
 const fields = byId('fields');
 const feedback = byId('feedback');

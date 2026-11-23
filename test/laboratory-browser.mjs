@@ -120,7 +120,7 @@ export async function verifyLaboratory(browser) {
     await page.waitForFunction(() => window.testTools.size === 2);
     await ok('desk_discover');
     await Promise.all([page.waitForURL('**/desk.html'), tool('desk_enter').catch(() => {})]);
-    await page.waitForFunction(() => window.testTools.size === 22);
+    await page.waitForFunction(() => window.testTools.size === 23);
     const desc = await ok('desk_describe');
     assert.equal(desc.data.frames.length, 12);
     assert.equal((await tool('desk_describe', { unknown: true })).error.code, 'INVALID_INPUT');
@@ -141,6 +141,20 @@ export async function verifyLaboratory(browser) {
     assert.ok(chart.data.forming.time > chart.data.bars.at(-1).time);
     assert.equal((await ok('read_depth', { symbol: 'ALD.USD', count: 20 })).data.rows.bids.length, 20);
     assert.ok((await ok('read_tape', { symbol: 'ALD.USD', count: 10 })).data.volumes.buyer >= 0);
+    const calendar = await ok('read_calendar', {
+      market: 'US',
+      begin_date: '2026-11-19',
+      end_date: '2026-11-21',
+      sort_type: 'HOT',
+      count: 10
+    });
+    assert.equal(calendar.data.rows.length, 3);
+    assert.equal(calendar.data.rows[0].published, true);
+    assert.equal(calendar.data.rows[1].eps_actual, null);
+    assert.equal(
+      (await tool('read_calendar', { market: 'US', begin_date: '2026-11-19', end_date: '2026-11-27' })).error.code,
+      'INVALID_PARAMETER'
+    );
     const placed = {
       symbol: 'ALD.USD',
       marketType: 'perpetual',
@@ -268,10 +282,10 @@ export async function verifyLaboratory(browser) {
     if (cancelled.status === 'OK') assert.equal(cancelled.data.status, 'cancelled');
     else assert.equal(cancelled.error.code, 'RUN_FINISHED');
     assert.equal((await ok('practice_portfolio')).ledger_revision, 9);
-    assert.equal(seen.size, 24);
-    assert.equal(compared.size, 22);
+    assert.equal(seen.size, 25);
+    assert.equal(compared.size, 23);
     await page.reload();
-    await page.waitForFunction(() => window.testTools.size === 22);
+    await page.waitForFunction(() => window.testTools.size === 23);
     const records = [];
     const route = '**/api/practice/session';
     async function intercept(req) {
@@ -296,7 +310,7 @@ export async function verifyLaboratory(browser) {
     await addFunds();
     await page.locator('#notice').filter({ hasText: 'SAVE_UNKNOWN' }).waitFor();
     await page.reload();
-    await page.waitForFunction(() => window.testTools.size === 22);
+    await page.waitForFunction(() => window.testTools.size === 23);
     await addFunds();
     await page.waitForFunction(() => sessionStorage.getItem('trading-practice-pending/v1') === null);
     assert.equal(records.length, 2);
