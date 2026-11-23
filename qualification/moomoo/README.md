@@ -12,6 +12,6 @@ The command prints one private display quote to stdout. It uses the host’s exi
 
 ## Observed live handoffs
 
-On November 23, 2026 the CLI received one HK.00700 snapshot with Hong Kong LV1 access and one US.AAPL snapshot with US LV3 access from Visual OpenD 10.12.7208. Each returned the requested symbol, a positive price, a UTC epoch and a suspension flag. Only these field checks are recorded. The US result had no per-observation Nasdaq Basic attribution or feed-delay guarantee. The two supplied Nasdaq Basic URLs resolved to the same address. The card returned HTTP 439 from the verifier. The US snapshot test used the signed-in local session.
+On November 23, 2026 the CLI received one HK.00700 snapshot with Hong Kong LV1 access and one US.AAPL snapshot with US LV3 access from Visual OpenD 10.12.7208. Each returned the requested symbol, a positive price, a UTC epoch and a suspension flag. Only these field checks are recorded. The US result had no per-observation Nasdaq Basic attribution or feed-delay guarantee. The two supplied Nasdaq Basic URLs resolved to the same address. Chromium opened the card with HTTP 200 and displayed “Nasdaq Basic+TotalView”. A plain HTTP client received 439. The US snapshot test used the signed-in local session.
 
 [moomoo API quote rights](https://openapi.moomoo.com/moomoo-api-doc/en/intro/authority.html) · [moomoo Nasdaq Basic card](https://qtcard.moomoo.com/intro/nasdaq-basic?type=16&is_support_buy=1&is_professional=0&navStyle=transparent)
