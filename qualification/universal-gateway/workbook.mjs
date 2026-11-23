@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import manifest from './workbook.json' with { type: 'json' };
+import { pinnedOwner } from './pinned-owner.mjs';
+import { createResolver } from './resolver.mjs';
+
+const root = process.argv[2], pin = pinnedOwner(root, manifest);
+const { decodeSnapshot, encodeSnapshot } = await import(pathToFileURL(resolve(root, 'sheets/core.mjs')));
+const resolver = createResolver([{ manifest, bindings: { direct: { ...pin, invoke: decodeSnapshot } } }]);
+const request = { ...manifest, route: 'direct', required: ['canonical-round-trip'], acceptedLosses: [] };
+const bytes = readFileSync(new URL('./workbook.fixture.json', import.meta.url), 'utf8');
+const sha256 = createHash('sha256').update(bytes).digest('hex');
+assert.equal(sha256,'26693bc68511ef1e43f00f9540eca74b56a71f433d3270f35857f7d1b9c981a6');
+const { native } = await resolver.invoke(request, bytes);
+assert.deepEqual(['A2','B2','A3','B3'].map(key => native.cells[key].value), ['A',2,'B',0]);
+assert.ok(!('C2' in native.cells) && !('C3' in native.cells));
+assert.equal(encodeSnapshot(native),bytes);
+await assert.rejects(resolver.invoke(request,JSON.stringify({...native,schemaVersion:2})),{code:'VERSION'});
+console.log(JSON.stringify({bytes:Buffer.byteLength(bytes),sha256,unsupportedVersion:'VERSION'}));

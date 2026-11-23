@@ -280,3 +280,44 @@ test('a gateway without trusted keys cannot admit connected reads or writes', as
   assert.equal(read.error.code, 'UNQUALIFIED');
   assert.equal(f.calls.snapshot, 0);
 });
+test('portable resolver preserves the native fixture quote and refusals across direct, HTTP and MCP', async t => {
+  const { createResolver } = await import('../qualification/universal-gateway/resolver.mjs');
+  const { default: manifest } = await import('../qualification/universal-gateway/quote.json', { with: { type: 'json' } });
+  const { createHash } = await import('node:crypto');
+  const { readFileSync } = await import('node:fs');
+  const schemaDigest = createHash('sha256').update(readFileSync(new URL('../runtime/gateway.mjs', import.meta.url))).digest('hex');
+  const f = fixture(t), gateway = f.gateway(), mcp = createGatewayMcp({ gateway }), api = createGatewayApi({ gateway, mcp });
+  const direct = (request, auth) => gateway.admit(request, auth);
+  const routes = {
+    direct,
+    async http(body, authorization) {
+      const { req, res, done } = httpRequest({ body, authorization });
+      assert.equal(api(req, res), true); await done;
+      return JSON.parse(res.body);
+    },
+    async mcp(request, auth) {
+      const reply = await mcpCall(mcp, request, auth);
+      return reply.result.structuredContent;
+    },
+  };
+  const bindings = Object.fromEntries(Object.entries(routes).map(([route, invoke]) => [route, {
+    revision: manifest.revision, schemaDigest, costUsd: 0, offline: true, invoke,
+  }]));
+  const resolver = createResolver([{ manifest, bindings }]);
+  assert.deepEqual(resolver.discover()[0].configuredRoutes, manifest.routes);
+  const request = f.request('read.fixture', { request_id: 'portable-quote' });
+  const plan = { ...manifest, route: 'direct', required: ['decimal-text'], acceptedLosses: [] };
+  const first = await resolver.invoke(plan, request, AUTH);
+  assert.equal(first.native.data.rows[0].last, '100.25');
+  assert.equal(f.calls.read, 1);
+  const equivalent = await direct(request, AUTH);
+  const expired = f.request('read.fixture', { request_id: 'portable-expired', deadline_utc: iso(f.time - 1) });
+  const refusal = await direct(expired, AUTH);
+  assert.equal(refusal.error.code, 'STALE');
+  for (const route of manifest.routes) {
+    const plan = { ...manifest, route, required: ['decimal-text'], acceptedLosses: [] };
+    assert.deepEqual((await resolver.invoke(plan, request, AUTH)).native, equivalent);
+    assert.deepEqual((await resolver.invoke(plan, expired, AUTH)).native, refusal);
+  }
+  assert.equal(f.calls.read, 1);
+});

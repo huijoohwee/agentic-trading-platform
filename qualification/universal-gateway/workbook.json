@@ -1,0 +1,21 @@
+{
+  "id": "workbook/snapshot-read",
+  "owner": "agentic-sheets",
+  "operation": "decode",
+  "input": "sheets/workbook/v1",
+  "output": "native-workbook",
+  "fidelity": "lossless-for-declared-subset",
+  "mode": "read",
+  "routes": [
+    "direct"
+  ],
+  "features": [
+    "canonical-round-trip"
+  ],
+  "losses": [],
+  "major": 1,
+  "locality": "device",
+  "revision": "a063b9326149c40fcfd7934a520d439372e6c67f",
+  "schemaSource": "sheets/schema.mjs",
+  "schemaDigest": "8e2605a7e175480f60533ee1d6d00f5d2d287d91e67913b67e5305a16cd6c3f7"
+}
