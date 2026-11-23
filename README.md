@@ -210,6 +210,19 @@ Run `node scripts/export-ticker-fixture.mjs ./ticker-receipt.json` with a new ou
 
 Transfer the JSON file to the device running Graph. Under **MainPanel → Integrations → Trading ticker fixture**, choose **Open synthetic receipt**. While online, choose **Install offline workspace**, then **Open verified offline workspace**. Save that revision-specific URL. To replay after closing the tab, reopen the saved URL on the same device and origin and select **MainPanel → Integrations**. The SHA-256 covers the display fields and ledger reference. It checks file integrity. The receipt contains synthetic data and carries no broker identity or execution rights.
 
+### Signed provider ticker for Graph MainPanel
+
+Run one qualified `read.ticker` through the Trading gateway. A UUID v4 request ID travels unchanged. Trading exports a SHA-256 reference for other gateway IDs to keep private labels on the host. Save the exact submitted request in a private file beside the runtime configuration (directory mode 0700, files 0600). The reviewed adapter mapping must project one row with the returned `symbol`, ISO currency and numeric `price` mapped from the provider's decimal string. Optional `market_time_utc` uses UTC ISO seconds or milliseconds. Optional `delay_class` accepts `realtime`, `delayed` or `unknown`. Missing market time and delay remain unknown.
+
+The operator-signed read grant needs current account, rights and zero-dollar cost proofs. Its single rights proof must include a `ticker_receipt` object with `audience` set to `graph-mainpanel`, the exact `provider` and `symbol`, `display: true`, `offline_replay: true` and a UTC-seconds `retain_until_utc`. Issue these permissions only under the selected feed's actual display and retention terms.
+
+Run `node scripts/export-provider-ticker.mjs /private/runtime.json /private/request.json ./provider-ticker.json`. Trading verifies the original signed request against the finalized SQLite checkpoint and current configuration, then signs the quote with the configured integration Ed25519 key. Export and cross-frontend retry consume zero additional provider calls. The output retains the provider, candidate, definition, rights and result digests, quote, capture time, delay, request ID, ledger revision and earliest applicable expiry. An existing destination is preserved.
+
+Build Graph with `VITE_TRADING_TICKER_TRUST` set to a JSON object containing the reviewed `provider`, Trading `candidate`, `definition_digest` and `public_key` (the trusted integration public key's Ed25519 JWK `x` value). Provision all four from the operator's configuration independently of the file. Ship only this public binding to Graph. Rotate or withdraw it with a new Graph build and refresh the offline workspace on each device.
+
+In **MainPanel → Integrations → Trading provider ticker**, select **Open signed provider receipt**. Install the offline workspace while connected and open its verified URL for replay. Graph rechecks the signature, binding and expiry when opening the panel, importing, or resuming, and clears an expired quote while displayed. A closed browser can purge its saved copy when the panel next runs. Offline verification uses the installed binding and device clock. A current online revocation decision requires a refreshed installation.
+
+
 ### Authenticated market/account reads
 
 Only the following explicitly invoked command contacts a reviewed provider; do not run it before provider rights, account identity, runtime isolation and a zero-cost deny-at-exhaustion allowance have been independently reviewed.
