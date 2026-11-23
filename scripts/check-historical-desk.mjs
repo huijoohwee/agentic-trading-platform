@@ -60,7 +60,7 @@ let page;
 async function enter() {
   page = await ctx.newPage();
   await page.goto(origin + '/desk.html');
-  await page.waitForFunction(() => window.qualificationActions.size === 22);
+  await page.waitForFunction(() => window.qualificationActions.size === 23);
 }
 const call = async (name, input = {}) => {
   const out = await page.evaluate(

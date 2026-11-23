@@ -6,7 +6,7 @@ import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
 // transport owner (endpoint/protocols/ownPath/rpcResponse) and never exposes raw provider tools:
 // the reviewed private mapping binds each native operation to one read-only tool and projection.
-export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape'];
+export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar'];
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 

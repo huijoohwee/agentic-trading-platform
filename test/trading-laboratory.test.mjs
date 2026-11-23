@@ -143,7 +143,7 @@ test('offline scientific imports, named Python functions and worker error bounds
 test('WebMCP route lifecycle, strict schemas, annotations and ordinary browser fallback', async () => {
   for (const [actions, count] of [
     [landingActions, 2],
-    [deskActions, 22]
+    [deskActions, 23]
   ]) {
     const events = new EventTarget(),
       live = new Map(),
