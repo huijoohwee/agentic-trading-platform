@@ -7,7 +7,7 @@ const instant = n => new Date(Math.floor(n / 1000) * 1000).toISOString().replace
 const REQUEST_KEYS = 'contract_version,request_id,capability_digest,operation,scope,inputs,deadline_utc';
 const WRITE_OPERATIONS = new Set(['release', 'reconcile', 'halt']);
 const REFUSALS = new Set(['UNSUPPORTED', 'UNQUALIFIED', 'UNAUTHORIZED', 'SCHEMA_DRIFT', 'PRECISION_UNKNOWN', 'STALE',
-  'BUDGET_HALT', 'RELEASE_UNKNOWN', 'HALTED', 'CONFLICT', 'CONFLICTING_EVENT']);
+  'BUDGET_HALT', 'RELEASE_UNKNOWN', 'HALTED', 'CONFLICT', 'CONFLICTING_EVENT', 'BASELINE_REQUIRED']);
 const REFUSAL_MAP = {
   ACCOUNT_BINDING: 'UNAUTHORIZED', SCOPE_DENIED: 'UNAUTHORIZED', UNTRUSTED_PRINCIPAL: 'UNAUTHORIZED',
   PRINCIPAL_BINDING: 'UNAUTHORIZED', CANDIDATE_BINDING: 'UNAUTHORIZED', INVALID_SIGNATURE: 'UNAUTHORIZED',
@@ -79,7 +79,7 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
       return await boundedCall(() => guard[method](boundedJson(body.inputs)), timeoutMs);
     }
     return await boundedCall(signal => readers[body.operation]({ capability: record, inputs: boundedJson(body.inputs),
-      deadlineUtc: body.deadline_utc, signal }), timeoutMs);
+      requestId: body.request_id, deadlineUtc: body.deadline_utc, signal }), timeoutMs);
   }
 
   const refused = (request_id, code) => ({ request_id, status: 'REFUSED', error: { code }, provenance: null, ledger_revision: null });

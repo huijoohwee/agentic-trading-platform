@@ -121,6 +121,13 @@ export function mountQuoteStreamReceipt(host, panel, ui) {
         !capture.frames.every(frame => frame?.symbol === symbol)) throw Error('Receipt identity mismatch.');
       output.append(node('h4', symbol + ' · ' + type.toUpperCase()),
         node('p', 'Captured ' + capture.issued_utc + ' · Ledger revision ' + receipt.ledger_revision));
+      if (capture.recovery) {
+        const link = capture.recovery;
+        const note = node('p');
+        note.append('Resumed after ', node('code', link.previous_request_id), ' using the ',
+          node('code', link.operation), ' snapshot ', node('code', link.request_id), ' received ' + link.observed_utc + '.');
+        output.append(note);
+      }
       if (!capture.frames.length) { output.append(node('p', 'No quote frames arrived during this capture.')); return; }
       const frameView = node('div');
       function show(index) {

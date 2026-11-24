@@ -25,6 +25,12 @@ export async function verifyStreamBrowser({ base, audience, request, frameCount 
       assert.deepEqual(posts, []);
       await panel.getByRole('button', { name: 'Look up completed read' }).click();
       await panel.getByRole('heading', { name: symbol + ' · ' + type.toUpperCase() }).waitFor();
+      const recovery = request.inputs.grant.payload.proofs.find(proof => proof.kind === 'stream-recovery');
+      if (recovery) {
+        const note = panel.locator('p').filter({ hasText: 'Resumed after' });
+        assert.deepEqual(await note.locator('code').allTextContents(),
+          [recovery.previous_request_id, recovery.request.operation, recovery.request.request_id]);
+      }
       if (frameCount === 0) await panel.getByText('No quote frames arrived during this capture.').waitFor();
       else if (type === 'quote') {
         await panel.getByText('302.5', { exact: true }).waitFor();

@@ -150,8 +150,11 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (search) target.search = search;
       const url = target.href;
       if (screen) requireThat(url === 'https://webapi.moomoo.com' + STOCK_SCREEN_PATH && allowed.name === STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
+      const started = now();
       const wire = await send(url, native?.method ?? (screen ? 'POST' : 'GET'), requestBody, signal);
-      if (market) return issuePage(operation, marketPage(spec, parameters, wire), wire, allowed.schema_digest);
+      if (market) return issuePage(operation, { ...marketPage(spec, parameters, wire),
+        market_request: { started_ms: started, definition_digest: sha(definition), grant_digest: sha(grant), inputs_digest: sha(parameters) },
+      }, wire, allowed.schema_digest);
       const body = json(wire);
       requireThat(body && typeof body === 'object' && !Array.isArray(body), 'INVALID_RESPONSE');
       if (screen) {

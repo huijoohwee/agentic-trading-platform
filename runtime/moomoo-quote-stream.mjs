@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { bindMoomooQuoteCapture, MOOMOO_QUOTE_SOCKET } from 'agentic-gateway/connectors/moomoo-quote-socket';
 import { boundedJson, canonical, fail, freeze, hash, id, requireProofs, requireThat, sha, utcMillis, verifyEnvelope } from './core.mjs';
 import { completedRead } from './completed-read.mjs';
+import { snapshotOperation, verifyQuoteBaseline } from './quote-stream-baseline.mjs';
 import { readBudgetScope, reserveReadCalls } from './read-budget.mjs';
 
 export const quoteStreamOperation = 'read.quote-stream';
@@ -17,7 +18,7 @@ const publicDer = key => createPublicKey(key).export({ type: 'spki', format: 'de
 const positive = n => Number.isSafeInteger(n) && n > 0;
 const only = (value, keys) => Object.keys(value).every(key => keys.includes(key));
 
-export function createQuoteStreamReader({ store, scope, candidate, keys, definition, credential }) {
+export function createQuoteStreamReader({ store, scope, candidate, keys, definition, credential, resolveBaseline }) {
   requireThat(definition.transport?.origin === MOOMOO_QUOTE_SOCKET && definition.transport.kind === 'WEBSOCKET' &&
     definition.transport.protocol === '13' && definition.adapter_digest === quoteStreamAdapterDigest &&
     definition.mapping_digest === sha(quoteStreamMapping) && definition.schema_digest === quoteStreamMapping.schema_digest &&
@@ -31,6 +32,7 @@ export function createQuoteStreamReader({ store, scope, candidate, keys, definit
   const pool = { environment: 'SIMULATE', profile: 'practice', account_alias: 'runtime-budget/ws/' + credential.quota_pool };
   const budget = readBudgetScope(scope);
   const definitionDigest = sha(definition);
+  const baselineContext = { store, scope, candidate, keys, resolveBaseline };
 
   function validate({ capability, inputs }) {
     requireThat(capability.source === 'PROVIDER' && capability.transport === 'WEBSOCKET' &&
@@ -65,19 +67,32 @@ export function createQuoteStreamReader({ store, scope, candidate, keys, definit
 
   async function read(request) {
     const { grant, parameters: p, quota, checked, expires } = validate(request);
-    const until = Math.min(expires, utcMillis(request.deadlineUtc), Date.now() + grant.limits.timeout_ms);
-    const capture = bindMoomooQuoteCapture({ accessToken: () => credential.token, grant: {
-      right: 'quote:read', entitled: true, providerHardCapUsd: 0, reservedSessions: 1, reservedKeys: 1, reservedControlCalls: 3,
-      symbol: p.symbol, type: p.type, period: p.period, adjust: p.adjust, frameLimit: p.frame_limit,
-      captureMs: p.capture_ms, controlTimeoutMs: p.control_timeout_ms, expiresAt: until,
-    } });
+    const recoveryProof = grant.proofs.find(item => item.kind === 'stream-recovery');
+    const topicKey = 'quote-session:' + sha({ provider: definition.provider, scope, symbol: p.symbol, type: p.type });
     const reservation = sha({ scope, candidate, nonce: grant.nonce });
-    // The upstream subscription pool is per user across aliases. Reserve it and the
-    // existing call budget atomically, before opening a socket or reading the token.
+    let capture, recovery, until;
+    // Fence the failed session, validate its replacement snapshot and reserve both
+    // budgets in one transaction. Binding the reader performs no provider I/O.
     store.transactionScopes([budget, pool], ([costState, poolState]) => {
-      requireThat(!request.signal?.aborted && Date.now() < until, 'WINDOW_CLOSED');
       requireThat(!poolState.usedApprovals['stream:' + reservation] && !poolState.usedApprovals['quota:' + quota.digest] &&
         checked >= (poolState.telemetry.next_quota_observation_ms ?? 0), 'BUDGET_HALT');
+      const now = Date.now();
+      const previous = costState.telemetry[topicKey];
+      const prior = previous && store.read(scope).checkpoints['gateway:' + previous.request_id];
+      const needsBaseline = previous && !(prior?.status === 'FINAL' && prior.result?.status === 'OK');
+      requireThat(!recoveryProof || needsBaseline, 'SCOPE_DENIED');
+      recovery = needsBaseline ? verifyQuoteBaseline(baselineContext, p, recoveryProof, previous, now) : null;
+      until = Math.min(expires, recovery?.expires ?? expires, utcMillis(request.deadlineUtc), now + grant.limits.timeout_ms);
+      requireThat(!request.signal?.aborted && now < until, 'WINDOW_CLOSED');
+      capture = bindMoomooQuoteCapture({ accessToken: () => credential.token, grant: {
+        right: 'quote:read', entitled: true, providerHardCapUsd: 0, reservedSessions: 1, reservedKeys: 1, reservedControlCalls: 3,
+        symbol: p.symbol, type: p.type, period: p.period, adjust: p.adjust, frameLimit: p.frame_limit,
+        captureMs: p.capture_ms, controlTimeoutMs: p.control_timeout_ms, expiresAt: until,
+      } });
+      if (snapshotOperation(p.type)) {
+        requireThat(id(request.requestId), 'SCOPE_DENIED');
+        costState.telemetry[topicKey] = { request_id: request.requestId, after_ms: until };
+      }
       reserveReadCalls(costState, grant);
       poolState.usedApprovals['stream:' + reservation] = true;
       poolState.usedApprovals['quota:' + quota.digest] = true;
@@ -97,8 +112,9 @@ export function createQuoteStreamReader({ store, scope, candidate, keys, definit
     const finished = Date.now();
     requireThat(!request.signal?.aborted && finished < until, 'WINDOW_CLOSED');
     const payload = boundedJson({ schema: 'trading-runtime-envelope/v1', kind: 'quote-stream-capture', scope, candidate,
-      principal: signer.principal, runtime: signer.runtime, issued_utc: utc(finished), expires_utc: utc(expires),
-      definition_digest: definitionDigest, grant_digest: sha(request.inputs.grant), ...result }, 460000);
+      principal: signer.principal, runtime: signer.runtime, issued_utc: utc(finished), expires_utc: utc(Math.min(expires, recovery?.expires ?? expires)),
+      definition_digest: definitionDigest, grant_digest: sha(request.inputs.grant),
+      ...(recovery && { recovery: recovery.link }), ...result }, 460000);
     const receipt = { key_id: signer.key_id, payload, signature: sign(null, Buffer.from(canonical(payload)), privateKey).toString('base64url') };
     verifyEnvelope(receipt, { keys, role: 'integration', kind: 'quote-stream-capture', scope, candidate, now: Date.now() });
     return { source: 'AUTHENTICATED_ADAPTER', digest: sha(receipt), receipt,
@@ -110,6 +126,14 @@ export function createQuoteStreamReader({ store, scope, candidate, keys, definit
       scope, candidate, now: Date.now() });
     requireThat(receipt.key_id === signer.key_id && request.data.digest === sha(receipt) &&
       payload.grant_digest === sha(request.inputs.grant) && payload.definition_digest === definitionDigest, 'SCOPE_DENIED');
+    if (payload.recovery) {
+      const link = payload.recovery;
+      const proof = request.inputs.grant.payload.proofs.find(item => item.kind === 'stream-recovery');
+      const verified = verifyQuoteBaseline(baselineContext, request.inputs, proof,
+        { request_id: link.previous_request_id, after_ms: link.after_ms }, Date.now());
+      requireThat(canonical(verified.link) === canonical(link), 'SCOPE_DENIED');
+      return Math.min(verified.expires, utcMillis(payload.expires_utc));
+    }
     return utcMillis(payload.expires_utc);
   }
   return Object.assign(read, {
