@@ -14,11 +14,13 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = '34c1269cfdcc2b8ddc96d30f5eb6626cb0855081';
+const REVISION = '577fe880bba78185539c157dbf734b9e31ae019b';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-jAxgwbuI3zhn2VcweFWFnIDwrgZ72DOlEbIKAxA/A8WBSq4e7nWJ1+UApnUonLOMBy5M88Cs031SWPKPhsYW9A==';
+const LOCK_INTEGRITY = 'sha512-HGlqLZSaMiYCxsOk1tyGtj8/Ttf+EVcPdoYMkWw1tzRGamPFT7vWDyjtOw1blPeGXnQPaY4/PG5r4SXutqQ1mA==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
+  'connectors/moomoo-trade-event.mjs': 'b8cf85cd4c4f84c44bc9cedd2a90cc2ef5e271b321349fb9e1829e9b59a990f5',
+  'connectors/moomoo-crypto-report.mjs': 'c2b3243017953859f0a3bd62488039fd9c9c52d2ce74e0459f7e033929d7cbb1',
   'connectors/moomoo-market-rest.mjs': '44eacd4e7f6290794bf4210b415dca0c7311ed435fdb69e806da1888101d7a26',
   'connectors/moomoo-stock-screen.mjs': '637730130ac76d63f7f39c54527716e663694c458cc21612a6590d6db4b3d1a1',
   'connectors/moomoo-fields.json': '5a3adf13c7925ef33884fcbe87b882992a93733933fbd631f572218b6d7c1d13',
@@ -52,7 +54,7 @@ test('Trading pins the exact reviewed Gateway manifest, lock and installed impor
   const installed = JSON.parse(read('node_modules/agentic-gateway/package.json'));
   assert.equal(installed.name, 'agentic-gateway');
   assert.equal(installed.version, INSTALLED_VERSION);
-  for (const key of ['.', './connectors/moomoo', './connectors/moomoo-stock-screen', './connectors/moomoo-market-rest', './provider-profiles', './connectors/moomoo-catalog.json', './connectors/moomoo-fields.json']) {
+  for (const key of ['.', './connectors/moomoo', './connectors/moomoo-stock-screen', './connectors/moomoo-market-rest', './connectors/moomoo-trade-event', './provider-profiles', './connectors/moomoo-catalog.json', './connectors/moomoo-fields.json']) {
     assert.equal(typeof installed.exports[key], 'string');
   }
   for (const rel of Object.keys(INSTALLED_DIGESTS)) guardInstalled(rel);
