@@ -6,7 +6,7 @@ const cssUrl = new URL('../owners/base/packages/views-react/dist/browser-data-vi
 export function mountCoverageRecords(host, inventory, node, config, inspect) {
   const { columns: fields, rowDimension, groupDimension, plural, singular, title } = config;
   const labelFor = id => fields.find(field => field.id === id).name;
-  const rows = inventory.map((row, index) => ({ ...row, id: config.id + '-' + index }));
+  const rows = inventory.map((row, index) => ({ ...row, recordId: config.id + '-' + index }));
   const distinct = key => [...new Set(rows.map(row => row[key]))].sort();
   const groups = distinct(groupDimension), dimensions = distinct(rowDimension);
   const root = node('div'), evidence = node('section');
@@ -38,12 +38,19 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   searchPanel.className = filterPanel.className = 'route-query-controls';
   searchPanel.hidden = filterPanel.hidden = true;
   searchPanel.append(control(fields[0].name, search)); filterPanel.append(control(labelFor(rowDimension), dimensionFilter), control(labelFor(groupDimension), groupFilter));
-  shadow.append(css, localStyle, toolbarHost, searchPanel, filterPanel, content);
+  const measure = node('select'), measurePanel = node('div');
+  measurePanel.className = 'route-query-controls'; measurePanel.hidden = true;
+  if (config.measure) {
+    measure.append(node('option', title), node('option', config.measure.label));
+    measurePanel.append(control('Count', measure));
+    measure.addEventListener('change', render);
+  }
+  shadow.append(css, localStyle, toolbarHost, searchPanel, filterPanel, measurePanel, content);
   host.append(root, evidence);
   let layout = 'table', orientation = 'rows', offset = 0, sorted = false, selected, table, toolbar, matches = rows;
 
   function selectRecord(id) {
-    selected = matches.find(row => row.id === id);
+    selected = matches.find(row => row.recordId === id);
     evidence.replaceChildren();
     if (selected) inspect(selected, evidence);
     if (layout === 'table') table.update(viewState());
@@ -51,20 +58,21 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   function matrixState() {
     const activeGroups = groups.filter(value => matches.some(row => row[groupDimension] === value));
     const kinds = dimensions.filter(kind => matches.some(row => row[rowDimension] === kind));
+    const count = config.measure && measure.selectedIndex === 1 ? config.measure.count : group => group.length;
     const records = [...kinds, 'Total'].map(kind => {
       const group = kind === 'Total' ? matches : matches.filter(row => row[rowDimension] === kind);
-      return { id: kind, cells: [kind, ...activeGroups.map(value => String(group.filter(row => row[groupDimension] === value).length)), String(group.length)] };
+      return { id: kind, cells: [kind, ...activeGroups.map(value => String(count(group.filter(row => row[groupDimension] === value)))), String(count(group))] };
     });
-    const columns = [labelFor(rowDimension), ...activeGroups, 'Total'].map(name => ({ name, id: name }));
+    const columns = [labelFor(rowDimension), ...activeGroups, 'Total'].map((name, index) => ({ name, id: name, kind: index ? 'number' : 'text' }));
     return { layout, columns, rows: records, orientation, ariaLabel: title + ' counts',
       onOrientationChange(value) { orientation = value; render(); } };
   }
   function viewState() {
     if (layout === 'multiDimensional') return matrixState();
     const tableView = layout === 'table', page = tableView ? matches.slice(offset, offset + pageSize) : matches;
-    return { layout, columns: fields, rows: page.map(row => ({ id: row.id, cells: fields.map(field => row[field.id]) })),
+    return { layout, wrapText: tableView, columns: fields, rows: page.map(row => ({ id: row.recordId, cells: fields.map(field => String(row[field.id] ?? '')) })),
       ariaLabel: tableView ? title + ' table' : title + ' by ' + labelFor(groupDimension).toLowerCase(), onActivateRow: selectRecord,
-      ...(tableView ? { selectedRowId: page.some(row => row === selected) ? selected.id : null } : { groupByColumnId: groupDimension }) };
+      ...(tableView ? { selectedRowId: page.some(row => row === selected) ? selected.recordId : null } : { groupByColumnId: groupDimension }) };
   }
   function toggle(panel, input) {
     panel.hidden = !panel.hidden;
@@ -91,6 +99,7 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   }
   function render() {
     refreshToolbar();
+    measurePanel.hidden = !config.measure || layout !== 'multiDimensional';
     content.dataset.layout = layout;
     if (!matches.length) { table?.destroy(); table = undefined; return; }
     const state = viewState();
@@ -99,7 +108,7 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   function applyFilters() {
     const term = search.value.trim().toLowerCase();
     matches = rows.filter(row => (dimensionFilter.value === 'All' || row[rowDimension] === dimensionFilter.value) &&
-      (groupFilter.value === 'All' || row[groupDimension] === groupFilter.value) && fields.some(field => row[field.id].toLowerCase().includes(term)));
+      (groupFilter.value === 'All' || row[groupDimension] === groupFilter.value) && fields.some(field => String(row[field.id] ?? '').toLowerCase().includes(term)));
     if (sorted) matches.sort((a, b) => a.label.localeCompare(b.label, 'en'));
     offset = 0; selected = null; evidence.replaceChildren(); render();
   }

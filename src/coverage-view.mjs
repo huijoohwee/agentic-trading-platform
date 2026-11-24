@@ -1,5 +1,5 @@
 import { mountCoverageRecords } from './coverage-routes-view.mjs';
-import { providerCoverage, coverageSummary, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
+import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
 
 const limits = {
   default: 'Default', enum: 'Values', min: 'Minimum', max: 'Maximum', maximum: 'Maximum',
@@ -57,9 +57,10 @@ export async function mountCoverageView(host) {
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
   const references = catalog.sources.filter(source => source.reference);
-  const intro = node('p', `${COVERAGE_INDEX.known_sources} known OpenAPI sources · ${COVERAGE_INDEX.imported_sources} from the original mirror · ${references.length} additional public references. Connected qualification applies to the named host and read.`);
+  const intro = node('p', `${COVERAGE_INDEX.known_sources} known OpenAPI sources · ${COVERAGE_INDEX.imported_sources} from the original mirror · ${references.length} additional public references. Select a row or card for full values and source links. Connected qualification applies to the named host and read.`);
   const counts = node('p', Object.entries(summary.by_status).map(([key, value]) => `${key}: ${value}`).join(' · '));
   const text = (id, name) => ({ id, name });
+  const number = (id, name) => ({ id, name, kind: 'number' });
   const category = (id, name) => ({ id, name, kind: 'select' });
   function sourceLine(parent, label, url, hash) {
     const link = node('a', label); link.href = url; link.rel = 'noopener noreferrer'; link.target = '_blank';
@@ -76,6 +77,8 @@ export async function mountCoverageView(host) {
     columns: [text('label', 'Route or tool'), category('transport', 'Transport'), category('status', 'Disposition'), category('scope', 'Access scope')],
     rowDimension: 'transport', groupDimension: 'status' }, (row, detail) => {
     detail.append(node('h5', row.label), node('p', row.scope + ' · ' + row.evidence), node('p', row.units));
+    const bindings = [...new Set(row.sources.map(source => source.http).filter(http => http && http !== row.label))];
+    if (bindings.length) detail.append(node('h6', 'HTTP bindings'), ...bindings.map(http => node('p', http)));
     for (const source of row.sources) {
       sourceLine(detail, source.tool ?? new URL(source.url).pathname, source.url, source.digest);
     }
@@ -105,22 +108,27 @@ export async function mountCoverageView(host) {
     const parts = source.path.split('/').filter(Boolean);
     const locale = /^zh-(cn|hk)$/.test(parts[0]) ? parts.shift() : 'Default';
     const section = parts[0] === 'api' ? parts[1] ?? 'api' : parts[0] ?? 'Home';
-    return { label: source.path, section, locale, hash: source.reference.sha256, reference: source.reference };
+    return { label: source.path, section, locale, hash: source.reference.sha256, routeCount: source.reference.routes.length, reference: source.reference };
   });
   mountCoverageRecords(supplement, sources, node, { id: 'reference', title: 'References', plural: 'references', singular: 'reference',
-    columns: [text('label', 'Reference path'), category('section', 'Section'), category('locale', 'Locale'), text('hash', 'SHA-256')],
+    columns: [text('label', 'Reference path'), category('section', 'Section'), category('locale', 'Locale'), text('hash', 'SHA-256'), number('routeCount', 'Routes listed')],
     rowDimension: 'locale', groupDimension: 'section' }, (row, detail) => {
     sourceLine(detail, row.label, catalog.origin + '/' + row.reference.file, row.hash);
+    detail.append(node('p', 'Markdown file · ' + row.reference.file));
+    if (!row.routeCount) detail.append(node('p', 'This catalog reference lists no routes.'));
     for (const route of row.reference.routes) detail.append(node('p', route));
   });
   families.append(node('h4', 'Feature families'), counts);
-  const entries = providerCoverage.map(entry => ({ ...entry, reads: String(entry.operations.length) }));
+  const entries = providerCoverage.map(entry => ({ ...entry, operationNames: entry.operations.join(', '), readCount: mappedReads([entry]).length }));
   mountCoverageRecords(families, entries, node, { id: 'family', title: 'Feature families', plural: 'families', singular: 'family',
-    columns: [text('label', 'Feature family'), category('transport', 'Transport'), category('status', 'Disposition'), text('reads', 'Semantic reads')],
+    columns: [text('label', 'Feature family'), category('transport', 'Transport'), category('status', 'Disposition'), text('operationNames', 'Operation IDs'), number('readCount', 'Mapped reads')],
+    measure: { label: 'Distinct mapped reads', count: group => mappedReads(group).length },
     rowDimension: 'transport', groupDimension: 'status' }, (entry, detail) => {
     detail.append(node('h5', entry.label), node('p', entry.note));
     const facts = node('dl'); facts.className = 'facts';
-    facts.append(node('dt', 'Semantic reads'), node('dd', entry.operations.join(', ') || 'none (excluded)'),
+    facts.append(node('dt', 'Family ID'), node('dd', entry.id),
+      node('dt', 'Operation IDs'), node('dd', entry.operationNames || 'None'),
+      node('dt', 'Mapped reads'), node('dd', entry.readCount),
       node('dt', 'Listed MCP tools'), node('dd', entry.mcp.join(', ') || 'See individual routes'));
     detail.append(facts);
     for (const item of entry.sources) sourceLine(detail, item.path, item.url, item.sha256);

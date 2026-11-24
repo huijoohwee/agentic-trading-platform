@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 export async function verifyRouteViews(page) {
   const routes = page.locator('#coverage-routes');
   const layout = routes.getByRole('combobox', { name: 'View layout' });
+  const family = page.locator('#coverage-families'), reference = page.locator('#coverage-references');
+  await family.getByRole('cell', { name: 'read.catalog, read.candles, read.ticker, read.depth, read.tape', exact: true }).waitFor();
+  await family.getByRole('columnheader', { name: 'Mapped reads' }).waitFor();
+  await reference.getByRole('cell', { name: '/', exact: true }).click();
+  await reference.getByText('This catalog reference lists no routes.').waitFor();
+  const hashCell = reference.getByRole('cell', { name: /^[A-Fa-f0-9]{64}$/ }).first();
+  assert(await hashCell.locator('span').first().evaluate(el =>
+    el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1));
+
   for (const grid of [
     { id: 'references', count: 109, cell: '/', record: /Card: \/api-reference$/, evidence: 'Selected reference evidence', link: '/api-reference' },
     { id: 'families', count: 26, cell: 'Earnings calendar', record: /Card: Earnings calendar$/, evidence: 'Selected family evidence', link: 'api/quote/calendar/earnings-calendar.md' },
@@ -13,6 +22,10 @@ export async function verifyRouteViews(page) {
     const choose = surface.getByLabel('View layout');
     await choose.selectOption('multiDimensional');
     await surface.getByRole('cell', { name: String(grid.count), exact: true }).first().waitFor();
+    if (grid.id === 'families') {
+      await surface.getByLabel('Count', { exact: true }).selectOption({ label: 'Distinct mapped reads' });
+      await surface.getByRole('cell', { name: '42', exact: true }).first().waitFor();
+    }
     await surface.getByRole('button', { name: /Current table orientation/ }).click();
     await choose.selectOption('kanban');
     await surface.getByRole('button', { name: grid.record }).click();
@@ -49,6 +62,7 @@ export async function verifyRouteViews(page) {
   await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('quote_stock_quote');
   await routes.getByRole('cell', { name: 'quote_stock_quote', exact: true }).click();
   await routes.getByText('quote:read · Desktop and hosted captures').waitFor();
+  await routes.getByText('POST /api/v1.0/quote/stock-quote', { exact: true }).last().waitFor();
   await routes.getByText('Public HTTP fields · quote_stock_quote', { exact: true }).waitFor();
   await routes.getByText('code_list', { exact: true }).waitFor();
   await routes.getByText('Minimum items 1 · Maximum items 400', { exact: true }).waitFor();

@@ -34,8 +34,8 @@ export function readPinnedBytes(repoRoot, revision, path, maxBuffer = 500000) {
   }
 }
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: '6d90bd812169bde115e3c927c0919d6bacfd8872',
-    digest: '204070bc665f64cfc890203fde294ef84ec710d76c23326209663068e68fc738',
+  { repo: 'agentic-base', prefix: 'base', revision: '735f91f4ef6a5c81fd4591f32989f60dd0989d72',
+    digest: 'bb7f997ffa96fb2bc14c32697dac0b1192ad59cac8f4628fd90b4fa019b3eb0e',
     paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
   { repo: 'agentic-sheets', prefix: 'sheets', revision: '349b43ccadbec4edf107cfef9f0c09fc1715f9f2',
@@ -135,10 +135,10 @@ export async function assemble({ devDocumentPolicy } = {}) {
   verifyImports(assets);
   const template = await readFile(join(root, 'web/sw.js'), 'utf8');
   const digests = Object.fromEntries([...assets].map(([path, bytes]) => [path, sha(bytes)]));
-  const id = sha(template + JSON.stringify(digests));
+  const owners = pins.map(({ repo, revision, digest }) => ({ repo, revision, digest }));
+  const id = sha(template + JSON.stringify({ owners, files: digests }));
   assets.set('sw.js', Buffer.from(template.replace("'__BUILD_ID__'", JSON.stringify(id)).replace("'__DIGESTS__'", JSON.stringify(digests))));
-  assets.set('asset-manifest.json', Buffer.from(JSON.stringify({ id, owners: pins.map(({ repo, revision, digest }) =>
-    ({ repo, revision, digest })), files: { ...digests, 'sw.js':sha(assets.get('sw.js')) } }, null, 2)));
+  assets.set('asset-manifest.json', Buffer.from(JSON.stringify({ id, owners, files: { ...digests, 'sw.js':sha(assets.get('sw.js')) } }, null, 2)));
   for (const [path, bytes] of assets) if (bytes.length >= 500000) throw new Error('Chunk budget exceeded: ' + path);
   return { id, assets };
 }
