@@ -78,6 +78,7 @@ export async function verifyRouteViews(page) {
   const fieldDetail = fields.getByRole('region', { name: 'Selected field evidence' });
   await fieldDetail.getByText('Minimum items 1 · Maximum items 400', { exact: true }).waitFor();
   await fieldDetail.getByRole('link', { name: 'MCP · quote_stock_quote', exact: true }).click();
+  await routes.locator('tr[aria-selected=true]:focus').getByRole('cell', { name: 'quote_stock_quote', exact: true }).waitFor();
   await routeDetail.getByRole('heading', { name: 'quote_stock_quote', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('/rt-ticker');
