@@ -78,7 +78,8 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
       const method = { release: 'release', reconcile: 'reconcile', halt: 'halt' }[body.operation];
       return await boundedCall(() => guard[method](boundedJson(body.inputs)), timeoutMs);
     }
-    return await boundedCall(signal => readers[body.operation]({ capability: record, inputs: boundedJson(body.inputs), signal }), timeoutMs);
+    return await boundedCall(signal => readers[body.operation]({ capability: record, inputs: boundedJson(body.inputs),
+      deadlineUtc: body.deadline_utc, signal }), timeoutMs);
   }
 
   const refused = (request_id, code) => ({ request_id, status: 'REFUSED', error: { code }, provenance: null, ledger_revision: null });
@@ -113,8 +114,14 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
         appendEvent(state, { id: 'gateway-admit:' + request_id, type: 'gateway-admitted', at: instant(now()),
           data: { request_id, capability_digest: body.capability_digest, operation: body.operation, binding } });
         return { reserved: true };
-      });
-      if (reserved.cached) return reserved.cached;
+      }, undefined, { readOnlyWhen: value => Boolean(value.cached) });
+      if (reserved.cached) {
+        if (reserved.cached.status === 'OK' && readers[body.operation]?.validateReplay) {
+          const { record } = resolveCapability(body);
+          readers[body.operation].validateReplay({ capability: record, inputs: body.inputs, data: reserved.cached.data });
+        }
+        return reserved.cached;
+      }
       let result, authority = null;
       try {
         const { record, binding: providerBinding } = resolveCapability(body);
@@ -135,6 +142,9 @@ export function createGateway({ store, scope, candidate, capabilities, readers =
         result = { request_id, status: 'OK', data, provenance: provenance(record, body.operation, providerBinding) };
       } catch (error) {
         result = { request_id, status: 'REFUSED', error: { code: refusalCode(error.code ?? '') }, provenance: null };
+        if (Number.isInteger(error.providerCode) && error.providerCode > 0 && error.providerCode <= 9999) {
+          result.error.provider_code = error.providerCode;
+        }
       }
       return store.transaction(scope, state => {
         const checkpoint = state.checkpoints[checkpointKey];

@@ -54,28 +54,42 @@ export function openStore(path) {
     requireThat(state.revision === row.revision, 'STORED_STATE_INVALID');
     return validate(state, scope);
   }
+  function transactionScopes(scopes, mutate, readOnlyWhen) {
+    const keys = scopes.map(scopeKey);
+    requireThat(keys.length > 0 && keys.length <= 2 && new Set(keys).size === keys.length, 'ACCOUNT_BINDING');
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const states = scopes.map(read);
+      const result = mutate(states);
+      requireThat(!result || typeof result.then !== 'function', 'ASYNC_TRANSACTION_FORBIDDEN');
+      const output = boundedJson(result ?? null, 16_000_000);
+      if (readOnlyWhen?.(result)) {
+        db.exec('ROLLBACK');
+        return output;
+      }
+      for (const [index, state] of states.entries()) {
+        state.revision++;
+        validate(state, scopes[index]);
+        const body = canonical(state);
+        requireThat(Buffer.byteLength(body) <= 16_000_000, 'LEDGER_CAPACITY');
+        put.run(keys[index], state.revision, body);
+      }
+      db.exec('COMMIT');
+      return output;
+    } catch (error) { db.exec('ROLLBACK'); throw error; }
+  }
   return {
     read,
     listScopes(prefix) {
       requireThat(prefix === 'research/', 'ACCOUNT_BINDING');
       return db.prepare("SELECT json_extract(body,'$.scope') AS scope FROM accounts WHERE json_extract(body,'$.scope.account_alias') LIKE 'research/%'").all().map(row=>JSON.parse(row.scope));
     },
-    transaction(scope, mutate, expectedRevision) {
-      db.exec('BEGIN IMMEDIATE');
-      try {
-        const state = read(scope);
+    transactionScopes,
+    transaction(scope, mutate, expectedRevision, { readOnlyWhen } = {}) {
+      return transactionScopes([scope], ([state]) => {
         if (expectedRevision !== undefined) requireThat(state.revision === expectedRevision, 'CONFLICT');
-        const result = mutate(state);
-        requireThat(!result || typeof result.then !== 'function', 'ASYNC_TRANSACTION_FORBIDDEN');
-        state.revision++;
-        validate(state, scope);
-        const body = canonical(state);
-        requireThat(Buffer.byteLength(body) <= 16_000_000, 'LEDGER_CAPACITY');
-        const output = boundedJson(result ?? null, 16_000_000);
-        put.run(scopeKey(scope), state.revision, body);
-        db.exec('COMMIT');
-        return output;
-      } catch (error) { db.exec('ROLLBACK'); throw error; }
+        return mutate(state);
+      }, readOnlyWhen);
     },
     close() { db.close(); },
   };

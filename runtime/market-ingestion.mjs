@@ -1,3 +1,4 @@
+import { readBudgetScope, reserveReadCalls } from './read-budget.mjs';
 import { simulatorOperation } from './moomoo-simulator-read.mjs';
 import { boundedCall, boundedJson, canonical, hash, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
 import { MARKET_READ_OPERATIONS } from './mcp-market-read.mjs';
@@ -8,7 +9,7 @@ import { MARKET_READ_OPERATIONS } from './mcp-market-read.mjs';
 export function createMarketReadBoundary({ store, scope, candidate, keys, adapter, now = Date.now }) {
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
-  const budgetScope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'runtime-budget/' + sha(scope.account_alias) };
+  const budgetScope = readBudgetScope(scope);
   return async function readMarket({ operation, inputs, grant: envelope, signal: dispatchSignal }) {
     const started = now();
     requireThat((MARKET_READ_OPERATIONS.includes(operation) || simulatorOperation(operation)), 'UNSUPPORTED');
@@ -26,14 +27,7 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       const { grant: envelopeInput, ...parameters } = boundedJson(inputs);
       requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');
     }
-    store.transaction(budgetScope, state => {
-      const proofDigest = grant.proofs.find(proof => proof.kind === 'cost').digest;
-      const counter = state.telemetry[proofDigest] ?? { limit: grant.cost.remaining_calls, calls: 0 };
-      requireThat(counter.limit === grant.cost.remaining_calls && Number.isSafeInteger(counter.calls) && counter.calls >= 0 &&
-        counter.calls <= counter.limit - grant.limits.max_calls, 'BUDGET_HALT');
-      counter.calls += grant.limits.max_calls;
-      state.telemetry[proofDigest] = counter;
-    });
+    store.transaction(budgetScope, state => reserveReadCalls(state, grant));
     const deadline = Math.min(started + 600_000, utcMillis(grant.expires_utc));
     const invoke = fn => boundedCall(signal => {
       requireThat(now() >= started && now() < deadline, 'WINDOW_CLOSED');
