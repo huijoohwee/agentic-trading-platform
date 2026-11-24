@@ -11,21 +11,20 @@ export const MCP_PROTOCOLS = ['2025-03-26', '2025-06-18', '2025-11-25'];
 // transport-specific mappings under the same schema, isolation and $0 pins as MCP. The protocol
 // token is the reviewed REST API version, never a caller-selected value.
 export const REST_PROTOCOLS = ['1.0'];
-const TRANSPORT_PROTOCOLS = { MCP: MCP_PROTOCOLS, REST: REST_PROTOCOLS };
+const TRANSPORT_PROTOCOLS = { MCP: MCP_PROTOCOLS, REST: REST_PROTOCOLS, WEBSOCKET: ['13'] };
 const DEFINITION_KEYS = 'schema,provider,adapter_version,transport,adapter_digest,schema_digest,mapping_digest,mapping,operations,allowlist,mode,source,cost,qualification';
 const TRANSPORT_KEYS = 'kind,origin,protocol';
 const only = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).every(key => keys.split(',').includes(key));
 const distinct = values => new Set(values).size === values.length;
 
-// A pinned outbound origin: https only, no userinfo, query, fragment or whitespace. The exact string is
-// the transport pin; a caller cannot redirect a read to an arbitrary endpoint.
-function validOrigin(origin) {
+// The reviewed transport selects the secure URL scheme. The complete endpoint is pinned.
+function validOrigin(origin, kind) {
   if (typeof origin !== 'string' || origin.length > 256 || /\s/.test(origin) || origin.includes('@') ||
     origin.includes('?') || origin.includes('#')) return false;
   let url;
   try { url = new URL(origin); } catch { return false; }
-  return url.protocol === 'https:' && url.username === '' && url.password === '' && url.search === '' &&
+  return url.protocol === (kind === 'WEBSOCKET' ? 'wss:' : 'https:') && url.username === '' && url.password === '' && url.search === '' &&
     url.hash === '' && /^[A-Za-z0-9.-]+$/.test(url.hostname) && url.href === origin;
 }
 
@@ -34,7 +33,7 @@ export function validateProviderDefinition(candidate) {
   requireThat(only(c, DEFINITION_KEYS) && c.schema === 'trading-provider-definition/v1' &&
     id(c.provider) && id(c.adapter_version), 'INVALID_PROVIDER_DEFINITION');
   requireThat(only(c.transport, TRANSPORT_KEYS) && Object.hasOwn(TRANSPORT_PROTOCOLS, c.transport.kind) &&
-    validOrigin(c.transport.origin) && TRANSPORT_PROTOCOLS[c.transport.kind].includes(c.transport.protocol), 'INVALID_TRANSPORT_PIN');
+    validOrigin(c.transport.origin, c.transport.kind) && TRANSPORT_PROTOCOLS[c.transport.kind].includes(c.transport.protocol), 'INVALID_TRANSPORT_PIN');
   requireThat(hash(c.adapter_digest) && hash(c.schema_digest) && hash(c.mapping_digest), 'INVALID_PIN');
   requireThat(c.mapping && typeof c.mapping === 'object' && !Array.isArray(c.mapping) &&
     sha(c.mapping) === c.mapping_digest, 'MAPPING_DRIFT');

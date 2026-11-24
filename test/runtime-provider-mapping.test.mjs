@@ -47,6 +47,20 @@ test('a reviewed definition binds its capability and discovery exposes metadata 
   assert.equal(JSON.stringify(registry.discover()).includes('a.example'), false);
 });
 
+test('WebSocket bindings use a secure socket endpoint and cannot select an HTTP credential or protocol', () => {
+  const pin = { kind: 'WEBSOCKET', protocol: '13', origin: 'wss://stream.example/ws' };
+  const socket = { ...distinctB(), provider: 'provider-a', transport: pin };
+  const registry = createProviderRegistry([definition(), socket]);
+  assert.deepEqual(registry.bind(capability(socket)).transport, pin);
+  assert.deepEqual(registry.discover()[1].transport, { kind: 'WEBSOCKET', protocol: '13' });
+  for (const transport of [{ ...pin, protocol: '12' }, { ...pin, origin: 'https://stream.example/ws' },
+    { ...pin, origin: 'ws://stream.example/ws' }, { ...pin, origin: 'wss://user@stream.example/ws' },
+    { ...pin, origin: 'wss://stream.example/ws?token=x' }, { ...pin, kind: 'REST', protocol: '1.0' },
+    { ...pin, kind: 'MCP', protocol: '2025-11-25' }]) {
+    assert.throws(() => validateProviderDefinition({ ...socket, transport }), /INVALID_TRANSPORT_PIN/);
+  }
+});
+
 test('each provider is admitted once with isolated adapter/schema/mapping/origin pins', () => {
   assert.throws(() => createProviderRegistry([definition(), definition()]), /DUPLICATE_PROVIDER/);
   const sharedAdapter = distinctB(); sharedAdapter.adapter_digest = sha('adapter-a');
