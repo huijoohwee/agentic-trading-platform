@@ -36,7 +36,7 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   const summary = coverageSummary();
   assert.ok(summary.mapped_operations.includes('read.calendar'));
   assert.ok(summary.mapped_operations.includes('read.ticker'));
-  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'capital-flow', 'rank', 'plate-industry', 'news-research', 'ipo',
+  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'capital-flow', 'plate-industry', 'news-research', 'ipo',
     'financials', 'corporate-actions', 'holders', 'influencer', 'macro', 'derivatives', 'etf', 'event-contract', 'crypto-market', 'valuation', 'short', 'stock-connect', 'top-brokers', 'chip-cbbc']);
   assert.ok(summary.excluded.includes('trading') && summary.excluded.includes('crypto-trading'));
   const calendar = providerCoverage.find(entry => entry.id === 'calendar');
@@ -68,8 +68,13 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   assert.deepEqual(on('Push').filter(row => row.status === 'offline replay').map(row => row.label.split('/').at(-1)).sort(),
     ['BROKER_QUEUE', 'KLINE', 'MARKET_STATE', 'ORDER_BOOK', 'QUOTE', 'TICKER']);
   assert.equal(on('Push').filter(row => row.status === 'candidate').length, 18);
+  for (const [transport, label] of [['REST', 'POST /api/v1.0/quote/stock-screen'], ['MCP', 'quote_stock_screen']]) {
+    const screen = on(transport).find(row => row.label === label);
+    assert.deepEqual([screen.status, screen.scope, screen.evidence], ['mapped', 'quote:read', 'Signed local stock-screen fixture']);
+    assert.match(screen.units, /Exact raw integer/);
+  }
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
-  const researchPaths = Object.values(researchMapping.operations).map(spec => 'GET ' + spec.path);
+  const researchPaths = Object.values(researchMapping.operations).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
   assert.equal(on('MCP').find(row => row.label === 'quote_capital_flow').status, 'candidate');
   assert.equal(on('REST').find(row => row.label.endsWith('/modify-user-security')).status, 'blocked');

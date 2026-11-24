@@ -1,3 +1,4 @@
+import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } from 'agentic-gateway/connectors/moomoo-stock-screen';
 import { createPrivateKey, sign } from 'node:crypto';
 import { validateProviderDefinition } from './provider-mapping.mjs';
 import { MARKET_READ_OPERATIONS } from './mcp-market-read.mjs';
@@ -6,7 +7,7 @@ import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, 
 // Reviewed REST adapter for operation-shaped market reads (for example the earnings calendar, which
 // has no MCP tool). It issues the same signed read-capabilities/provider-market-page envelopes as the
 // MCP adapter, so the shared boundary, single durable $0 counter and gateway admission are unchanged.
-// GET-only: the reviewed mapping pins origin, path, query input map, response schema and projection.
+// GET mappings and one fixed read-only stock-screen POST share the same signed admission.
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 const datePattern = /^\d{4}-\d\d-\d\d$/;
@@ -83,8 +84,12 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
   const privateKey = createPrivateKey(attestation.privateKey);
   requireThat(privateKey.asymmetricKeyType === 'ed25519', 'ATTESTATION_REQUIRED');
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
-  for (const spec of Object.values(mapping.operations)) {
-    requireThat(id(spec.tool) && spec.method === 'GET' && Array.isArray(spec.rows_path) && /^[a-f0-9]{64}$/.test(spec.schema_digest), 'INVALID_MAPPING');
+  for (const [operation, spec] of Object.entries(mapping.operations)) {
+    const screen = operation === 'read.stock-screen';
+    if (screen) requireThat(spec.method === 'POST' && spec.path === STOCK_SCREEN_PATH && spec.tool === STOCK_SCREEN_TOOL &&
+      spec.profile === 'moomoo-stock-screen/v1' && spec.pin_inputs === true, 'INVALID_MAPPING');
+    else requireThat(spec.method === 'GET' && spec.tool !== STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
+    requireThat(id(spec.tool) && Array.isArray(spec.rows_path) && /^[a-f0-9]{64}$/.test(spec.schema_digest), 'INVALID_MAPPING');
     requireThat(typeof spec.path === 'string' && spec.path.startsWith('/') && !/[\s?#]/.test(spec.path) && spec.path.length <= 256, 'INVALID_MAPPING');
     requireThat(!writeBan.test(spec.tool), 'SCOPE_DENIED');
   }
@@ -95,6 +100,12 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     const payload = { schema: 'trading-runtime-envelope/v1', kind, scope, candidate, principal: attestation.principal,
       runtime: attestation.runtime, issued_utc, expires_utc: grant.expires_utc, ...data };
     return { key_id: attestation.key_id, payload, signature: sign(null, Buffer.from(canonical(payload)), privateKey).toString('base64url') };
+  };
+  const issuePage = (operation, page, body, schema_digest) => {
+    const response_digest = sha(body);
+    const observed_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+    return issue('provider-market-page', { operation, ...page, observed_utc,
+      source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest });
   };
   const project = (raw, spec, body, inputs) => {
     requireThat(raw && typeof raw === 'object' && !Array.isArray(raw), 'INVALID_PAGE');
@@ -243,6 +254,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       for (const allowed of grant.tools) {
         const spec = mapping.operations[allowed.operation];
         requireThat(spec && allowed.effect === 'read' && allowed.name === spec.tool && allowed.schema_digest === spec.schema_digest, 'SCHEMA_DRIFT');
+        if (allowed.operation === 'read.stock-screen') requireThat(new URL(origin).origin === 'https://webapi.moomoo.com', 'INVALID_MAPPING');
         requireThat(!writeBan.test(allowed.name), 'SCOPE_DENIED');
       }
       return issue('read-capabilities', { tools: grant.tools, calls });
@@ -250,8 +262,9 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     async read({ operation, inputs, signal }) {
       const spec = mapping.operations[operation], allowed = grant.tools.find(tool => tool.operation === operation);
       requireThat(grant && spec && allowed, 'SCOPE_DENIED');
-      if (spec.pin_inputs || allowed.inputs_digest !== undefined) {
-        const { grant: requestGrant, ...parameters } = boundedJson(inputs);
+      const screen = operation === 'read.stock-screen';
+      const { grant: requestGrant, ...parameters } = boundedJson(inputs);
+      if (screen || spec.pin_inputs || allowed.inputs_digest !== undefined) {
         requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');
       }
       beforeCall?.();
@@ -260,8 +273,9 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       requireProofs(grant, ['cost', 'rights', 'account'], now());
       requireThat(current(grant, now()) && calls < grant.limits.max_calls, 'BUDGET_HALT');
       calls++;
-      const search = query(spec, boundedJson(inputs));
-      let path = spec.path;
+      const postBody = screen ? JSON.stringify(buildMoomooStockScreen(parameters)) : undefined;
+      const search = screen ? '' : query(spec, boundedJson(inputs));
+      let path = screen ? STOCK_SCREEN_PATH : spec.path;
       if (spec.symbol_path) {
         requireThat(path.includes('{symbol}'), 'INVALID_MAPPING');
         requireThat(typeof inputs.symbol === 'string' && inputs.symbol.length <= 32 &&
@@ -274,13 +288,24 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (search) target.search = search;
       const url = target.href;
       let response;
-      try { response = await fetchImpl(url, { method: 'GET', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }, signal, redirect: 'error' }); }
+      const options = { method: screen ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+        signal, redirect: 'error' };
+      if (screen) {
+        requireThat(url === 'https://webapi.moomoo.com' + STOCK_SCREEN_PATH && allowed.name === STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
+        options.headers['Content-Type'] = 'application/json';
+        options.body = postBody;
+      }
+      try { response = await fetchImpl(url, options); }
       catch { fail(signal?.aborted ? 'TIMEOUT' : 'PROVIDER_UNAVAILABLE'); }
       if ([401, 403].includes(response.status)) { await response.body?.cancel(); fail('SCOPE_DENIED'); }
       requireThat(response.ok && !response.redirected, 'PROVIDER_UNAVAILABLE');
       requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'INVALID_RESPONSE');
       const body = await readResponse(response);
       requireThat(body && typeof body === 'object' && !Array.isArray(body), 'INVALID_RESPONSE');
+      if (screen) {
+        const { rows, pagination } = projectMoomooStockScreen(parameters, body);
+        return issuePage(operation, { rows, decimals: rows.map(() => ({})), pagination }, body, allowed.schema_digest);
+      }
       const code = body[spec.response_code ?? 'ret_code'];
       if (spec.response_code && Object.hasOwn(body, 'ret_code')) requireThat(body.ret_code === code, 'INVALID_RESPONSE');
       requireThat(Number.isSafeInteger(code), 'INVALID_RESPONSE');
@@ -323,10 +348,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         metadata.pagination = { completed: page.completed, next_cursor: page.completed ? null : page.page_flag,
           ...(total !== undefined && { total }) };
       }
-      const response_digest = sha(body);
-      const observed_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
-      return issue('provider-market-page', { operation, rows, decimals, ...metadata, observed_utc,
-        source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest: allowed.schema_digest });
+      return issuePage(operation, { rows, decimals, ...metadata }, body, allowed.schema_digest);
     },
   };
 }

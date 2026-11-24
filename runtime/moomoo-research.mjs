@@ -1,3 +1,4 @@
+import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL } from 'agentic-gateway/connectors/moomoo-stock-screen';
 import { sha } from './core.mjs';
 
 // Reviewed REST response fields. The digest identifies this local projection.
@@ -92,7 +93,13 @@ const seasonalPoint = { fields: fields(['timestamp', 'close', 'prev_close']), in
   decimal_text: ['close', 'prev_close'], nullable: ['close', 'prev_close'] };
 const correlationPoint = { fields: fields(['timestamp', 'correlation']), integer: ['timestamp'],
   decimal_text: ['correlation'], unit_interval: ['correlation'] };
+// A connected host supplies its own reviewed descriptor digest at discovery.
+export const stockScreenMcpMapping = { protocol: '2025-11-25', operations: {
+  'read.stock-screen': { tool: STOCK_SCREEN_TOOL, pin_inputs: true, rows_path: ['data', 'items'] }
+} };
 const operations = {
+  'read.stock-screen': { tool: STOCK_SCREEN_TOOL, method: 'POST', path: STOCK_SCREEN_PATH,
+    pin_inputs: true, rows_path: ['data', 'items'], profile: 'moomoo-stock-screen/v1' },
   'read.capital-flow': capitalFlow, 'read.rank': hotList, 'read.plate': plate, 'read.ipo': ipo,
   'read.futures-positions': quote('future-positions', symbol + 'future/position-analysis', items,
     { integer: ['report_time'], text: ['variety'], exact_integer: futuresPositionFields, decimal_text: ['open_interest_change_rate_weekly'] },
