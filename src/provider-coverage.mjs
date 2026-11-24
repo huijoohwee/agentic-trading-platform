@@ -189,6 +189,12 @@ const reviewedRest = new Map([
 ]);
 // These are documentation bindings for the simulator rehearsal. Admission
 // and order dispatch remain owned by the paper guard and its selected broker.
+export function researchRouteUnits(method, path) {
+  const entry = reviewedRest.get(method + ' ' + path);
+  if (!entry) throw Error('Missing research units for ' + method + ' ' + path);
+  return entry.units;
+}
+
 const simRoot = '/api/v1.0/sim-trade/';
 const simAccount = simRoot + '{acc_id}/';
 const simOrder = simAccount + 'orders/{order_id}/';
