@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { canonical, sha } from '../runtime/core.mjs';
 import { createRestMarketReadAdapter } from '../runtime/rest-market-read.mjs';
 import { marketRestMapping, marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
+import { openStore } from '../runtime/store.mjs';
+import { readBudgetScope, reserveHistoryRead } from '../runtime/read-budget.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 import { readResearchPage } from '../src/research-page.mjs';
 
@@ -35,7 +37,34 @@ test('each native market REST method, origin, route and operation are pinned', (
   }
 });
 
-test('running gateway signs all four REST reads, replays them across inbound interfaces and preserves exact saved values', async t => {
+test('history quota reservations share a durable provider-user pool across local aliases and refresh after pending calls', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'trading-history-pool-'));
+  const path = join(dir, 'state.sqlite'), store = openStore(path), second = openStore(path);
+  t.after(async () => { store.close(); second.close(); await rm(dir, { recursive: true, force: true }); });
+  const firstAlias = readBudgetScope(scope), secondAlias = readBudgetScope({ ...scope, account_alias: 'other-alias' });
+  const symbol = 'HK.00700', start = Date.UTC(2026, 10, 24), pool = sha('one-provider-user');
+  const rights = { kind: 'rights', scope: 'quote:read', symbol, display: true, private_ledger: true };
+  const cost = { kind: 'cost', digest: sha('history-call-allowance') };
+  const quota = { kind: 'history-quota', symbol, pool_digest: pool, observed_utc: utc(start),
+    active_target: false, remaining_targets: 1, deny_at_exhaustion: true };
+  const grant = (change = {}, permission = rights) => ({ proofs: [permission, cost, { ...quota, ...change }],
+    cost: { remaining_calls: 6 }, limits: { max_calls: 3, timeout_ms: 1000 }, expires_utc: utc(start + 60000) });
+  assert.equal(reserveHistoryRead(store, firstAlias, grant(), symbol, start), start + 1000);
+  assert.throws(() => reserveHistoryRead(second, secondAlias, grant(), symbol, start), /BUDGET_HALT/);
+  assert.equal(second.read(secondAlias).revision, 0);
+  assert.throws(() => reserveHistoryRead(second, secondAlias, grant({ observed_utc: utc(start - 1000) }), symbol, start), /STALE_EVIDENCE/);
+  // An active target consumes calls, but takes no further target slot. Its in-flight window also counts.
+  reserveHistoryRead(second, secondAlias, grant({ active_target: true }), symbol, start + 500);
+  assert.throws(() => reserveHistoryRead(store, firstAlias, grant({ observed_utc: utc(start + 1000) }), symbol, start + 2000), /STALE_EVIDENCE/);
+  const fresh = { observed_utc: utc(start + 2000) };
+  assert.throws(() => reserveHistoryRead(second, secondAlias, grant(fresh, { ...rights, private_ledger: false }), symbol, start + 2000), /SCOPE_DENIED/);
+  assert.throws(() => reserveHistoryRead(second, secondAlias, grant({ ...fresh, symbol: 'US.DIA' }), symbol, start + 2000), /MISSING_ADMISSION_PROOF/);
+  reserveHistoryRead(store, firstAlias, grant(fresh), symbol, start + 2000);
+  assert.equal(store.read(firstAlias).telemetry[cost.digest].calls, 6);
+  assert.equal(second.read(secondAlias).telemetry[cost.digest].calls, 3);
+});
+
+test('running gateway signs current and historical market REST reads, replays them across inbound interfaces and preserves exact saved values', async t => {
   const { schema, mapping: definitions, transport, ...identity } = provider;
   const capability = { ...identity, transport: transport.kind, protocol: transport.protocol };
   const audience = 'fixture-market-rest-local-gateway-audience';
@@ -46,7 +75,14 @@ test('running gateway signs all four REST reads, replays them across inbound int
     provider_credentials: { [provider.provider]: { transports: { REST: { token: 'fixture-market-rest-credential', attestation } } } },
     gateway: { audience_token: audience, capabilities: [capability] } }), { mode: 0o600 });
   const symbol = 'HK.00700', time = 1780469195226;
+  const token = 'ab'.repeat(24), history = 'read.candle-history', pool = sha('shared historic slot observation');
+  const historyInputs = { symbol, start: '2026-06-03', end: '2026-06-04', ktype: 110, count: 1 };
+  const observation = utc(Date.now() - 2000);
+  const historicBar = { time_key: time, date: 20260603, time_zone: 480, open: 344, high: 346, low: 343, close: '345.0000',
+    volume: '9007199254740993', turnover: '34500.0' };
   const cases = [
+    [history, historyInputs, 'GET', symbol + '/history-kline?start=2026-06-03&end=2026-06-04&ktype=110&num=1', null,
+      { kline_list: [historicBar], volume_precision: 3, next_time: time }],
     ['read.ticker', { symbol }, 'POST', 'stock-quote', { code_list: [symbol] }, { quote_list: [{ code: symbol, name: 'Example', last_price: '345.600',
       data_time: time, data_date: '2026-06-03', volume: '9007199254740993' }] }],
     ['read.depth', { symbol, count: 2 }, 'POST', 'order-book', { code: symbol, num: 2 }, [{ code: symbol, name: 'Example',
@@ -64,7 +100,7 @@ test('running gateway signs all four REST reads, replays them across inbound int
     if (new URL(url).hostname === '127.0.0.1') return network(url, options);
     const entry = cases.find(x => url === origin + 'api/v1.0/quote/' + x[3]);
     calls.push({ url, method: options.method, body: options.body && JSON.parse(options.body), token: options.headers.Authorization, redirect: options.redirect });
-    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5] }).replace(/"(764705696406055802[23])"/g, '$1');
+    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23])"/g, '$1');
     return new Response(wire, { headers: { 'content-type': 'application/json' } });
   });
   const server = await runtimeCommand(['gateway', path, '0']); t.after(() => new Promise(resolve => server.close(resolve)));
@@ -73,13 +109,19 @@ test('running gateway signs all four REST reads, replays them across inbound int
       headers: { Authorization: 'Bearer ' + audience, 'Content-Type': 'application/json' } });
     assert.ok(reply.ok); return reply.json();
   };
-  function request(operation, id, parameters, digest) {
+  function request(operation, id, parameters, digest, quotaChanges = {}) {
     const spec = marketRestSpecs[operation];
     const payload = { schema: 'trading-runtime-envelope/v1', kind: 'read', scope, candidate, principal: 'operator', runtime: 'operator',
       issued_utc: utc(Date.now() - 2000), expires_utc: expires, nonce: id, mapping_digest: provider.mapping_digest,
       tools: [{ operation, name: spec.tool, schema_digest: spec.schema_digest, effect: 'read', ...(digest && { inputs_digest: digest }) }],
       limits: { max_calls: 3, timeout_ms: 10000 }, proofs: ['cost', 'rights', 'account'].map(kind =>
         ({ kind, digest: sha(kind + operation), expires_utc: expires })), cost: { hard_cap_usd: 0, deny_at_exhaustion: true, remaining_calls: 3 } };
+    if (operation === history) {
+      Object.assign(payload.proofs.find(p => p.kind === 'rights'), { scope: 'quote:read', symbol, private_ledger: true, display: true });
+      payload.proofs.push({ kind: 'history-quota', symbol, pool_digest: pool, observed_utc: observation, digest: sha('quota evidence'),
+        active_target: false, remaining_targets: 1, deny_at_exhaustion: true, expires_utc: expires, ...quotaChanges });
+      payload.cost.remaining_calls = 12;
+    }
     const grant = { key_id: 'operator', payload, signature: sign(null, Buffer.from(canonical(payload)), operator.privateKey).toString('base64url') };
     return { contract_version: '1', scope, operation, request_id: id, capability_digest: sha(capability),
       inputs: { ...parameters, grant }, deadline_utc: utc(Date.now() + 60000) };
@@ -92,14 +134,31 @@ test('running gateway signs all four REST reads, replays them across inbound int
       const refused = await post('/api/gateway', request(op, op + suffix, args, digest)); assert.equal(refused.status, 'REFUSED');
     }
     assert.equal(calls.length, before);
+    if (op === history) {
+      for (const [name, change] of [['absent', { kind: 'unrelated' }], ['wrong-target', { symbol: 'US.QQQ' }],
+        ['no-slots', { remaining_targets: 0 }], ['expired', { expires_utc: utc(Date.now() - 5000) }]]) {
+        const refused = await post('/api/gateway', request(op, op + name, inputs, sha(inputs), change));
+        assert.equal(refused.status, 'REFUSED');
+      }
+      assert.equal(calls.length, before);
+    }
     const admitted = request(op, op, inputs, sha(inputs)), result = await post('/api/gateway', admitted);
     assert.equal(result.status, 'OK', JSON.stringify(result.error)); assert.equal(result.data.cost.tool_calls, 1);
     const replay = await post('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: op, arguments: admitted } });
     assert.deepEqual(replay.result.structuredContent, result); assert.equal(calls.length, before + 1);
     assert.deepEqual(calls.at(-1), { url: origin + 'api/v1.0/quote/' + path, method,
       body: body ?? undefined, token: 'Bearer fixture-market-rest-credential', redirect: 'error' });
-    pages[op] = (await readResearchPage(replay)).rows;
+    const display = await readResearchPage(replay);
+    pages[op] = display.rows;
+    if (op === history) {
+      assert.deepEqual(display.pagination, { completed: false, cursor: token, total: null, token, nextTime: time });
+      const exhausted = await post('/api/gateway', request(op, op + '-exhausted', inputs, sha(inputs)));
+      assert.equal(exhausted.error.code, 'BUDGET_HALT'); assert.equal(calls.length, before + 1);
+      const active = await post('/api/gateway', request(op, op + '-active', inputs, sha(inputs), { active_target: true }));
+      assert.equal(active.status, 'OK', JSON.stringify(active.error)); assert.equal(calls.length, before + 2);
+    }
   }
+  assert.equal(pages[history][0].volume, '9007199254740.993'); assert.equal(pages[history][0].close, '345.0000');
   assert.equal(pages['read.ticker'][0].volume, '9007199254740993');
   assert.equal(pages['read.ticker'][0].last, '345.600');
   assert.deepEqual(pages['read.depth'].map(row => row.exchange), ['A', 'B']); assert.equal(pages['read.depth'][0].bids[0].volume, '12.80');

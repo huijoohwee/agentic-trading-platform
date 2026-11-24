@@ -5,7 +5,7 @@ import { researchMapping } from './moomoo-research.mjs';
 const profile = 'moomoo-market-rest/v1';
 export const marketRestSpecs = Object.fromEntries(Object.entries({
   'read.ticker': 'quote_stock_quote', 'read.depth': 'quote_order_book',
-  'read.tape': 'quote_rt_ticker', 'read.candles': 'quote_cur_kline',
+  'read.tape': 'quote_rt_ticker', 'read.candles': 'quote_cur_kline', 'read.candle-history': 'quote_history_kline',
 }).map(([operation, tool]) => {
   const [method, path] = marketRestRoutes[tool].split(' ');
   const spec = { profile, tool, method, path, rows_path: [], pin_inputs: true };
@@ -27,7 +27,12 @@ export function marketRequest(spec, inputs, allowed) {
   return buildMoomooMarketRequest(spec.tool, parameters);
 }
 export function marketPage(spec, parameters, wire) {
-  const { rows, requested } = projectMoomooMarketResponse(spec.tool, parameters, wire);
+  const { rows, requested, pagination } = projectMoomooMarketResponse(spec.tool, parameters, wire);
   // Bind the signed candle selectors to each visible bar also when opening the saved page offline.
-  return { rows: requested ? rows.map(row => ({ ...row, ...requested })) : rows, decimals: rows.map(() => ({})) };
+  const page = { rows: requested ? rows.map(row => ({ ...row, ...requested })) : rows, decimals: rows.map(() => ({})) };
+  if (pagination) {
+    page.pagination = { completed: !pagination.has_more, next_cursor: pagination.next_page_token ?? pagination.next_time?.toString() ?? null,
+      next_page_token: pagination.next_page_token, next_time: pagination.next_time };
+  }
+  return page;
 }

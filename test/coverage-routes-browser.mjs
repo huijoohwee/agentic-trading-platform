@@ -4,7 +4,7 @@ export async function verifyRouteViews(page) {
   const routes = page.locator('#coverage-routes');
   const layout = routes.getByRole('combobox', { name: 'View layout' });
   const family = page.locator('#coverage-families'), reference = page.locator('#coverage-references');
-  const operations = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape'];
+  const operations = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.candle-history'];
   const firstCell = family.getByRole('row').filter({ hasText: 'Realtime quotes, history, book and tape' }).getByRole('cell').nth(3);
   await firstCell.locator('code').first().waitFor();
   assert.deepEqual(await firstCell.locator('code').allTextContents(), operations);
@@ -30,7 +30,7 @@ export async function verifyRouteViews(page) {
     await surface.getByRole('cell', { name: String(grid.count), exact: true }).first().waitFor();
     if (grid.id === 'families') {
       await surface.getByLabel('Count', { exact: true }).selectOption({ label: 'Distinct mapped reads' });
-      await surface.getByRole('cell', { name: '42', exact: true }).first().waitFor();
+      await surface.getByRole('cell', { name: '43', exact: true }).first().waitFor();
     }
     await surface.getByRole('button', { name: /Current table orientation/ }).click();
     await choose.selectOption('kanban');

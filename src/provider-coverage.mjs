@@ -24,10 +24,11 @@ const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE', 'BROKER_
 
 export const providerCoverage = Object.freeze([
   family('market-reads', 'Realtime quotes, history, book and tape', 'mapped', 'MCP+REST',
-    ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape'],
+    ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.candle-history'],
     ['quote_stock_quote', 'quote_rt_ticker', 'quote_cur_kline', 'quote_order_book'],
-    [source('api/quote/kline/list.md', '2d0a1de5628c5165adbbfad1ca0ac649874408f106723e7ca16f0baad08271a7')],
-    'Desktop MCP captures cover four reads. Signed local REST fixtures preserve quote price tokens, venue books, trade IDs and current candles.'),
+    [source('api/quote/kline/list.md', '2d0a1de5628c5165adbbfad1ca0ac649874408f106723e7ca16f0baad08271a7'),
+     source('api/quote/basic-data/history-kline.md', 'd3437cdb21c9392ba50e2a9944aa6e69f10fac354ba13ee82b758960da098f59')],
+    'Desktop MCP captures cover four reads. Signed local REST fixtures preserve quote price tokens, venue books, trade IDs, current candles and dated historical pages with separate quota accounting.'),
   family('calendar', 'Earnings calendar', 'mapped', 'REST',
     ['read.calendar'], [],
     [source('api/quote/calendar/earnings-calendar.md', '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2')],
@@ -177,6 +178,7 @@ const reviewedRest = new Map([
   ['POST /api/v1.0/quote/stock-quote', marketFixture('Source quote price and representation, market date, Unix milliseconds, shares and turnover')],
   ['POST /api/v1.0/quote/order-book', marketFixture('Per-exchange book, source size, scaled size, order count and exchange time in Unix milliseconds')],
   ['GET /api/v1.0/quote/{symbol}/rt-ticker', marketFixture('Exact trade sequence, source price, raw and scaled volume, session and Unix milliseconds')],
+  ['GET /api/v1.0/quote/{symbol}/history-kline', marketFixture('Exact OHLC, market date and UTC offset when supplied, Unix milliseconds, raw and scaled volume, and backward pagination')],
   ['GET /api/v1.0/quote/{symbol}/cur-kline', marketFixture('Market-local date, OHLC, shares, turnover, percent changes, Unix milliseconds and requested candle settings')],
   [screenPath, stockScreenEvidence],
   ['GET /api/v1.0/quote/{symbol}/future/position-analysis', { evidence: 'Local CFTC positions fixture', units: 'Reported contract counts, weekly changes, open interest and report time in Unix seconds' }],

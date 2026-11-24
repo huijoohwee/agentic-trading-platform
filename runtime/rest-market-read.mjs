@@ -41,7 +41,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     const screen = operation === 'read.stock-screen';
     if (simulatorOperation(operation) || spec.profile === 'moomoo-simulator-read/v1' ||
       spec.path?.startsWith('/api/v1.0/sim-trade/') || spec.tool?.startsWith('sim_trade_')) verifySimulatorSpec(operation, spec, origin);
-    else if (isMarketRest(spec)) verifyMarketRest(operation, spec, origin);
+    else if (operation === 'read.candle-history' || isMarketRest(spec)) verifyMarketRest(operation, spec, origin);
     else if (screen) requireThat(spec.method === 'POST' && spec.path === STOCK_SCREEN_PATH && spec.tool === STOCK_SCREEN_TOOL &&
       spec.profile === 'moomoo-stock-screen/v1' && spec.pin_inputs === true, 'INVALID_MAPPING');
     else requireThat(spec.method === 'GET' && spec.tool !== STOCK_SCREEN_TOOL, 'INVALID_MAPPING');

@@ -1,4 +1,4 @@
-import { readBudgetScope, reserveReadCalls } from './read-budget.mjs';
+import { readBudgetScope, reserveReadCalls, reserveHistoryRead } from './read-budget.mjs';
 import { simulatorOperation } from './moomoo-simulator-read.mjs';
 import { boundedCall, boundedJson, canonical, hash, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
 import { MARKET_READ_OPERATIONS } from './mcp-market-read.mjs';
@@ -23,12 +23,13 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
     const allowed = grant.tools.find(tool => tool.operation === operation);
     requireThat(allowed, 'SCOPE_DENIED');
     adapter.validateInputs?.(operation, inputs, allowed, grant);
-    if (operation === 'read.stock-screen' || allowed.inputs_digest !== undefined) {
+    if (operation === 'read.stock-screen' || operation === 'read.candle-history' || allowed.inputs_digest !== undefined) {
       const { grant: envelopeInput, ...parameters } = boundedJson(inputs);
       requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');
     }
-    store.transaction(budgetScope, state => reserveReadCalls(state, grant));
-    const deadline = Math.min(started + 600_000, utcMillis(grant.expires_utc));
+    let deadline = Math.min(started + 600_000, utcMillis(grant.expires_utc));
+    if (operation === 'read.candle-history') deadline = reserveHistoryRead(store, budgetScope, grant, inputs.symbol, started);
+    else store.transaction(budgetScope, state => reserveReadCalls(state, grant));
     const invoke = fn => boundedCall(signal => {
       requireThat(now() >= started && now() < deadline, 'WINDOW_CLOSED');
       requireThat(!dispatchSignal?.aborted, 'WINDOW_CLOSED');

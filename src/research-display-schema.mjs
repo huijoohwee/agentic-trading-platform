@@ -40,6 +40,18 @@ const marketColumns = {
     text: ['symbol', 'market_date'], integers: ['time_ms', 'ktype', 'autype', 'extended_time', 'pred_side'], exactIntegers: ['volume'],
     decimalText: ['open', 'high', 'low', 'close', 'prev_close', 'turnover', 'turnover_rate_pct', 'change_pct'], nullable: ['prev_close', 'turnover_rate_pct', 'change_pct'] }
 };
+const currentBars = marketColumns['read.candles'];
+marketColumns['read.candle-history'] = {
+  ...currentBars, rowLimit: 370, paged: true,
+  columns: [...currentBars.columns, 'raw_volume', 'volume_precision', 'utc_offset_minutes', 'pe_ratio', 'open_interest',
+    'reported_settle_price', 'implied_volatility_pct', 'name', 'sc_name', 'tc_name'],
+  integers: [...currentBars.integers, 'volume_precision', 'utc_offset_minutes'],
+  exactIntegers: ['raw_volume', 'open_interest'],
+  decimalText: [...currentBars.decimalText, 'volume', 'pe_ratio', 'reported_settle_price', 'implied_volatility_pct'],
+  text: [...currentBars.text, 'name', 'sc_name', 'tc_name'],
+  nullable: [...currentBars.nullable, 'market_date', 'volume', 'volume_precision', 'utc_offset_minutes', 'pe_ratio', 'open_interest',
+    'reported_settle_price', 'implied_volatility_pct', 'name', 'sc_name', 'tc_name']
+};
 export const researchDisplaySchema = { 'read.calendar': calendar,
   ...Object.fromEntries(Object.entries(marketRestSpecs).map(([operation, spec]) =>
     [operation, { ...marketColumns[operation], units: researchRouteUnits(spec.method, spec.path) }])),
