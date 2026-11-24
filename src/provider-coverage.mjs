@@ -71,10 +71,14 @@ export const providerCoverage = Object.freeze([
     ['read.macro'], [],
     [source('api/quote/macro/macro-indicators.md', '05793610fec13ef1dc4daebfc70ccba885945cd7bf225bd8b5f75d110ee17299')],
     'Regional category names and indicator identifiers. Signed local REST fixture.'),
-  family('derivatives', 'Unusual derivatives activity', 'mapped', 'REST',
-    ['read.derivatives'], ['quote_future_info'],
-    [source('api/quote/unusual/derivatives.md', 'ca21b50ff8bef45e3b33cf5f86698c3a69d46fec85cc40343d8b0c575ac4425e')],
-    'Provider summary, lookback and movement status. Signed local REST fixture.'),
+  family('derivatives', 'Derivatives activity and options', 'mapped', 'REST',
+    ['read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events'],
+    ['quote_future_info', 'quote_option_chain', 'quote_option_expiration_date'],
+    [source('api/quote/unusual/derivatives.md', 'ca21b50ff8bef45e3b33cf5f86698c3a69d46fec85cc40343d8b0c575ac4425e'),
+     source('api/quote/derivatives/option-chain.md', 'fb7f9d61e0bbcf732ee05119b02377ed08d15f0768fed839b526901212f5031a'),
+     source('api/quote/derivatives/option-expiration.md', '9f96aea83279fa7a4ccc4f31ed2cb6610b8610c7135afddb6b4cfe51d4641ec1'),
+     source('api/quote/derivatives/option-event.md', 'b21cf9f36810dd3d653cf3179efc652e438d80872162d9c37a6f79a271ea2a44')],
+    'Signed local REST fixtures cover unusual activity, chain contracts, expiration cycles and the Greeks reported for an option trade.'),
   family('etf', 'ETF top holdings', 'mapped', 'REST',
     ['read.etf'], [],
     [source('api/quote/etf/quote-etf-top-holdings.md', 'f64d56a974cb6c7d8ea6993f68e883f27a4740b2f8a98098807ccd764681b9c4')],
@@ -140,6 +144,9 @@ export function coverageSummary(entries = providerCoverage) {
 }
 const deskTools = new Set(Object.values(captureMapping.operations).map(operation => operation.tool));
 const reviewedRest = new Map([
+  ['GET /api/v1.0/quote/{symbol}/option-chain', { evidence: 'Local option-chain fixture', units: 'Contract, underlying, strike price, lot size and market-local expiry date' }],
+  ['GET /api/v1.0/quote/{symbol}/option-expiration', { evidence: 'Local expiry fixture', units: 'Market-local strike date, signed days to expiry and expiration cycle' }],
+  ['GET /api/v1.0/quote/option-event', { evidence: 'Local option trade fixture', units: 'Execution and expiry in Unix microseconds, trade price, Greeks and IV in percent' }],
   ['GET /api/v1.0/quote/earnings-calendar', { evidence: 'Local earnings calendar fixture', units: 'Market-local dates and Unix microseconds' }],
   ['GET /api/v1.0/quote/{symbol}/capital-flow', { evidence: 'Local capital-flow fixture', units: 'Native currency and Unix milliseconds' }],
   ['GET /api/v1.0/quote/rank/hot-list', { evidence: 'Local hot-list fixture', units: 'Provider heat scores and rank changes' }],
@@ -230,8 +237,10 @@ export function routeInventory(catalog) {
     route.sources.push(source);
   }
   for (const doc of catalog.sources) {
-    for (const route of doc.routes ?? []) {
-      const source = { url: catalog.origin + doc.path, digest: doc.sha256 };
+    const record = doc.reference ?? doc;
+    for (const route of record.routes ?? []) {
+      const url = doc.reference ? catalog.origin + '/' + record.file : catalog.origin + doc.path;
+      const source = { url, digest: record.sha256 };
       if (route.startsWith('PUSH ')) add('Push', route.slice(5), null, route.slice(5), null, source);
       else add('REST', route, route, null, null, source);
     }

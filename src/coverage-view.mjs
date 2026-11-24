@@ -30,7 +30,8 @@ function showHttpFields(tool, node) {
   if (tool.response.length) {
     const response = node('details');
     response.append(node('summary', 'Response fields (' + tool.response.length + ')'),
-      node('p', (tool.wrap ? tool.wrap + ' · ' : '') + tool.response.join(', ')));
+      node('p', (tool.wrap ? tool.wrap + ' · ' : '') + tool.response.join(', ')),
+      node('p', 'These names come from the public tool directory. The REST reference gives the JSON field names returned by that endpoint.'));
     section.append(response);
   }
   if (tool.pagination?.length) section.append(node('p', 'Pagination · ' + tool.pagination.join(', ')));
@@ -54,7 +55,8 @@ export async function mountCoverageView(host) {
   const summary = coverageSummary();
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
-  const intro = node('p', `Evidence-led inventory of ${COVERAGE_INDEX.known_sources} known OpenAPI sources (${COVERAGE_INDEX.imported_sources} imported, ${COVERAGE_INDEX.incomplete_sources} incomplete). Connected qualification is specific to the host and read. Live order dispatch is excluded from the read-only $0 scope.`);
+  const references = catalog.sources.filter(source => source.reference);
+  const intro = node('p', `${COVERAGE_INDEX.known_sources} known OpenAPI sources · ${COVERAGE_INDEX.imported_sources} from the original mirror · ${references.length} additional public references. Connected qualification applies to the named host and read.`);
   const counts = node('p', Object.entries(summary.by_status).map(([key, value]) => `${key}: ${value}`).join(' · '));
   const list = node('div'); list.id = 'coverage-families';
   for (const entry of providerCoverage) {
@@ -77,7 +79,6 @@ export async function mountCoverageView(host) {
     list.append(section);
   }
   const rows = routeInventory(catalog);
-  const missing = catalog.sources.filter(source => source.imported === false);
   const summaryLine = node('p', ['REST', 'MCP', 'Push'].map(kind =>
     rows.filter(row => row.transport === kind).length + ' ' + kind + ' routes').join(' · '));
   const finder = node('section');
@@ -146,12 +147,17 @@ export async function mountCoverageView(host) {
   next.addEventListener('click', () => { offset += 12; render(); });
   finder.append(label, filterLabel, range, results, previous, next);
   render();
-  const gaps = node('details');
-  gaps.append(node('summary', missing.length + ' source URLs awaiting import'));
+  const supplement = node('details');
+  supplement.append(node('summary', references.length + ' additional public references'));
   const paths = node('ul');
-  for (const source of missing) paths.append(node('li', source.path));
-  gaps.append(paths);
+  for (const source of references) {
+    const item = node('li'), link = node('a', source.path);
+    link.href = catalog.origin + '/' + source.reference.file; link.rel = 'noopener noreferrer'; link.target = '_blank';
+    item.append(link, node('code', ' SHA-256 ' + source.reference.sha256));
+    paths.append(item);
+  }
+  supplement.append(paths);
   const families = node('details');
   families.append(node('summary', 'Feature families'), counts, list);
-  host.replaceChildren(status, intro, finder, gaps, families);
+  host.replaceChildren(status, intro, finder, supplement, families);
 }

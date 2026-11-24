@@ -433,3 +433,63 @@ test('running gateway replays one parameter-bound headline through HTTP and MCP 
   assert.equal(refusal.error.code, 'UNAUTHORIZED');
   assert.deepEqual(calls, ['GET']);
 });
+
+test('option chains bind contract owner, expiry interval, standard and signed query inputs', async t => {
+  const op = 'read.option-chain';
+  const parameters = { ...hk, start: '2026-04-01', end: '2026-06-01', filter_standard: 'STANDARD' };
+  const contract = { code: 'HK.TCH260528C230000', stock_owner: hk.symbol, strike_time: '2026-05-28',
+    strike_price: '230.000', lot_size: 100, option_type: 'CALL', expiration_cycle: 'MONTH', option_standard_type: 'STANDARD' };
+  const chain = (row = contract) => response({ option_chain: [row] });
+  const zeroCalls = calls => assert.equal(calls.length, 0);
+  const result = await researchRead(t, op, parameters, chain(), calls => {
+    const url = new URL(calls[0].url);
+    assert.equal(url.pathname, '/api/v1.0/quote/HK.00700/option-chain');
+    assert.equal(url.searchParams.get('end'), parameters.end);
+  });
+  assert.equal(result.rows[0].strike_price, 230);
+  assert.equal(result.decimals[0].strike_price, '230.000');
+  for (const wrong of [{ stock_owner: 'HK.00001' }, { strike_time: '2026-06-02' }, { option_standard_type: 'NON_STANDARD' }]) {
+    await assert.rejects(researchRead(t, op, parameters, chain({ ...contract, ...wrong })), /SOURCE_MAPPING_REQUIRED/);
+  }
+  await assert.rejects(researchRead(t, op, { ...parameters, end: '2026-03-01' }, chain(), zeroCalls), /INVALID_PARAMETER/);
+  await assert.rejects(researchRead(t, op, { ...parameters, index_option_type: 1002 }, chain(), zeroCalls), /INVALID_PARAMETER/);
+  await assert.rejects(researchRead(t, op, { ...parameters, symbol: 'SG.DEMO' }, chain(), zeroCalls), /UNSUPPORTED/);
+  await assert.rejects(researchRead(t, op, { ...parameters, start: '' }, chain(), zeroCalls, parameters), /SCOPE_DENIED/);
+  const many = Array.from({ length: 21 }, (_, day) => ({ ...contract, strike_time: '2026-05-' + String(day + 1).padStart(2, '0') }));
+  await assert.rejects(researchRead(t, op, parameters, response({ option_chain: many })), /INVALID_PAGE/);
+});
+
+test('expiry lookup preserves expired dates, filters cycles and accepts empty results', async t => {
+  const op = 'read.option-expiries';
+  const parameters = { symbol: 'JP.N225', index_option_type: 2001, filter_expiration_cycles: 'MONTH,QUARTERLY' };
+  const expiry = { strike_time: '2026-05-28', option_expiry_date_distance: -2, expiration_cycle: 'MONTH' };
+  const body = response({ expiration_list: [expiry] });
+  const result = await researchRead(t, op, parameters, body,
+    calls => assert.equal(new URL(calls[0].url).searchParams.get('index_option_type'), '2001'));
+  assert.deepEqual(result.rows, [expiry]);
+  await assert.rejects(researchRead(t, op, { ...parameters, filter_expiration_cycles: 'WEEK' }, body), /SOURCE_MAPPING_REQUIRED/);
+  await assert.rejects(researchRead(t, op, { ...parameters, filter_expiration_cycles: 'MONTH,BOGUS' }, body,
+    calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+  assert.deepEqual((await researchRead(t, op, { ...hk, filter_expiration_cycles: '' }, { ret_code: -10 })).rows, []);
+});
+
+test('option trade Greeks retain zero and absent values, source price strings and the full opaque cursor', async t => {
+  const op = 'read.option-events', filter = { option_market: 'US_SECURITY', code: 'US.DEMO', page_size: 1 };
+  const fill = { option: 'US.DEMO261218C100000', owner: 'US.DEMO', fill_timestamp: 1795490000000123,
+    strike_timestamp: 1797638400000000, price: '3.07000', strike_price: '100.00', bid_price: '3.000', delta: 0, theta: -0.025 };
+  const cursor = 'a+/='.repeat(64);
+  const body = (event = fill) => ({ ...response({ events: [event] }), pagination: { page_flag: cursor, completed: false, total: 2 } });
+  const result = await researchRead(t, op, filter, body());
+  assert.deepEqual([result.rows[0].delta, result.rows[0].theta, result.rows[0].rho, result.rows[0].ask_price], [0, -0.025, null, null]);
+  assert.equal(result.decimals[0].price, fill.price);
+  assert.equal(result.pagination.next_cursor, cursor);
+  const end = { ...response({ events: [] }), pagination: { ...pageEnd, total: 2 } };
+  const next = await researchRead(t, op, { ...filter, page_flag: cursor }, end,
+    calls => assert.equal(new URL(calls[0].url).searchParams.get('page_flag'), cursor));
+  assert.equal(next.pagination.next_cursor, null);
+  await assert.rejects(researchRead(t, op, filter, body({ ...fill, price: 3.07 })), /PRECISION_UNKNOWN/);
+  await assert.rejects(researchRead(t, op, filter, body({ ...fill, owner: 'US.OTHER' })), /SOURCE_MAPPING_REQUIRED/);
+  await assert.rejects(researchRead(t, op, { option_market: 'HK_SECURITY' }, body()), /SOURCE_MAPPING_REQUIRED/);
+  await assert.rejects(researchRead(t, op, { ...filter, page_flag: cursor }, end,
+    calls => assert.equal(calls.length, 0), filter), /SCOPE_DENIED/);
+});
