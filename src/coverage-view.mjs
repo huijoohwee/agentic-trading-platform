@@ -1,6 +1,6 @@
 import { createRecordLinkCodec } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 import { mountCoverageRecords } from './coverage-routes-view.mjs';
-import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
+import { providerCoverage, coverageSummary, mappedReads, routeInventory, catalogReferences } from './provider-coverage.mjs';
 
 import { coverageRelations, httpFieldInventory, routeId } from './coverage-relations.mjs';
 
@@ -12,8 +12,9 @@ export async function mountCoverageView(host) {
   const summary = coverageSummary();
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
-  const references = catalog.sources.filter(source => source.reference);
-  const intro = node('p', `${COVERAGE_INDEX.known_sources} known OpenAPI sources · ${COVERAGE_INDEX.imported_sources} from the original mirror · ${references.length} additional public references. Select a row or card for full values and source links. Connected qualification applies to the named host and read.`);
+  const references = catalogReferences(catalog);
+  const additional = catalog.sources.filter(source => source.reference).length;
+  const intro = node('p', `${references.length} known OpenAPI sources · ${references.length - additional} from the original mirror · ${additional} additional public references. Select a row or card for full values and source links. Connected qualification applies to the named host and read.`);
   const counts = node('p', Object.entries(summary.by_status).map(([key, value]) => `${key}: ${value}`).join(' · '));
   const text = (id, name) => ({ id, name });
   const number = (id, name) => ({ id, name, kind: 'number' });
@@ -22,10 +23,10 @@ export async function mountCoverageView(host) {
     const link = node('a', label); link.href = url; link.rel = 'noopener noreferrer'; link.target = '_blank';
     const line = node('p'); line.append(link, node('code', ' SHA-256 ' + hash)); parent.append(line);
   }
-  const rows = routeInventory(catalog);
-  const links = coverageRelations(catalog, rows);
+  const rows = routeInventory(catalog, references);
+  const links = coverageRelations(catalog, rows, references, providerCoverage);
   const { href: fragment, parse } = createRecordLinkCodec({ fragment: 'provider-coverage',
-    views: [{ view: 'route' }, { view: 'reference' }, { view: 'field', group: 'fields' }] });
+    views: [{ view: 'route' }, { view: 'reference' }, { view: 'field', group: 'fields' }, { view: 'family' }] });
   const remember = params => history.replaceState(history.state, '', fragment(params));
   function link(label, params) {
     const anchor = node('a', label); anchor.href = fragment(params);
@@ -51,7 +52,7 @@ export async function mountCoverageView(host) {
     const bindings = [...new Set(row.sources.map(source => source.http).filter(http => http && http !== row.label))];
     if (bindings.length) detail.append(node('h6', 'HTTP bindings'), ...bindings.map(http => node('p', http)));
     for (const source of row.sources) {
-      sourceLine(detail, source.tool ?? new URL(source.url).pathname, source.url, source.digest);
+      sourceLine(detail, source.tool ?? 'Open source ' + new URL(source.url).pathname, source.url, source.digest);
     }
     const tools = links.tools.to(routeId(row)).map(edge => edge.source);
     selectedTools = tools;
@@ -62,25 +63,28 @@ export async function mountCoverageView(host) {
   });
   const supplement = node('section'), families = node('section');
   supplement.id = 'coverage-references'; families.id = 'coverage-families';
-  supplement.append(node('h4', references.length + ' additional public references'));
+  supplement.append(node('h4', references.length + ' public references'));
   const sources = references.map(source => {
     const parts = source.path.split('/').filter(Boolean);
     const locale = /^zh-(cn|hk)$/.test(parts[0]) ? parts.shift() : 'Default';
     const section = parts[0] === 'api' ? parts[1] ?? 'api' : parts[0] ?? 'Home';
-    return { label: source.path, section, locale, hash: source.reference.sha256, routeCount: source.reference.routes.length, reference: source.reference };
+    return { ...source, label: source.path, section, locale, routeCount: source.routes.length };
   });
   const referenceView = mountCoverageRecords(supplement, sources, node, { id: 'reference', key: row => row.label, onSelect: row => remember({ view: 'reference', record: row.label }), title: 'References', plural: 'references', singular: 'reference',
-    columns: [text('label', 'Reference path'), category('section', 'Section'), category('locale', 'Locale'), text('hash', 'SHA-256'), number('routeCount', 'Routes listed')],
+    columns: [text('label', 'Reference path'), category('section', 'Section'), category('locale', 'Locale'), text('sha256', 'SHA-256'), number('routeCount', 'Routes listed'), category('collection', 'Source collection')],
     rowDimension: 'locale', groupDimension: 'section' }, (row, detail) => {
-    sourceLine(detail, row.label, catalog.origin + '/' + row.reference.file, row.hash);
-    detail.append(node('p', 'Markdown file · ' + row.reference.file));
+    sourceLine(detail, row.label, row.url, row.sha256);
+    detail.append(node('p', row.collection + ' · ' + row.file));
     if (!row.routeCount) detail.append(node('p', 'This catalog reference lists no routes.'));
     related(detail, 'Documented routes', links.references.from(row.label).map(edge =>
       link(edge.label, { view: 'route', record: edge.target })));
+    related(detail, 'Cited by feature families', links.familySources.to(row.label).map(edge =>
+      link(edge.label, { view: 'family', record: edge.source })));
   });
   families.append(node('h4', 'Feature families'), counts);
   const entries = providerCoverage.map(entry => ({ ...entry, operationNames: entry.operations.join(', '), readCount: mappedReads([entry]).length }));
-  mountCoverageRecords(families, entries, node, { id: 'family', title: 'Feature families', plural: 'families', singular: 'family',
+  const familyView = mountCoverageRecords(families, entries, node, { id: 'family', key: row => row.id,
+    onSelect: row => remember({ view: 'family', record: row.id }), title: 'Feature families', plural: 'families', singular: 'family',
     columns: [text('label', 'Feature family'), category('transport', 'Transport'), category('status', 'Disposition'), { id: 'operationNames', name: 'Operation IDs', format: 'code-list' }, number('readCount', 'Mapped reads')],
     measure: { label: 'Distinct mapped reads', count: group => mappedReads(group).length },
     rowDimension: 'transport', groupDimension: 'status' }, (entry, detail) => {
@@ -96,7 +100,11 @@ export async function mountCoverageView(host) {
       node('dt', 'Mapped reads'), node('dd', entry.readCount),
       node('dt', 'Listed MCP tools'), node('dd', entry.mcp.join(', ') || 'See individual routes'));
     detail.append(facts);
-    for (const item of entry.sources) sourceLine(detail, item.path, item.url, item.sha256);
+    for (const edge of links.familySources.from(entry.id)) {
+      const doc = links.documentsByPath.get(edge.target), line = node('p');
+      line.append(link(doc.file, { view: 'reference', record: doc.path }), node('code', ' SHA-256 ' + doc.sha256));
+      detail.append(line);
+    }
   });
   const fields = node('section'), fieldStatus = node('p'), notice = node('p');
   const toolRoutes = node('nav'); toolRoutes.setAttribute('aria-label', 'Routes for selected tool');
@@ -153,6 +161,7 @@ export async function mountCoverageView(host) {
     let opened = false;
     if (destination?.view === 'route') opened = routeView.open({ key: destination.record });
     else if (destination?.view === 'reference') opened = referenceView.open({ key: destination.record });
+    else if (destination?.view === 'family') opened = familyView.open({ key: destination.record });
     else if (destination?.view === 'field') {
       const view = await loadFields();
       if (location.hash !== '#' + hash) return;

@@ -285,7 +285,16 @@ function disposition(methodPath, topic, name) {
   return ['candidate', scope, 'Review fields, rights and quota'];
 }
 
-export function routeInventory(catalog) {
+export function catalogReferences(catalog) {
+  return catalog.sources.map(source => {
+    const document = source.reference ?? source;
+    return { path: source.path, file: document.file, sha256: document.sha256, routes: document.routes,
+      collection: source.reference ? 'Additional public reference' : 'Original mirror',
+      url: catalog.origin + (source.reference ? '/' + document.file : source.path) };
+  });
+}
+
+export function routeInventory(catalog, documents = catalogReferences(catalog)) {
   if (catalog.schema !== 'moomoo-documentation-catalog/v1' || catalog.authority !== false ||
       catalog.index_sha256 !== COVERAGE_INDEX.index_sha256) throw Error('COVERAGE_SOURCE_DRIFT');
   const routes = new Map();
@@ -301,11 +310,9 @@ export function routeInventory(catalog) {
     }
     route.sources.push(source);
   }
-  for (const doc of catalog.sources) {
-    const record = doc.reference ?? doc;
+  for (const record of documents) {
     for (const route of record.routes ?? []) {
-      const url = doc.reference ? catalog.origin + '/' + record.file : catalog.origin + doc.path;
-      const source = { url, digest: record.sha256 };
+      const source = { url: record.url, digest: record.sha256, document: record.path };
       if (route.startsWith('PUSH ')) add('Push', route.slice(5), null, route.slice(5), null, source);
       else add('REST', route, route, null, null, { ...source, http: route });
     }
