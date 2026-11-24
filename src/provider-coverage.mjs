@@ -16,6 +16,8 @@ const source = (path, sha256) => Object.freeze({ path, sha256, url: 'https://ope
 const family = (id, label, status, transport, operations, mcp, sources, note) =>
   Object.freeze({ id, label, status, transport, operations: Object.freeze(operations), mcp: Object.freeze(mcp), sources: Object.freeze(sources), note });
 
+const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE', 'BROKER_QUEUE', 'MARKET_STATE']);
+
 export const providerCoverage = Object.freeze([
   family('market-reads', 'Realtime quotes, history, book and tape', 'mapped', 'MCP',
     ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape'],
@@ -120,7 +122,7 @@ export const providerCoverage = Object.freeze([
   family('push', 'Realtime push subscription', 'candidate', 'PUSH',
     ['subscribe.push'], [],
     [source('api/quote/push/overview.md', '485db83bdf0dd46e4e63f042ce21c9bd473bd68745eb64c1328ebfe59c789670')],
-    'Offline QUOTE, ORDER_BOOK, TICKER and KLINE replay. An entitled stream needs its own subscription and recovery evidence.'),
+    `Saved quote frames supported by the desk: ${[...replayTopics].join(', ')}. An entitled stream needs its own subscription and recovery evidence.`),
   family('sim-trade', 'Simulated paper trading', 'paper-candidate', 'REST',
     ['practice.sim'], [],
     [source('api/sim-trade/cash-info.md', '68a9a178c1b0c1d06b4dd6ecf066c907d808a03e1ecce5a1f565cd83bca62960')],
@@ -198,7 +200,6 @@ const simulationRoutes = new Map([
   ['POST ' + simOrder + 'modify', simEffect('Amend an independently approved paper ticket', 'Original order ID, new quantity and price')],
   ['POST ' + simOrder + 'cancel', simEffect('Cancel an independently approved paper ticket', 'Account market ID and original order ID')]
 ]);
-const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE', 'BROKER_QUEUE', 'MARKET_STATE']);
 const routeKey = http => http.replace(/\{[A-Za-z_][\w]*\}/g, '{}');
 
 // Labels describe the evidence needed at Trading admission. This inventory has
