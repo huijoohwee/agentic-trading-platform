@@ -1,3 +1,4 @@
+import { addQuoteProvenance } from './quote-display.mjs';
 import { captureSummary, captureProvenance, captureOperations } from './provider-capture.mjs';
 import { hostedProvenance } from './provider-hosted.mjs';
 
@@ -24,7 +25,7 @@ export async function mountCaptureView(host) {
   add('Depth levels', `${s.depth_levels} bid / ${s.depth_levels} ask`);
   add('Tape ticks', String(s.tape_ticks));
   add('Daily candles', String(s.candle_count));
-  add('Captured UTC', p.captured_utc);
+  addQuoteProvenance(add, s.data_time, p.captured_utc);
   add('Binding', p.binding);
   add('Hosted OAuth (N3)', hostedProvenance.hosted_n3 ? 'qualified' : 'open');
   const operations = node('p', 'Reviewed read operations: ' + captureOperations.join(', ') + '. Live order dispatch is excluded from the read-only $0 scope.');
