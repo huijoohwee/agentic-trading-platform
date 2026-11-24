@@ -1,12 +1,12 @@
 import { createPrivateKey, sign } from 'node:crypto';
-import { ownPath, rpcResponse } from './mcp-read.mjs';
+import { listReviewedTools, ownPath, rpcResponse } from './mcp-read.mjs';
 import { validateProviderDefinition } from './provider-mapping.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
 // transport owner (endpoint/protocols/ownPath/rpcResponse) and never exposes raw provider tools:
 // the reviewed private mapping binds each native operation to one read-only tool and projection.
-export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar'];
+export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank'];
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 
@@ -83,11 +83,10 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
       requireThat(initialized?.protocolVersion === mapping.protocol && initialized.capabilities?.tools, 'PROTOCOL_UNQUALIFIED');
       version = initialized.protocolVersion;
       await rpc('notifications/initialized', null, signal, true);
-      const listed = await rpc('tools/list', {}, signal);
-      requireThat(Array.isArray(listed?.tools) && !listed.nextCursor, 'TOOL_CATALOG_INCOMPLETE');
+      const listed = await listReviewedTools(rpc, grant.tools, grant.limits.max_calls - calls - 1, signal);
       for (const allowed of grant.tools) {
         const spec = mapping.operations[allowed.operation];
-        const descriptor = listed.tools.find(tool => tool.name === allowed.name);
+        const descriptor = listed.get(allowed.name);
         requireThat(spec && descriptor && sha(descriptor) === allowed.schema_digest && spec.tool === allowed.name && allowed.effect === 'read', 'SCHEMA_DRIFT');
         requireThat(!writeBan.test(allowed.name), 'SCOPE_DENIED');
       }

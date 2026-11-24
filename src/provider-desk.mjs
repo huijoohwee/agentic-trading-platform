@@ -1,75 +1,73 @@
-// Curated moomoo market-desk rows projected from the captured $0 Desktop fixture
-// (qualification/moomoo/desktop-mcp-capture.json). Prices/turnover/change_rate keep the exact
-// round-trip decimal string of the provider JSON number; tick `sequence` exceeds 2^53 and is left
-// opaque (not projected). test/provider-desk.test.mjs pins every row against the fixture so the
-// desk cannot drift from the evidence. Read-only replay: no provider call, no order dispatch.
-export const deskProvenance = {
-  binding: 'desktop-mcp',
-  fixture: 'qualification/moomoo/desktop-mcp-capture.json',
-  captured_utc: '2026-11-23T23:17:44Z',
-  symbol: 'HK.00700',
-  market: 'HK',
-  market_date: '2026-11-23',
-  cost_usd: 0,
-  operations: ['read.depth', 'read.tape', 'read.candles'],
-  note: 'Moomoo-inspired read-only desk replayed from the captured entitled $0 Desktop reads. Depth, tape and candles are the provider rows as captured; currency, delay class and per-quote feed attribution remain unknown. No live feed, subscription or order operation is performed.'
-};
+import {
+  replayMoomooOrderBook, replayMoomooTicker, replayMoomooKline
+} from 'agentic-gateway/connectors/moomoo';
+import capture from '../qualification/moomoo/desktop-mcp-capture.json' with { type: 'json' };
 
-export const deskDepth = {
-  exchange: 'SEHK',
-  ask: [
-    { price: '344', volume: 272400, orders: 62 },
-    { price: '344.2', volume: 96900, orders: 27 },
-    { price: '344.4', volume: 123300, orders: 15 },
-    { price: '344.6', volume: 132800, orders: 31 },
-    { price: '344.8', volume: 75600, orders: 41 },
-    { price: '345', volume: 112300, orders: 133 },
-    { price: '345.2', volume: 83700, orders: 26 },
-    { price: '345.4', volume: 7500, orders: 7 },
-    { price: '345.6', volume: 83900, orders: 25 },
-    { price: '345.8', volume: 70300, orders: 32 }
-  ],
-  bid: [
-    { price: '343.8', volume: 41700, orders: 13 },
-    { price: '343.6', volume: 30000, orders: 37 },
-    { price: '343.4', volume: 78900, orders: 25 },
-    { price: '343.2', volume: 59900, orders: 16 },
-    { price: '343', volume: 92200, orders: 98 },
-    { price: '342.8', volume: 90100, orders: 23 },
-    { price: '342.6', volume: 29400, orders: 12 },
-    { price: '342.4', volume: 18100, orders: 8 },
-    { price: '342.2', volume: 23800, orders: 18 },
-    { price: '342', volume: 84100, orders: 60 }
-  ]
-};
+// The build seals only the chart rows. Desktop returned MCP responses; the
+// documented frame envelopes below are local inputs to Gateway's replay API.
+export function projectDesktopDesk(fixture) {
+  const { provenance, calls } = fixture;
+  const { symbol, binding, captured_utc, market, market_date, cost_usd } = provenance;
+  if (fixture.schema !== 'trading-moomoo-desktop-capture/v1' || binding !== 'desktop-mcp' ||
+      provenance.hosted_n3 !== false || cost_usd !== 0) throw Error('DESK_CAPTURE_REQUIRED');
+  const read = (name, parameter) => {
+    const call = calls[name];
+    if (call?.arguments?.[parameter] !== symbol) throw Error('DESK_SYMBOL_MISMATCH');
+    if (call.isError || call.structuredContent?.ret_code !== 0) throw Error('DESK_PROVIDER_REFUSED');
+    return call.structuredContent.data;
+  };
+  const books = read('quote_order_book', 'code');
+  const tape = read('quote_rt_ticker', 'symbol');
+  const klines = read('quote_cur_kline', 'symbol').kline_list;
+  if (books?.length !== 1 || books[0].code !== symbol || books[0].books?.length !== 1 ||
+      tape.code !== symbol || !Array.isArray(klines) || klines.some(row => row.code !== symbol)) {
+    throw Error('DESK_CAPTURE_MISMATCH');
+  }
+  const klineArgs = calls.quote_cur_kline.arguments;
+  const schema = fixture.tools.find(tool => tool.name === 'quote_cur_kline')?.inputSchema.properties;
+  if ((klineArgs.ktype ?? schema?.ktype?.default) !== 2 ||
+      (klineArgs.autype ?? schema?.autype?.default) !== 1) throw Error('DESK_KLINE_DIMENSION');
 
-export const deskTape = [
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 1500, turnover: '516000', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 3300, turnover: '1135200', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 500, turnover: '172000', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 1100, turnover: '378400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 1400, turnover: '481600', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 300, turnover: '103200', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 200, turnover: '68800', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 1500, turnover: '516000', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 200, turnover: '68800', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 500, turnover: '172000', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 1200, turnover: '412800', direction: 'BUY', tick_type: 'AUTO_MATCH' },
-  { time: 1795421300722, price: '344', volume: 100, turnover: '34400', direction: 'BUY', tick_type: 'AUTO_MATCH' }
-];
+  const frame = (type, data) => ({ type, symbol, data });
+  const book = books[0].books[0];
+  const depth = replayMoomooOrderBook(symbol, frame('ORDER_BOOK', {
+    bid_list: book.bid_list, ask_list: book.ask_list, data_time_ms: book.exchange_data_time_ms
+  }));
+  const { ticks } = replayMoomooTicker(symbol, frame('TICKER', {
+    ticker_list: tape.ticker_list.map(row => ({
+      price: row.price, volume: row.volume, turnover: row.turnover,
+      direction: row.ticker_direction, time_ms: row.time
+    }))
+  }));
+  const { bars } = replayMoomooKline(symbol, frame('KLINE', {
+    period: '1D', adjust: 'forward_exclude_dividend',
+    kl_list: klines.map(row => ({ ...row, time_ms: row.time_key }))
+  }));
+  const levels = side => side.map(({ price, volume, orderCount }) => ({ price, volume, orders: orderCount }));
+  const epoch = utc => utc === null ? null : Date.parse(utc);
+  return {
+    deskProvenance: {
+      binding, captured_utc, symbol, market, market_date, cost_usd,
+      fixture: 'qualification/moomoo/desktop-mcp-capture.json',
+      operations: ['read.depth', 'read.tape', 'read.candles'],
+      note: 'Gateway replay of the saved Desktop order book, trades and daily candles. Currency, delay and feed attribution are unknown.'
+    },
+    deskDepth: { exchange: book.exchange, ask: levels(depth.asks), bid: levels(depth.bids) },
+    deskTape: ticks.map((tick, index) => ({
+      time: epoch(tick.marketTimeUtc), price: tick.price, volume: tick.volume,
+      turnover: tick.turnover, direction: tick.direction, tick_type: tape.ticker_list[index].tick_type
+    })),
+    deskCandles: bars.map((bar, index) => {
+      const row = klines[index];
+      const date = String(row.date).match(/^(\d{4})(\d{2})(\d{2})$/);
+      if (!date || (row.change_rate != null && !Number.isFinite(row.change_rate))) throw Error('DESK_KLINE_FIELDS');
+      return {
+        date: date.slice(1).join('-'), time: epoch(bar.marketTimeUtc),
+        open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+        volume: bar.volume, turnover: bar.turnover, change_rate: row.change_rate == null ? null : String(row.change_rate)
+      };
+    })
+  };
+}
 
-export const deskCandles = [
-  { date: '2026-11-17', time: 1794844800000, open: '386.6', high: '386.6', low: '376', close: '376', volume: 31401095, turnover: '11892584512', change_rate: '-3.6885245901639343' },
-  { date: '2026-11-18', time: 1794931200000, open: '374', high: '378', low: '370', close: '372.8', volume: 21333340, turnover: '7956175438', change_rate: '-0.851063829787234' },
-  { date: '2026-11-19', time: 1795017600000, open: '361.8', high: '365', low: '345', close: '348.4', volume: 76426269, turnover: '26816605631', change_rate: '-6.545064377682404' },
-  { date: '2026-11-20', time: 1795104000000, open: '341', high: '349.6', low: '339.6', close: '344', volume: 41094469, turnover: '14089992865', change_rate: '-1.2629161882893225' },
-  { date: '2026-11-23', time: 1795363200000, open: '335', high: '344.6', low: '333', close: '344', volume: 35289665, turnover: '11960782218', change_rate: '0' }
-];
+export const { deskProvenance, deskDepth, deskTape, deskCandles } = projectDesktopDesk(capture);

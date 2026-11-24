@@ -227,6 +227,18 @@ try {
     await reopened.locator('#provider-desk summary').click();
     await reopened.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
     assert.ok((await reopened.locator('#desk-status').innerText()).includes('read-only desk'));
+    await reopened.locator('#provider-coverage > summary').click();
+    const routes = reopened.locator('#coverage-routes');
+    await routes.getByLabel('Route or tool').fill('quote_stock_quote');
+    await routes.getByText('MCP · quote_stock_quote · mapped', { exact: true }).click();
+    await routes.getByText('quote:read · Desktop and hosted captures').waitFor();
+    await routes.getByLabel('Disposition').selectOption('excluded');
+    await routes.getByText('No matching routes').waitFor();
+    await routes.getByLabel('Route or tool').fill('trading_order_place');
+    await routes.getByText('MCP · trading_order_place · excluded', { exact: true }).waitFor();
+    const bookDetails = reopened.locator('#desk-body details').filter({ has: reopened.locator('summary', { hasText: 'Order book' }) });
+    await bookDetails.locator('summary').click();
+    await bookDetails.getByRole('cell', { name: '272400', exact: true }).waitFor();
     const offlineDeskText = await reopened.locator('#desk-body').innerText();
     for (const fragment of ['Order book · SEHK', 'Time & sales', 'Daily candles']) assert.ok(offlineDeskText.includes(fragment), 'offline desk missing ' + fragment);
     assert.equal(await reopened.locator('#desk-body svg.desk-diagram').count(), 3);

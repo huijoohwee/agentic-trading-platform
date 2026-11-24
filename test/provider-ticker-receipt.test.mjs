@@ -7,6 +7,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonical, sha } from '../runtime/core.mjs';
+import { researchMapping } from '../runtime/moomoo-research.mjs';
+import { providerCredential } from '../runtime/config.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 import { exportProviderTicker, providerTickerReceipt } from '../scripts/export-provider-ticker.mjs';
 
@@ -40,6 +42,19 @@ test('a single admitted provider dispatch survives HTTP/MCP retry and exports on
     provider_credentials: { [provider]: { token: randomBytes(32).toString('hex'), attestation: { key_id: 'integration',
       runtime: 'integration', principal: 'integration', privateKey: pairs.integration.privateKey.export({ type: 'pkcs8', format: 'pem' }) } } },
     gateway: { audience_token: audience, capabilities: [capability] } };
+  const rankOp = 'read.rank', rankSpec = researchMapping.operations[rankOp];
+  const rankDef = { ...definition, transport: { kind: 'REST', origin: 'https://research.invalid/', protocol: '1.0' },
+    adapter_digest: sha('rank-adapter'), schema_digest: rankSpec.schema_digest, mapping_digest: sha(researchMapping),
+    mapping: researchMapping, operations: [rankOp], allowlist: [rankSpec.tool] };
+  const { schema: _schema, mapping: _research, ...rankBase } = rankDef;
+  const rankCapability = { ...rankBase, transport: 'REST', protocol: '1.0' };
+  const mcpCredential = config.provider_credentials[provider];
+  assert.equal(providerCredential(config, provider, 'MCP'), mcpCredential);
+  config.providers.push(rankDef);
+  assert.throws(() => providerCredential(config, provider, 'REST'), /TRANSPORT_CREDENTIAL_REQUIRED/);
+  config.gateway.capabilities.push(rankCapability);
+  const restToken = randomBytes(32).toString('hex');
+  config.provider_credentials[provider] = { transports: { MCP: mcpCredential, REST: { ...mcpCredential, token: restToken } } };
   const replayRight = { audience: 'graph-mainpanel', provider, symbol, display: true, offline_replay: true, retain_until_utc: retention };
   function requestWith(right, grantCost = cost) {
     const nonce = randomUUID();
@@ -59,7 +74,14 @@ test('a single admitted provider dispatch survives HTTP/MCP retry and exports on
   const realFetch = globalThis.fetch;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     if (new URL(url).hostname === '127.0.0.1') return realFetch(url, options);
+    if (new URL(url).origin === 'https://research.invalid') {
+      assert.equal(options.headers.Authorization, 'Bearer ' + restToken);
+      assert.equal(options.method, 'GET');
+      assert.equal(new URL(url).pathname, '/api/v1.0/quote/rank/hot-list');
+      return Response.json({ ret_code: 0, data: { items: [] }, pagination: { completed: true, page_flag: '', total: 0 } });
+    }
     assert.equal(url, definition.transport.origin);
+    assert.equal(options.headers.Authorization, 'Bearer ' + mcpCredential.token);
     const body = JSON.parse(options.body);
     methods.push(body.method);
     if (body.method === 'notifications/initialized') return new Response(null, { status: 202 });
@@ -92,11 +114,24 @@ test('a single admitted provider dispatch survives HTTP/MCP retry and exports on
   assert.equal(http.status, 'OK', JSON.stringify(http.error));
   assert.equal((await rpc(1, 'initialize', { protocolVersion: mapping.protocol, capabilities: {}, clientInfo: { name: 'test', version: '1' } })).result.protocolVersion, mapping.protocol);
   await post('/mcp', { jsonrpc: '2.0', method: 'notifications/initialized' });
-  assert.deepEqual((await rpc(2, 'tools/list', {})).result.tools.map(item => item.name), [operation]);
+  assert.deepEqual((await rpc(2, 'tools/list', {})).result.tools.map(item => item.name).sort(), [rankOp, operation].sort());
   const mcp = await rpc(3, 'tools/call', { name: operation, arguments: request });
   assert.deepEqual(mcp.result.structuredContent, http);
   assert.equal(mcp.result.isError, false);
   assert.deepEqual(methods, ['initialize', 'notifications/initialized', 'tools/list', 'tools/call']);
+  const rankRequest = requestWith(null);
+  rankRequest.operation = rankOp;
+  rankRequest.capability_digest = sha(rankCapability);
+  const rankGrant = rankRequest.inputs.grant;
+  rankGrant.payload.mapping_digest = rankDef.mapping_digest;
+  rankGrant.payload.tools = [{ name: rankSpec.tool, operation: rankOp, effect: 'read', schema_digest: rankSpec.schema_digest }];
+  rankGrant.signature = sign(null, Buffer.from(canonical(rankGrant.payload)), pairs.operator.privateKey).toString('base64url');
+  rankRequest.inputs = { market: 'HK', grant: rankGrant };
+  const rankHttp = await post('/api/gateway', rankRequest);
+  assert.equal(rankHttp.status, 'OK', JSON.stringify(rankHttp.error));
+  assert.deepEqual(rankHttp.data.pagination, { completed: true, next_cursor: null, total: 0 });
+  const rankMcp = await rpc(4, 'tools/call', { name: rankOp, arguments: rankRequest });
+  assert.deepEqual(rankMcp.result.structuredContent, rankHttp);
   await privateFile(requestPath, request);
   const output = join(directory, 'receipt.json');
   const cli = fileURLToPath(new URL('../scripts/export-provider-ticker.mjs', import.meta.url));

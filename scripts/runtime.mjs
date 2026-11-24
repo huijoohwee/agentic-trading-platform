@@ -2,7 +2,7 @@ import { marketOperations, marketRead } from '../src/market-reads.mjs';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { openConfiguredRuntime, readPrivateJson } from '../runtime/config.mjs';
+import { openConfiguredRuntime, providerCredential, readPrivateJson } from '../runtime/config.mjs';
 import { hash, id, requireProofs, requireThat, sha, utcMillis, verifyEnvelope } from '../runtime/core.mjs';
 import { createRuntimeApi } from '../runtime/http.mjs';
 import { createGateway } from '../runtime/gateway.mjs';
@@ -55,8 +55,8 @@ export async function runtimeCommand(args) {
     if (command === 'read') {
       requireThat(rest.length === 3, 'READ_CONFIGURATION_REQUIRED');
       const [runId, grantPath, providerId] = rest;
-      const definition = (config.providers ?? []).find(item => item.provider === providerId);
-      const credential = config.provider_credentials?.[providerId];
+      const definition = (config.providers ?? []).find(item => item.provider === providerId && item.transport.kind === 'MCP' && item.mapping.sheets);
+      const credential = providerCredential(config, providerId, 'MCP');
       requireThat(definition && credential, 'READ_CONFIGURATION_REQUIRED');
       const grant = readPrivateJson(grantPath);
       const adapter = createMcpReadAdapter({ provider: definition, token: credential.token, mapping: definition.mapping,
@@ -71,29 +71,35 @@ export async function runtimeCommand(args) {
       const port = Number(rest[0] ?? 4182);
       requireThat(port >= 0 && port <= 65535, 'INVALID_PORT');
       const registry = createProviderRegistry(config.providers ?? []);
-      const credentials = config.provider_credentials ?? {};
       const marketBoundaries = new Map(), snapshotImporters = new Map();
-      for (const definition of config.providers ?? []) {
-        const credential = credentials[definition.provider];
+      const definitions = config.providers ?? [];
+      for (const definition of definitions) {
+        const transport = definition.transport.kind;
+        const credential = providerCredential(config, definition.provider, transport);
         if (!credential) continue;
+        const shared = { provider: definition, token: credential.token, mapping: definition.mapping,
+          attestation: credential.attestation, scope: config.scope, candidate: config.candidate };
+        // Each admission owns its own MCP session, grant, call counter and cursor.
+        // All admissions still reserve against the same durable cost proof.
         if (definition.mapping?.operations) {
-          const shared = { provider: definition, token: credential.token, mapping: definition.mapping,
-            attestation: credential.attestation, scope: config.scope, candidate: config.candidate };
-          const adapter = definition.transport?.kind === 'REST' ? createRestMarketReadAdapter(shared) : createMcpMarketReadAdapter(shared);
-          marketBoundaries.set(definition.provider, createMarketReadBoundary({ ...common, adapter }));
+          const makeAdapter = transport === 'REST' ? createRestMarketReadAdapter : createMcpMarketReadAdapter;
+          marketBoundaries.set(definition.mapping_digest, () => createMarketReadBoundary({ ...common, adapter: makeAdapter(shared) }));
         }
         if (definition.mapping?.sheets) {
-          const adapter = createMcpReadAdapter({ provider: definition, token: credential.token, mapping: definition.mapping,
-            attestation: credential.attestation, aliasSecret: credential.alias_secret, scope: config.scope, candidate: config.candidate });
-          snapshotImporters.set(definition.provider, createReadImporter({ ...common, adapter }));
+          snapshotImporters.set(definition.mapping_digest, () => createReadImporter({ ...common,
+            adapter: createMcpReadAdapter({ ...shared, aliasSecret: credential.alias_secret }) }));
         }
       }
-      const readers = Object.fromEntries(marketOperations.map(operation=>[operation, async ({capability,inputs})=>{
+      const operations = new Set([...marketOperations, ...MARKET_READ_OPERATIONS]);
+      const readers = Object.fromEntries([...operations].map(operation=>[operation, async ({capability,inputs})=>{
         if (capability.source==='MOCK') return marketRead(operation,inputs,Date.now());
-        const boundary = marketBoundaries.get(capability.provider);
+        const boundary = marketBoundaries.get(capability.mapping_digest);
         requireThat(capability.source==='PROVIDER' && boundary && MARKET_READ_OPERATIONS.includes(operation),'UNSUPPORTED');
-        const result = await boundary({ operation, inputs, grant: inputs.grant });
+        const read = boundary();
+        const result = await read({ operation, inputs, grant: inputs.grant });
         return { source: result.source, at: Date.parse(result.observed_utc), rows: result.rows, decimals: result.decimals,
+          ...(result.pagination && { pagination: result.pagination }),
+          ...(Object.hasOwn(result, 'last_valid_time_ms') && { last_valid_time_ms: result.last_valid_time_ms }),
           market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null },
           cost: result.cost, digest: result.digest };
       }]));
@@ -106,9 +112,10 @@ export async function runtimeCommand(args) {
       // verifies the signed grant at admission and the importer owns the durable $0 counter.
       if (config.gateway.capabilities.some(cap => cap.source === 'PROVIDER' && cap.operations?.includes('read.snapshot'))) {
         readers['read.snapshot'] = async ({ capability, inputs }) => {
-          const importer = snapshotImporters.get(capability.provider);
+          const importer = snapshotImporters.get(capability.mapping_digest);
           requireThat(importer, 'READ_CONFIGURATION_REQUIRED');
-          const snapshot = await importer({ run_id: inputs.run_id, grant: inputs.grant });
+          const read = importer();
+          const snapshot = await read({ run_id: inputs.run_id, grant: inputs.grant });
           return { run_id: snapshot.run_id, digest: snapshot.digest, source: snapshot.source, observed_utc: snapshot.observed_utc,
             cost: snapshot.cost, symbols: new Set(snapshot.input.IN_Quotes.map(row => row.symbol_key)).size };
         };

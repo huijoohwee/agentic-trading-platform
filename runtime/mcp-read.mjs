@@ -54,6 +54,31 @@ export async function rpcResponse(response, requestId) {
     return found.result;
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
+// Finish discovery before using any descriptor. Keep only admitted descriptors
+// and bound opaque cursors, name storage and calls across the entire catalog.
+export async function listReviewedTools(rpc, allowed, pageBudget, signal) {
+  const wanted = new Set(allowed.map(tool => tool.name));
+  const seen = new Set(), cursors = new Set(), reviewed = new Map();
+  let params = {};
+  for (let page = 0; page < 8; page++) {
+    requireThat(page < pageBudget, 'BUDGET_HALT');
+    const result = await rpc('tools/list', params, signal);
+    requireThat(Array.isArray(result?.tools) && seen.size + result.tools.length <= 1024, 'TOOL_CATALOG_INCOMPLETE');
+    for (const tool of result.tools) {
+      requireThat(typeof tool?.name === 'string' && tool.name.length > 0 && tool.name.length <= 256, 'SCHEMA_DRIFT');
+      requireThat(!seen.has(tool.name), 'SCHEMA_DRIFT');
+      seen.add(tool.name);
+      if (wanted.has(tool.name)) reviewed.set(tool.name, tool);
+    }
+    if (!Object.hasOwn(result, 'nextCursor')) return reviewed;
+    const cursor = result.nextCursor;
+    requireThat(typeof cursor === 'string' && cursor.length > 0 && cursor.length <= 1024 && !cursors.has(cursor),
+      'TOOL_CATALOG_INCOMPLETE');
+    cursors.add(cursor);
+    params = { cursor };
+  }
+  fail('TOOL_CATALOG_INCOMPLETE');
+}
 export function createMcpReadAdapter({ provider, token, mapping, attestation, aliasSecret, scope, candidate, fetchImpl = fetch, now = Date.now }) {
   const { definition } = validateProviderDefinition(provider);
   const endpoint = definition.transport.origin;
@@ -104,10 +129,9 @@ export function createMcpReadAdapter({ provider, token, mapping, attestation, al
       requireThat(initialized?.protocolVersion === mapping.protocol && initialized.capabilities?.tools, 'PROTOCOL_UNQUALIFIED');
       version = initialized.protocolVersion;
       await rpc('notifications/initialized', null, signal, true);
-      const listed = await rpc('tools/list', {}, signal);
-      requireThat(Array.isArray(listed?.tools) && !listed.nextCursor, 'TOOL_CATALOG_INCOMPLETE');
+      const listed = await listReviewedTools(rpc, grant.tools, grant.limits.max_calls - calls - 1, signal);
       for (const allowed of grant.tools) {
-        const descriptor = listed.tools.find(tool => tool.name === allowed.name);
+        const descriptor = listed.get(allowed.name);
         requireThat(descriptor && sha(descriptor) === allowed.schema_digest && mapping.sheets[allowed.sheet]?.tool === allowed.name, 'SCHEMA_DRIFT');
         requireThat(!/(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i.test(allowed.name), 'SCOPE_DENIED');
       }

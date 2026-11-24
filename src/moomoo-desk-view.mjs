@@ -17,11 +17,21 @@ export async function mountMoomooDeskView(host) {
     region.append(heading, frame); parent.append(region);
     return mount;
   };
-  const table = (parent, title, columns, rows) => mountDataView(viewport(parent, title), {
-    ariaLabel: title, columns: columns.map(name => ({ id: name, name })),
-    rows: rows.map((cells, index) => ({ id: title + '-' + index, cells: cells.map(value => value === null || value === undefined ? 'UNKNOWN' : String(value)) }))
-  });
-  const clock = epoch => new Date(epoch).toISOString().slice(11, 23);
+  const table = (parent, title, columns, rows) => {
+    const details = node('details');
+    details.append(node('summary', title));
+    parent.append(details);
+    details.addEventListener('toggle', function reveal() {
+      if (!details.open) return;
+      details.removeEventListener('toggle', reveal);
+      mountDataView(viewport(details, 'Exact values'), {
+        ariaLabel: title, columns: columns.map(name => ({ id: name, name })),
+        rows: rows.map((cells, index) => ({ id: title + '-' + index,
+          cells: cells.map(value => value == null ? 'UNKNOWN' : String(value)) }))
+      });
+    });
+  };
+  const clock = epoch => epoch == null ? null : new Date(epoch).toISOString().slice(11, 23);
   const diagrams = mountDeskDiagrams(document);
   const diagram = (parent, title, svg) => { const region = node('section'); region.append(node('h4', title), svg); parent.append(region); };
 

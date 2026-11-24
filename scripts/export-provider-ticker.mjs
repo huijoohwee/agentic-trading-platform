@@ -2,7 +2,7 @@ import { createPublicKey, sign } from 'node:crypto';
 import { link, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { openConfiguredRuntime, readPrivateJson } from '../runtime/config.mjs';
+import { openConfiguredRuntime, providerCredential, readPrivateJson } from '../runtime/config.mjs';
 import { canonical, hash, id, requireProofs, requireThat, sameScope, sha, utcMillis, verifyEnvelope } from '../runtime/core.mjs';
 import { createProviderRegistry } from '../runtime/provider-mapping.mjs';
 
@@ -67,7 +67,7 @@ export function providerTickerReceipt(configPath, requestPath) {
       request_id: uuid.test(request_id) ? request_id : 'sha256:' + sha(request_id), ledger_revision,
       ...effectiveRights(grant, cap.provider, symbol, [cap.qualification, binding.definition.qualification], now),
       ...quoteFields(data, symbol, now) };
-    const signer = config.provider_credentials?.[cap.provider]?.attestation;
+    const signer = providerCredential(config, cap.provider, cap.transport)?.attestation;
     const key = signer && keys[signer.key_id];
     requireThat(key?.role === 'integration' && key.revoked !== true && key.principal === signer.principal &&
       key.runtime === signer.runtime, 'UNTRUSTED_SIGNER');

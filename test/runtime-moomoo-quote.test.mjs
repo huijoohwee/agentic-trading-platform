@@ -43,3 +43,20 @@ test('the file reader preserves two-sided and one-sided replays independently', 
   const oneSide = await moomooQuote(['replay','HK.00700',path]);
   assert.deepEqual([oneSide.bid,oneSide.ask],['302.1',null]);
 });
+
+
+test('replay accepts four offline market frame types and rejects an unknown topic or symbol', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'moomoo-push-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, 'frame.json'), symbol = 'US.AAPL';
+  const run = async (type, data, selected = symbol) => {
+    await writeFile(path, JSON.stringify({ symbol, type, data }));
+    return moomooQuote(['replay', selected, path]);
+  };
+  assert.equal((await run('QUOTE', { last_price: 180.12 })).last, '180.12');
+  assert.deepEqual((await run('ORDER_BOOK', { bid_list: [], ask_list: [] })).bids, []);
+  assert.deepEqual((await run('TICKER', { ticker_list: [] })).ticks, []);
+  assert.deepEqual((await run('KLINE', { period: '1D', adjust: 'none', kl_list: [] })).bars, []);
+  await assert.rejects(run('QUOTE', { last_price: 180.12 }, 'HK.00700'), /SECURITY_MISMATCH/);
+  await assert.rejects(run('MARKET_STATE', {}), /UNSUPPORTED_PUSH_TYPE/);
+});
