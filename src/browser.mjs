@@ -40,6 +40,13 @@ byId('provider-hosted').addEventListener('toggle', async event => {
   try { const { mountHostedView } = await import('./hosted-view.mjs'); await mountHostedView(byId('hosted-body')); }
   catch { byId('hosted-body').textContent = 'Hosted capture unavailable. The offline rehearsal is unchanged.'; }
 });
+let deskOpened = false;
+byId('provider-desk').addEventListener('toggle', async event => {
+  if (!event.target.open || deskOpened) return;
+  deskOpened = true;
+  try { const { mountMoomooDeskView } = await import('./moomoo-desk-view.mjs'); await mountMoomooDeskView(byId('desk-body')); }
+  catch { byId('desk-body').textContent = 'Market desk unavailable. The offline rehearsal is unchanged.'; }
+});
 const form = byId('ticket');
 const fields = byId('fields');
 const feedback = byId('feedback');

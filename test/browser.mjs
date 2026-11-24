@@ -121,6 +121,15 @@ try {
     assert.ok((await page.locator('#hosted-body').innerText()).includes('quote:read'));
     assert.ok((await page.locator('#hosted-body').innerText()).includes('https://mcp.moomoo.com/mcp'));
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/hosted-view.mjs'))), true);
+    await page.locator('#provider-desk summary').click();
+    await page.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
+    assert.ok((await page.locator('#desk-status').innerText()).includes('desktop-mcp'));
+    assert.ok((await page.locator('#desk-status').innerText()).includes('read-only desk'));
+    const deskText = await page.locator('#desk-body').innerText();
+    for (const fragment of ['Order book · SEHK', 'Time & sales', 'Daily candles', 'Daily close']) assert.ok(deskText.includes(fragment), 'desk missing ' + fragment);
+    assert.ok(await page.locator('#desk-body').getByText('343.8', { exact: true }).count() >= 1);
+    assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
+    assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.includes('mcp.moomoo.com'))), false);
     console.log(name + ': online lazy Skills & Commands reference, controls, source digest and focus passed.');
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource')
       .some(e => e.name.endsWith('/src/rehearsal-view.mjs'))),false);
@@ -212,6 +221,14 @@ try {
     assert.match(await grid.innerText(),/BUY 1 TEST remaining/);
     assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource')
       .some(entry => entry.name.endsWith('/browser-data-view.js'))), false);
+    await reopened.locator('#provider-desk summary').click();
+    await reopened.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
+    assert.ok((await reopened.locator('#desk-status').innerText()).includes('read-only desk'));
+    const offlineDeskText = await reopened.locator('#desk-body').innerText();
+    for (const fragment of ['Order book · SEHK', 'Time & sales', 'Daily candles']) assert.ok(offlineDeskText.includes(fragment), 'offline desk missing ' + fragment);
+    assert.ok(await reopened.locator('#desk-body').getByText('343.8', { exact: true }).count() >= 1);
+    assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
+    assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     await dashboard.getByRole('button', {name:'Inspect 23 source events'}).click();
     const logTable = reopened.getByRole('table', { name: 'Replay events' });
     const evidence = reopened.getByRole('region', { name: 'Event evidence' });

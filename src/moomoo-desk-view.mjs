@@ -1,0 +1,84 @@
+import { createNativeDashboard } from '../owners/design/site/dashboard.mjs';
+import { mountDataView, mountDashboardChart } from '../owners/base/packages/views-react/dist/browser-data-view.js';
+import { captureSummary } from './provider-capture.mjs';
+import { deskProvenance, deskDepth, deskTape, deskCandles } from './provider-desk.mjs';
+
+// Moomoo-inspired read-only market desk: quote board, order-book ladder, time & sales and daily
+// candles, composed from pinned Agentic Design System / Base owner primitives (no token forks).
+// Every row is the captured $0 Desktop evidence replayed offline; no provider call or order control.
+export async function mountMoomooDeskView(host) {
+  const node = (tag, text) => { const element = document.createElement(tag); if (text !== undefined) element.textContent = text; return element; };
+  const ownerStyle = () => { const style = node('link'); style.rel = 'stylesheet'; style.href = new URL('../owners/base/packages/views-react/dist/browser-data-view.css', import.meta.url); return style; };
+  const viewport = (parent, title) => {
+    const region = node('section'), heading = node('h4', title), frame = node('div'), mount = node('div');
+    frame.className = 'rehearsal-table'; mount.setAttribute('part', 'mount');
+    frame.attachShadow({ mode: 'open' }).append(ownerStyle(), mount);
+    region.append(heading, frame); parent.append(region);
+    return mount;
+  };
+  const table = (parent, title, columns, rows) => mountDataView(viewport(parent, title), {
+    ariaLabel: title, columns: columns.map(name => ({ id: name, name })),
+    rows: rows.map((cells, index) => ({ id: title + '-' + index, cells: cells.map(value => value === null || value === undefined ? 'UNKNOWN' : String(value)) }))
+  });
+  const clock = epoch => new Date(epoch).toISOString().slice(11, 23);
+
+  const s = captureSummary, p = deskProvenance;
+  const status = node('p', `${s.symbol} ${s.name} · last ${s.last} · ${p.binding} replay · $${p.cost_usd} · read-only desk`);
+  status.id = 'desk-status'; status.setAttribute('role', 'status');
+  const intro = node('p', p.note);
+  const before = node('div'); before.append(status, intro);
+
+  const change = s.last - s.prev_close;
+  const changePct = s.prev_close ? (change / s.prev_close) * 100 : 0;
+  const signed = value => (value >= 0 ? '+' : '') + value;
+  const { DashboardCanvasLayout, DashboardCardGrid, DashboardPrimitive } = createNativeDashboard(document);
+  const overview = DashboardCardGrid({
+    ariaLabel: 'Market quote board',
+    cards: [
+      { id: 'desk-last', eyebrow: 'Last', title: String(s.last), accent: 'primary' },
+      { id: 'desk-change', eyebrow: 'Change vs prev close', title: `${signed(change)} (${signed(changePct.toFixed(2))}%)`, accent: change >= 0 ? 'success' : 'secondary' },
+      { id: 'desk-range', eyebrow: 'Day range', title: `${s.low} – ${s.high}`, accent: 'neutral' },
+      { id: 'desk-volume', eyebrow: 'Volume', title: String(s.volume), accent: 'neutral' },
+      { id: 'desk-turnover', eyebrow: 'Turnover', title: String(s.turnover), accent: 'neutral' }
+    ]
+  });
+
+  const sections = node('div');
+  const facts = node('dl'); facts.className = 'facts';
+  const add = (term, detail) => { facts.append(node('dt', term), node('dd', detail)); };
+  add('Symbol', `${s.symbol} (${s.market})`); add('Name', s.name); add('Market date', s.market_date);
+  add('Open', String(s.open)); add('Previous close', String(s.prev_close));
+  add('Exchange', deskDepth.exchange); add('Captured UTC', p.captured_utc); add('Binding', p.binding);
+  sections.append(facts);
+
+  const ladder = [
+    ...[...deskDepth.ask].reverse().map(level => ['ASK', level.price, level.volume, level.orders]),
+    ...deskDepth.bid.map(level => ['BID', level.price, level.volume, level.orders])
+  ];
+  table(sections, `Order book · ${deskDepth.exchange} (${deskDepth.ask.length} ask / ${deskDepth.bid.length} bid)`,
+    ['Side', 'Price', 'Volume', 'Orders'], ladder);
+
+  table(sections, `Time & sales (${deskTape.length} ticks)`, ['Time (UTC)', 'Price', 'Volume', 'Turnover', 'Side'],
+    deskTape.map(tick => [clock(tick.time), tick.price, tick.volume, tick.turnover, tick.direction]));
+
+  mountDashboardChart(viewport(sections, 'Daily close'), {
+    type: 'line', tone: 'blue', gridEnabled: true,
+    series: deskCandles.map(candle => ({ label: candle.date, value: Number(candle.close), detail: candle.close }))
+  });
+  table(sections, `Daily candles (${deskCandles.length})`, ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Change %'],
+    deskCandles.map(candle => [candle.date, candle.open, candle.high, candle.low, candle.close, candle.volume, candle.change_rate]));
+
+  const unknownsHeading = node('p', 'Unknowns preserved (not inferred):');
+  const unknowns = node('ul'); unknowns.className = 'capture-unknowns';
+  for (const item of s.unknowns.filter(item => item !== 'hosted OAuth qualification (N3)')) unknowns.append(node('li', item));
+  sections.append(unknownsHeading, unknowns);
+
+  host.replaceChildren(DashboardCanvasLayout({
+    ariaLabel: 'Moomoo market desk',
+    beforeHeader: before,
+    title: DashboardPrimitive({ kind: 'heading', level: 3, children: `${s.symbol} · ${s.name}` }),
+    description: DashboardPrimitive({ kind: 'text', children: 'Read-only $0 replay · no execution controls' }),
+    overview,
+    sections
+  }));
+}
