@@ -34,6 +34,7 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   }
   const search = node('input'); search.type = 'search';
   const dimensionFilter = select(dimensions), groupFilter = select(groups);
+  let relatedDimensions, relatedOption;
   const searchPanel = node('div'), filterPanel = node('div');
   searchPanel.className = filterPanel.className = 'route-query-controls';
   searchPanel.hidden = filterPanel.hidden = true;
@@ -113,9 +114,10 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     if (table) table.update(state); else table = mountDataView(content, state);
   }
   function filterRows() {
-    config.onDimension?.(dimensionFilter.value);
+    const related = relatedOption && dimensionFilter.selectedOptions[0] === relatedOption;
+    config.onDimension?.(related ? 'All' : dimensionFilter.value);
     const term = search.value.trim().toLowerCase();
-    matches = rows.filter(row => (dimensionFilter.value === 'All' || row[rowDimension] === dimensionFilter.value) &&
+    matches = rows.filter(row => (related ? relatedDimensions.has(row[rowDimension]) : dimensionFilter.value === 'All' || row[rowDimension] === dimensionFilter.value) &&
       (groupFilter.value === 'All' || row[groupDimension] === groupFilter.value) && fields.some(field => String(row[field.id] ?? '').toLowerCase().includes(term)));
     if (sorted) matches.sort((a, b) => a.label.localeCompare(b.label, 'en'));
   }
@@ -126,7 +128,21 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   for (const control of [dimensionFilter, groupFilter]) control.addEventListener('change', applyFilters);
   render();
   // A relationship opens the exact record even when a different page, layout or filter is active.
-  return { open({ key, dimension }) {
+  function showRelated(values) {
+    relatedOption?.remove();
+    relatedOption = undefined;
+    relatedDimensions = new Set(values);
+    if (values.length === 1 && dimensions.includes(values[0])) {
+      dimensionFilter.value = values[0];
+    } else {
+      relatedOption = node('option', 'Related ' + labelFor(rowDimension).toLowerCase() + ' records');
+      dimensionFilter.append(relatedOption);
+      relatedOption.selected = true;
+    }
+    search.value = ''; groupFilter.value = 'All'; layout = 'table';
+    applyFilters();
+  }
+  return { showRelated, open({ key, dimension }) {
     const row = key === undefined ? null : rows.find(item => config.key(item) === key);
     if ((key !== undefined && !row) || (dimension !== undefined && !dimensions.includes(dimension)) ||
         (row && dimension !== undefined && row[rowDimension] !== dimension)) return false;

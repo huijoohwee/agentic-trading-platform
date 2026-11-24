@@ -43,6 +43,7 @@ export async function mountCoverageView(host) {
   finder.id = 'coverage-routes';
   finder.append(node('h4', 'Find a provider route'), summaryLine,
     node('p', 'Gateway owns provider route definitions. Trading owns mappings and admission. Each connected read requires host-specific rights, a provider-enforced $0 limit and remaining quota.'));
+  let selectedTools, fieldView;
   const routeView = mountCoverageRecords(finder, rows, node, { id: 'route', key: routeId, onSelect: row => remember({ view: 'route', record: routeId(row) }), plural: 'routes', singular: 'route', title: 'Routes',
     columns: [text('label', 'Route or tool'), category('transport', 'Transport'), category('status', 'Disposition'), category('scope', 'Access scope')],
     rowDimension: 'transport', groupDimension: 'status' }, (row, detail) => {
@@ -53,6 +54,8 @@ export async function mountCoverageView(host) {
       sourceLine(detail, source.tool ?? new URL(source.url).pathname, source.url, source.digest);
     }
     const tools = links.tools.to(routeId(row)).map(edge => edge.source);
+    selectedTools = tools;
+    fieldView?.showRelated(tools);
     related(detail, 'Public HTTP fields', tools.map(tool => link('View fields for ' + tool, { view: 'field', group: tool })));
     if (!tools.length) detail.append(node('p', 'The public tool directory has no field schema for this route.'));
     related(detail, 'Related references', [...new Set(links.references.to(routeId(row)).map(edge => edge.source))].map(path => link(path, { view: 'reference', record: path })));
@@ -112,7 +115,7 @@ export async function mountCoverageView(host) {
       const records = httpFieldInventory(register, catalog);
       if (!register.tools.every(tool => links.tools.from(tool.name).length)) throw Error('FIELD_ROUTE_MISSING');
       fieldStatus.textContent = records.length + ' field records across ' + register.tools.length + ' public tools';
-      return mountCoverageRecords(fields, records, node, { id: 'field', plural: 'fields', singular: 'field', title: 'HTTP fields',
+      fieldView = mountCoverageRecords(fields, records, node, { id: 'field', plural: 'fields', singular: 'field', title: 'HTTP fields',
         onDimension(value) {
           toolRoutes.replaceChildren();
           if (value !== 'All') related(toolRoutes, 'Routes for ' + value, routeLinks(value));
@@ -120,13 +123,15 @@ export async function mountCoverageView(host) {
         key: row => row.key, onSelect: row => remember({ view: 'field', group: row.tool, record: row.key }),
         columns: [{ id: 'label', name: 'Field path', format: 'code-list' }, { id: 'tool', name: 'Tool', format: 'code-list' },
           category('section', 'Location'), text('type', 'Type'), category('requirement', 'Requirement')],
-        rowDimension: 'tool', groupDimension: 'section', layout: 'multiDimensional', boardPageSize: 48 }, (row, detail) => {
+        rowDimension: 'tool', groupDimension: 'section', boardPageSize: 48 }, (row, detail) => {
         detail.append(node('h5', row.label), node('p', row.tool + ' · ' + row.section + ' · ' + row.type + ' · ' + row.requirement));
         if (row.rules.length) detail.append(node('p', row.rules.join(' · ')));
         if (row.wrap) detail.append(node('p', 'Response wrapper · ' + row.wrap));
         if (row.section === 'Response') detail.append(node('p', 'The public tool directory supplies this field name. See the REST reference for the wire format.'));
         related(detail, 'Related routes', routeLinks(row.tool));
       });
+      if (selectedTools) fieldView.showRelated(selectedTools);
+      return fieldView;
     }).catch(() => {
       pending = undefined;
       const retry = node('button', 'Retry field definitions'); retry.type = 'button';

@@ -56,7 +56,7 @@ input, select { width: 100%; min-width: 0; }
 #coverage-routes { display: grid; gap: var(--agentic-control-padding-inline); min-inline-size: 0; }
 .coverage-record-views { min-inline-size: 0; overflow: hidden; border: 1px solid var(--agentic-base-border, color-mix(in srgb, CanvasText 25%, Canvas)); border-radius: .5rem; color-scheme: light dark; }
 :host(.coverage-record-views) .route-record-content { min-inline-size: 0; overflow: auto; }
-:host(.coverage-record-views) .route-record-content[data-layout="table"] { height: min(65dvh, 32rem); }
+:host(.coverage-record-views) .route-record-content[data-layout="table"] { max-height: min(65dvh, 32rem); }
 /* Give long identifiers and digests the larger share. The Base frame scrolls within the viewport on phones. */
 :host(.coverage-record-views) .route-record-content[data-layout="table"] table { inline-size: 100%; min-inline-size: 44rem; }
 :host(.coverage-record-views) .route-record-content[data-layout="table"] col { width: auto !important; }
