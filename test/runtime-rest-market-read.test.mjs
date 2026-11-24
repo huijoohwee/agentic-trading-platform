@@ -493,3 +493,42 @@ test('option trade Greeks retain zero and absent values, source price strings an
   await assert.rejects(researchRead(t, op, { ...filter, page_flag: cursor }, end,
     calls => assert.equal(calls.length, 0), filter), /SCOPE_DENIED/);
 });
+
+test('financial statements keep reported periods, nested amounts, percentages and source precision', async t => {
+  const op = 'read.financial-statements';
+  const line = { field_id: 1, display_name: 'Fixture revenue', value_type: 'amount',
+    data: '9007199254740993.000', yoy: '0.00', qoq: null };
+  const ratio = { field_id: 2, display_name: 'Fixture margin', value_type: 'percent', data: 12.375, yoy: 0 };
+  const report = { date_time: 1774886400000, fiscal_year: '2026', financial_type: '1', structure: 5,
+    structure_name: 'NORMAL_HK', period_text: '2026/Q1', currency_code: 'CNY', accounting_standards: 'IAS',
+    auditor_report: '', item_list: [{ ...line, private_attachment: 'discard' }, ratio] };
+  const cursor = 'a+/='.repeat(250);
+  const body = (reports, page = { has_more: true, next_key: cursor }) =>
+    ({ ...response({ report_list: reports }), pagination: page });
+  const failBeforeCall = calls => assert.equal(calls.length, 0);
+  const parameters = { ...hk, currency_code: 'CNY', limit: 1, statement_type: 1, financial_type: 1 };
+  for (const type of [1, 2, 3, 4]) {
+    const fixture = { ...report, accounting_standards: type === 4 ? '' : 'IAS' };
+    const result = await researchRead(t, op, { ...parameters, statement_type: type }, body([fixture]), calls => {
+      const url = new URL(calls[0].url);
+      assert.equal(url.pathname, '/api/v1.0/quote/HK.00700/financials/statements');
+      assert.equal(url.searchParams.get('statement_type'), String(type));
+    });
+    assert.deepEqual(result.rows[0], { ...fixture, item_list: [line, { ...ratio, qoq: null }] });
+    assert.deepEqual(result.pagination, { completed: false, next_cursor: cursor });
+  }
+  const final = await researchRead(t, op, { ...parameters, next_key: cursor }, body([], { has_more: false, next_key: '' }),
+    calls => assert.equal(new URL(calls[0].url).searchParams.get('next_key'), cursor));
+  assert.deepEqual(final.pagination, { completed: true, next_cursor: null });
+  assert.deepEqual((await researchRead(t, op, { ...hk, financial_type: 10 }, { ret_code: -10 })).rows, []);
+  for (const patch of [{ currency_code: 'USD' }, { financial_type: '7' }])
+    await assert.rejects(researchRead(t, op, parameters, body([{ ...report, ...patch }])), /SOURCE_MAPPING_REQUIRED/);
+  for (const patch of [{ data: 2 ** 53 }, { data: '12%' }, { yoy: false }])
+    await assert.rejects(researchRead(t, op, parameters, body([{ ...report, item_list: [{ ...line, ...patch }] }])), /PRECISION_UNKNOWN/);
+  await assert.rejects(researchRead(t, op, parameters, body([{ ...report, item_list: {} }])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, parameters, body([report, report])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, { ...parameters, next_key: cursor }, body([report])), /INVALID_PAGE/);
+  for (const patch of [{ limit: 51 }, { currency_code: 'Cny' }, { financial_type: 8 }, { statement_type: 5 }])
+    await assert.rejects(researchRead(t, op, { ...parameters, ...patch }, {}, failBeforeCall), /INVALID_PARAMETER/);
+  await assert.rejects(researchRead(t, op, { ...parameters, next_key: cursor }, {}, failBeforeCall, parameters), /SCOPE_DENIED/);
+});

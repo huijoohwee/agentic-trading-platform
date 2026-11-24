@@ -81,6 +81,12 @@ const optionFilters = {
   filter_standard: { enum: ['ALL', 'STANDARD', 'NON_STANDARD'] }
 };
 const greeks = ['delta', 'gamma', 'vega', 'theta', 'rho', 'iv'];
+const concretePeriods = [1, 2, 3, 4, 5, 6, 7];
+const statementItem = {
+  fields: fields(['field_id', 'display_name', 'value_type', 'data', 'yoy', 'qoq']),
+  integer: ['field_id'], text: ['display_name', 'value_type'], wire_decimal: ['data', 'yoy', 'qoq'],
+  nullable: ['data', 'yoy', 'qoq'], allowed_values: { value_type: ['amount', 'percent', ''] }
+};
 const operations = {
   'read.capital-flow': capitalFlow, 'read.rank': hotList, 'read.plate': plate, 'read.ipo': ipo,
   'read.option-chain': quote('option-chain', symbol + 'option-chain', ['data', 'option_chain'],
@@ -108,6 +114,16 @@ const operations = {
   'read.news': news, 'read.research': ratings,
   'read.financials': quote('company-profile', symbol + 'company/profile', items,
     { text: ['name', 'value'], integer: ['field_type', 'attribute_type'] }, { nullable: ['value'] }),
+  'read.financial-statements': quote('financial-statements', symbol + 'financials/statements', ['data', 'report_list'],
+    { integer: ['date_time', 'structure'], text: ['fiscal_year', 'financial_type', 'period_text', 'structure_name',
+      'accounting_standards', 'auditor_report'], currency: ['currency_code'] },
+    { source_fields: fields(['item_list']), nested: { item_list: statementItem },
+      params: { statement_type: { enum: [1, 2, 3, 4] }, financial_type: { enum: [...concretePeriods, 9, 10, 11] },
+        currency_code: { currency: true, allow_empty: true }, limit: boundedCount(1, 50),
+        next_key: { length: [0, 1000] } }, row_limit: { input: 'limit', fallback: 10 },
+      pagination: ['pagination'], pagination_mode: 'next_key', cursor_limit: 1000,
+      allowed_values: { financial_type: concretePeriods.map(String) }, match_inputs: { currency_code: 'currency_code' },
+      match_filters: { financial_type: { input: 'financial_type', when: concretePeriods } } }),
   'read.corporate-actions': quote('dividends', symbol + 'corporate-actions/dividends', ['data', 'dividend_list'],
     { text: ['statement', 'currency', 'process'], local_date: ['ex_date', 'record_date', 'dividend_payable_date'] },
     { nullable: ['currency', 'process', 'ex_date', 'record_date', 'dividend_payable_date'],

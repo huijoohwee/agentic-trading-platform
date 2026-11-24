@@ -11,6 +11,7 @@ const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|d
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 const datePattern = /^\d{4}-\d\d-\d\d$/;
 const symbolPattern = /^[A-Z0-9_]+\.[A-Za-z0-9_.-]+$/;
+const currencyPattern = /^[A-Z]{1,10}$/;
 const dayMs = 86_400_000;
 const validDate = value => {
   if (typeof value !== 'string' || !datePattern.test(value)) return false;
@@ -100,7 +101,18 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         requireThat(optional, 'PRECISION_UNKNOWN');
         row[target] = null; continue;
       }
-      if (spec.numeric?.includes(target)) {
+      if (spec.nested?.[target]) {
+        requireThat(Array.isArray(value), 'INVALID_PAGE');
+        row[target] = value.map(item => project(item, spec.nested[target], body, inputs).row);
+      } else if (spec.wire_decimal?.includes(target)) {
+        const validString = typeof value === 'string' && value.length <= 64 && decimalPattern.test(value);
+        const validNumber = Number.isFinite(value) && (!Number.isInteger(value) || Number.isSafeInteger(value));
+        requireThat(validString || validNumber, 'PRECISION_UNKNOWN');
+        row[target] = value;
+      } else if (spec.currency?.includes(target)) {
+        requireThat(typeof value === 'string' && currencyPattern.test(value), 'SOURCE_MAPPING_REQUIRED');
+        row[target] = value;
+      } else if (spec.numeric?.includes(target)) {
         const doubles = spec.provider_doubles === true || Array.isArray(spec.provider_doubles) && spec.provider_doubles.includes(target);
         const text = doubles && typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
         requireThat(!Object.hasOwn(projection, 'constant') && typeof text === 'string' && text.length <= 64 && decimalPattern.test(text), 'PRECISION_UNKNOWN');
@@ -146,7 +158,8 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (inputs[input]) requireThat(row[field] === inputs[input], 'SOURCE_MAPPING_REQUIRED');
     for (const [field, filter] of Object.entries(spec.match_filters ?? {})) {
       const value = inputs[filter.input];
-      if (value && value !== filter.all) requireThat(value.split(',').includes(row[field]), 'SOURCE_MAPPING_REQUIRED');
+      if (value && value !== filter.all && (!filter.when || filter.when.includes(value)))
+        requireThat(String(value).split(',').includes(row[field]), 'SOURCE_MAPPING_REQUIRED');
     }
     if (spec.market_input) {
       const { field, input } = spec.market_input;
@@ -177,6 +190,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       const value = inputs[inputKey];
       if (rule.allow_empty && value === '') continue;
       if (rule.enum) requireThat(rule.enum.includes(value), 'INVALID_PARAMETER');
+      else if (rule.currency) requireThat(typeof value === 'string' && currencyPattern.test(value), 'INVALID_PARAMETER');
       else if (rule.date) requireThat(validDate(value), 'INVALID_PARAMETER');
       else if (rule.length) requireThat(typeof value === 'string' && value.trim().length >= rule.length[0] &&
         [...value].length <= rule.length[1], 'INVALID_PARAMETER');
@@ -273,7 +287,12 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         requireThat(last === null || Number.isSafeInteger(last) && last >= 0, 'INVALID_PAGE');
         metadata.last_valid_time_ms = last;
       }
-      if (spec.pagination) {
+      if (spec.pagination_mode === 'next_key') {
+        const page = code === 0 ? readPath(body, spec.pagination, false) : { has_more: false, next_key: '' };
+        requireThat(typeof page?.has_more === 'boolean' && typeof page.next_key === 'string' &&
+          page.next_key.length <= spec.cursor_limit && (!page.has_more || page.next_key && page.next_key !== inputs.next_key), 'INVALID_PAGE');
+        metadata.pagination = { completed: !page.has_more, next_cursor: page.has_more ? page.next_key : null };
+      } else if (spec.pagination) {
         const page = code === 0 ? readPath(body, spec.pagination, false) : { completed: true, page_flag: '', ...(spec.optional_total ? {} : { total: 0 }) };
         requireThat(typeof page?.completed === 'boolean' && typeof page.page_flag === 'string' &&
           page.page_flag.length <= (spec.cursor_limit ?? 64) && (page.completed ? page.page_flag === '' : page.page_flag.length > 0 &&
