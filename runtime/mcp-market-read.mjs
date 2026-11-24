@@ -1,3 +1,4 @@
+import { STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } from 'agentic-gateway/connectors/moomoo-stock-screen';
 import { createPrivateKey, sign } from 'node:crypto';
 import { listReviewedTools, ownPath, rpcResponse } from './mcp-read.mjs';
 import { validateProviderDefinition } from './provider-mapping.mjs';
@@ -6,7 +7,7 @@ import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
 // transport owner (endpoint/protocols/ownPath/rpcResponse) and never exposes raw provider tools:
 // the reviewed private mapping binds each native operation to one read-only tool and projection.
-export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank',
+export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank', 'read.stock-screen',
   'read.plate', 'read.ipo', 'read.news', 'read.research', 'read.financials', 'read.corporate-actions', 'read.holders',
   'read.financial-statements', 'read.influencer', 'read.macro', 'read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events',
   'read.futures-positions', 'read.futures-seasonality', 'read.futures-correlation', 'read.etf', 'read.event-contract', 'read.crypto-market',
@@ -26,6 +27,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
     requireThat(MARKET_READ_OPERATIONS.includes(operation) && id(spec.tool) && Array.isArray(spec.rows_path), 'INVALID_MAPPING');
+    requireThat((operation === 'read.stock-screen') === (spec.tool === STOCK_SCREEN_TOOL), 'INVALID_MAPPING');
     requireThat(!writeBan.test(spec.tool), 'SCOPE_DENIED');
   }
   let session, version, sequence = 0, calls = 0, grant, beforeCall;
@@ -99,11 +101,20 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
     async read({ operation, inputs, signal }) {
       const spec = mapping.operations[operation], allowed = grant.tools.find(tool => tool.operation === operation);
       requireThat(grant && spec && allowed, 'SCOPE_DENIED');
-      const parameters = boundedJson(spec.parameters ?? {});
-      for (const [parameter, inputKey] of Object.entries(spec.input_map ?? {})) {
-        requireThat(id(parameter) && id(inputKey) && Object.hasOwn(inputs, inputKey), 'SOURCE_MAPPING_REQUIRED');
-        const value = inputs[inputKey];
-        parameters[parameter] = spec.array_parameters?.includes(parameter) ? [value] : value;
+      const { grant: envelopeInput, ...request } = boundedJson(inputs);
+      const screen = operation === 'read.stock-screen';
+      if (screen || allowed.inputs_digest !== undefined) requireThat(allowed.inputs_digest === sha(request), 'SCOPE_DENIED');
+      let parameters;
+      if (screen) {
+        requireThat(allowed.name === STOCK_SCREEN_TOOL, 'SCHEMA_DRIFT');
+        parameters = buildMoomooStockScreen(request);
+      } else {
+        parameters = boundedJson(spec.parameters ?? {});
+        for (const [parameter, inputKey] of Object.entries(spec.input_map ?? {})) {
+          requireThat(id(parameter) && id(inputKey) && Object.hasOwn(inputs, inputKey), 'SOURCE_MAPPING_REQUIRED');
+          const value = inputs[inputKey];
+          parameters[parameter] = spec.array_parameters?.includes(parameter) ? [value] : value;
+        }
       }
       const response = await rpc('tools/call', { name: allowed.name, arguments: parameters }, signal);
       requireThat(!response.isError, 'PROVIDER_ERROR');
@@ -112,10 +123,13 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         requireThat(response.content?.length === 1 && response.content[0].type === 'text', 'SOURCE_MAPPING_REQUIRED');
         try { source = JSON.parse(response.content[0].text); } catch { fail('SOURCE_MAPPING_REQUIRED'); }
       }
-      const raw = ownPath(source, spec.rows_path);
+      const raw = screen ? undefined : ownPath(source, spec.rows_path);
       const decimals = [];
-      let rows;
-      if (spec.object_result) {
+      let rows, pagination;
+      if (screen) {
+        ({ rows, pagination } = projectMoomooStockScreen(request, source));
+        for (const row of rows) decimals.push({});
+      } else if (spec.object_result) {
         requireThat(raw !== null && typeof raw === 'object' && !Array.isArray(raw), 'INVALID_PAGE');
         const { row, precise } = project(raw, spec);
         rows = row; decimals.push(precise);
@@ -130,7 +144,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         const wirePrice = ownPath(spec.object_result ? raw : raw[0], spec.fields.price.path);
         precision.price_source = typeof wirePrice === 'string' ? 'decimal-string' : 'json-number';
       }
-      return issue('provider-market-page', { operation, rows, decimals, observed_utc,
+      return issue('provider-market-page', { operation, rows, decimals, ...(pagination && { pagination }), observed_utc,
         ...precision, source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest: allowed.schema_digest });
     },
   };

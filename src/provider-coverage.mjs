@@ -32,11 +32,12 @@ export const providerCoverage = Object.freeze([
     ['read.capital-flow'], ['quote_capital_flow'],
     [],
     'The route finder links the public quote_capital_flow HTTP definition. Its local REST fixture preserves signed native-currency flows and millisecond timestamps.'),
-  family('rank', 'Ranking hot list', 'mapped', 'REST',
-    ['read.rank'], [],
-    [source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
+  family('rank', 'Stock screening and rankings', 'mapped', 'MCP+REST',
+    ['read.rank', 'read.stock-screen'], [],
+    [source('api/quote/screening/stock-screen.md', 'e19263aeea9615a0262950b57df146deffd945ec1fd5ba329057d316008b6f88'),
+     source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
      source('api/quote/rank/rank-earnings-beat.md', '4689cb06a31b34f6a020aaa32b977b8a9ed8f0ba6d2a2d4521703f1680f7f934')],
-    'Local REST fixture covers one bounded hot-list page, its heat scores and continuation. Other rankings await mapping.'),
+    'Signed local fixtures cover market-wide screening over MCP and REST, plus the REST hot list. Each screen binds its market, factor bounds, sorting, columns and cursor.'),
   family('plate-industry', 'Sector directory', 'mapped', 'REST',
     ['read.plate'], ['quote_plate_list', 'quote_plate_stock', 'quote_owner_plate'],
     [source('api/quote/industry/heatmap.md', 'a636ade5e00f7018f4cb7461b1bd82e607119f3714483eff68476bb8665a0297'),
@@ -150,7 +151,11 @@ export function coverageSummary(entries = providerCoverage) {
   });
 }
 const deskTools = new Set(Object.values(captureMapping.operations).map(operation => operation.tool));
+const screenPath = 'POST /api/v1.0/quote/stock-screen';
+const stockScreenEvidence = { evidence: 'Signed local stock-screen fixture',
+  units: 'Prices and market cap ×1000, valuation multiples ×100000, dividend yield percent ×1000, listing time in seconds. Exact raw integer and decimal text.' };
 const reviewedRest = new Map([
+  [screenPath, stockScreenEvidence],
   ['GET /api/v1.0/quote/{symbol}/future/position-analysis', { evidence: 'Local CFTC positions fixture', units: 'Reported contract counts, weekly changes, open interest and report time in Unix seconds' }],
   ['GET /api/v1.0/quote/{symbol}/future/seasonal', { evidence: 'Local seasonality fixture', units: 'Unscaled source prices for each year or the historical mean, with UTC+8-aligned Unix seconds' }],
   ['GET /api/v1.0/quote/{symbol}/future/correlation', { evidence: 'Local futures correlation fixture', units: 'Unscaled coefficients from −1 to 1, per related contract and UTC+8-aligned Unix timestamp' }],
@@ -221,6 +226,7 @@ function disposition(methodPath, topic, name) {
       method === 'POST' && /\/(orders|order_confirm|transfers?)$/.test(path))) {
     return ['excluded', 'trade:write', 'Live effect excluded'];
   }
+  if (name === 'quote_stock_screen' && methodPath === screenPath) return ['mapped', 'quote:read', stockScreenEvidence.evidence];
   if (name && deskTools.has(name)) {
     return ['mapped', 'quote:read', name === 'quote_stock_quote' ? 'Desktop and hosted captures' : 'Desktop capture'];
   }
@@ -241,7 +247,8 @@ export function routeInventory(catalog) {
     let route = routes.get(key);
     if (!route) {
       const [status, scope, evidence] = disposition(methodPath, topic, name);
-      const units = transport === 'REST' ? (reviewedRest.get(methodPath) ?? simulationRoutes.get(methodPath))?.units : undefined;
+      const units = transport === 'REST' ? (reviewedRest.get(methodPath) ?? simulationRoutes.get(methodPath))?.units
+        : name === 'quote_stock_screen' ? stockScreenEvidence.units : undefined;
       route = { transport, label, status, scope, evidence, units: units ?? 'See source field definitions', sources: [] };
       routes.set(key, route);
     }

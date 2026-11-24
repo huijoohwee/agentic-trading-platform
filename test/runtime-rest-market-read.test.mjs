@@ -62,7 +62,7 @@ const calendarResponse = { ret_code: 0, ret_msg: 'success', data: { items: [
 function fakeRest({ result = calendarResponse, status = 200 } = {}) {
   const calls = [];
   const fetchImpl = async (url, options) => {
-    calls.push({ url, method: options.method, authorization: options.headers.Authorization });
+    calls.push({ url, method: options.method, authorization: options.headers.Authorization, body: options.body, redirect: options.redirect });
     return new Response(JSON.stringify(result), { status, headers: { 'content-type': 'application/json' } });
   };
   return { fetchImpl, calls };
@@ -577,4 +577,19 @@ test('futures correlations bind the related series and apply page size and total
     calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
   await assert.rejects(researchRead(t, op, { ...inputs, page_flag: '1' }, {}, calls => assert.equal(calls.length, 0), inputs), /SCOPE_DENIED/);
   assert.deepEqual((await researchRead(t, op, inputs, { ret_code: -10 })).rows, []);
+});
+
+test('signed stock screen sends one fixed read-only POST and preserves the terminal page', async t => {
+  const inputs = { market: 'HK', factors: ['price_to_book'], limit: 1 };
+  const response = { ret_code: 0, data: { items: [{ code: 'HK.00700', name: 'Example', results: [{ result_type: 2, res: { ival: '125000' } }] }] },
+    pagination: { total: 1, has_more: false, next_key: '-1' } };
+  const page = await researchRead(t, 'read.stock-screen', inputs, response, ([call]) => {
+    assert.deepEqual([call.method, call.url, call.redirect], ['POST', 'https://webapi.moomoo.com/api/v1.0/quote/stock-screen', 'error']);
+    assert.deepEqual(JSON.parse(call.body), { screen_queries: [{ simple_field_query: { simple_field: 1, screen_value_list: [1] } }],
+      retrieve_queries: [{ simple_property: { name: 2304 } }], limit: 1 });
+  });
+  assert.deepEqual(page.rows[0].factors, [{ factor: 'price_to_book', raw: '125000', value: '1.25000' }]);
+  assert.deepEqual(page.pagination, { total: 1, completed: true, next_cursor: null });
+  await assert.rejects(researchRead(t, 'read.stock-screen', { ...inputs, next_key: '3' }, response,
+    calls => assert.equal(calls.length, 0), inputs), /SCOPE_DENIED/);
 });

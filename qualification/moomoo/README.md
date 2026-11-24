@@ -42,7 +42,7 @@ Open **Moomoo OpenAPI coverage** on a primed dashboard to search the pinned Gate
 
 The reviewed definitions in `runtime/moomoo-research.mjs` map `read.capital-flow` to a single symbol and session, and `read.rank` to one hot-list page. Capital flow preserves signed amounts in native currency and Unix milliseconds. A ranking result includes the provider's completion flag, next cursor and total. Each subsequent page needs a new admitted request. Run `node --test test/runtime-rest-market-read.test.mjs test/provider-ticker-receipt.test.mjs` for signed local examples. A host that binds both transports for one provider supplies separate private `provider_credentials[provider].transports.MCP` and `.REST` entries. The dashboard renders saved evidence offline.
 
-The route inventory identifies 29 REST mappings, including 26 GETs with parameter-bound signed fixtures. The dashboard lists the reviewed projection and units for each mapped route. Other endpoints in the same family keep their own status.
+The route inventory identifies 30 REST mappings, including 26 GETs with parameter-bound signed fixtures and the market-wide stock-screen POST. The dashboard lists the reviewed projection and units for each mapped route. Other endpoints in the same family keep their own status.
 
 | Research read | Fields covered by the fixture |
 | --- | --- |
@@ -64,4 +64,11 @@ Search for `/sim-trade/` in the route inventory. Six GETs cover account discover
 
 Opening an advertised tool in the route finder loads its public HTTP field register from the sealed site. The field list shows path variables, declared parameters, body fields, limits and top-level response names. Required and optional labels reflect explicit values in the published schema. Connected MCP admission still checks the host’s own descriptor.
 
-The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Twenty-nine REST reads have local mappings. The connected captures retain their own host, operation and grant.
+The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Thirty REST reads have local mappings. Five MCP tools have mappings, including the stock-screen fixture. The connected captures retain their own host, operation and grant.
+
+
+## Stock screening over REST and MCP
+
+Use `read.stock-screen` with the REST definition from `researchMapping` or the separate `stockScreenMcpMapping` in `runtime/moomoo-research.mjs`. Both use the pinned Gateway connector. A screen takes one market and optional factor filters, retrieval columns, sorts, limit and cursor. For example, `{"market":"HK","factors":["last_price","pe_ttm"],"filters":[{"factor":"pe_ttm","upper":{"value":"15.25","includes":true}}],"limit":20}` returns a bounded market-wide page. Each factor includes its raw integer and exact scaled decimal text. Sorts, column order and the opaque cursor are part of the signed input digest. A terminal page has a null next cursor.
+
+The REST adapter builds a JSON POST only for the exact stock-screen route on the published origin. MCP discovers the host’s descriptor and calls the named tool. Both enforce the operator’s grant and local call reservation. Local fixtures verify dispatch and refusal. The four Desktop market captures and the hosted ticker retain their original evidence. Watchlists, holdings and advanced screen conditions require separate mappings. [Stock screen](https://open.moomoo.com/api/quote/screening/stock-screen)

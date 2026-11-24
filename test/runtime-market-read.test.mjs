@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { stockScreenMcpMapping } from '../runtime/moomoo-research.mjs';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -148,4 +149,28 @@ test('catalog cycles, ambiguous tool names, oversized catalogs and exhausted dis
     assert.ok(provider.calls.length < max_calls);
     assert.equal(provider.calls.some(call => call.method === 'tools/call'), false);
   }
+});
+
+test('signed MCP stock screen binds the discovered tool, market, factors and cursor before discovery', async t => {
+  const operation = 'read.stock-screen', name = 'quote_stock_screen';
+  const descriptor = { name, description: 'Fixture screener', inputSchema: { type: 'object' } };
+  const mapping = stockScreenMcpMapping;
+  const inputs = { market: 'US', factors: ['dividend_yield_pct'], next_key: '-12' };
+  const tool = { name, operation, effect: 'read', schema_digest: sha(descriptor), inputs_digest: sha(inputs) };
+  const provider = { ...definition, mapping, mapping_digest: sha(mapping), operations: [operation], allowlist: [name] };
+  const fake = fakeProvider({ tools: [descriptor], result: { ret_code: 0, data: { items: [
+    { code: 'US.DEMO', name: 'Demo', results: [{ simple_property_result: { property: { name: 2305 }, res: { result_type: 2, ival: '12340' } } }] }] },
+    pagination: { total: 3, has_more: true, next_key: '03' } } });
+  const { store } = await fixture(t);
+  const adapter = createMcpMarketReadAdapter({ provider, token: 'fixture-token-000000', mapping, attestation, scope, candidate, fetchImpl: fake.fetchImpl, now });
+  const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter, now });
+  const permit = grant('screen', 'screen', { tools: [tool], mapping_digest: sha(mapping) });
+  await assert.rejects(boundary({ operation, inputs: { ...inputs, market: 'HK' }, grant: permit }), /SCOPE_DENIED/);
+  assert.deepEqual(fake.calls, []);
+  const page = await boundary({ operation, inputs, grant: permit });
+  assert.deepEqual(fake.calls.at(-1).params, { name, arguments: { screen_queries: [{ simple_field_query: { simple_field: 1, screen_value_list: [2] } }],
+    retrieve_queries: [{ simple_property: { name: 2305 } }], next_key: '-12' } });
+  assert.deepEqual(page.rows[0], { symbol: 'US.DEMO', name: 'Demo', factors: [{ factor: 'dividend_yield_pct', raw: '12340', value: '12.340' }] });
+  assert.deepEqual(page.pagination, { total: 3, completed: false, next_cursor: '03' });
+  assert.equal(page.cost.tool_calls, 4);
 });
