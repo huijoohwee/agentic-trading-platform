@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
+import { researchMapping } from '../runtime/moomoo-research.mjs';
 import { providerCoverage, coverageSummary, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
 
 const statuses = ['mapped', 'candidate', 'paper-candidate', 'excluded'];
@@ -35,7 +36,8 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   const summary = coverageSummary();
   assert.ok(summary.mapped_operations.includes('read.calendar'));
   assert.ok(summary.mapped_operations.includes('read.ticker'));
-  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'capital-flow', 'rank']);
+  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'capital-flow', 'rank', 'plate-industry', 'news-research', 'ipo',
+    'financials', 'corporate-actions', 'holders', 'influencer', 'macro', 'derivatives', 'etf', 'event-contract', 'crypto-market', 'valuation', 'short', 'stock-connect', 'top-brokers', 'chip-cbbc']);
   assert.ok(summary.excluded.includes('trading') && summary.excluded.includes('crypto-trading'));
   const calendar = providerCoverage.find(entry => entry.id === 'calendar');
   assert.equal(calendar.transport, 'REST');
@@ -53,7 +55,9 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   assert.equal(catalog.sources.filter(source => hex(source.sha256)).length, 196);
   assert.deepEqual(on('MCP').map(row => row.label).sort(), catalog.tools.map(tool => tool.name).sort());
   assert.equal(on('Push').filter(row => row.status === 'offline replay').length, 4);
-  assert.equal(on('REST').filter(row => row.status === 'mapped').length, 3);
+  const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
+  const researchPaths = Object.values(researchMapping.operations).map(spec => 'GET ' + spec.path);
+  assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
   assert.equal(on('MCP').find(row => row.label === 'quote_capital_flow').status, 'candidate');
   assert.equal(on('REST').find(row => row.label.endsWith('/modify-user-security')).status, 'blocked');
   assert.equal(on('REST').find(row => row.label === 'POST /api/v1/crypto/accounts/{acc_id}/orders').status, 'excluded');
