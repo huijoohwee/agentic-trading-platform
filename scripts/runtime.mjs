@@ -98,6 +98,7 @@ export async function runtimeCommand(args) {
         const read = boundary();
         const result = await read({ operation, inputs, grant: inputs.grant });
         return { source: result.source, at: Date.parse(result.observed_utc), rows: result.rows, decimals: result.decimals,
+          ...(result.price_source && { price_source: result.price_source }),
           ...(result.pagination && { pagination: result.pagination }),
           ...(Object.hasOwn(result, 'last_valid_time_ms') && { last_valid_time_ms: result.last_valid_time_ms }),
           market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null },

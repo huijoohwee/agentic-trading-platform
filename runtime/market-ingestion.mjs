@@ -43,11 +43,17 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       utcMillis(page.observed_utc) !== null && utcMillis(page.observed_utc) <= now() && id(page.source_event) &&
       page.rows !== undefined && Array.isArray(page.decimals), 'INVALID_PAGE');
     const rows = boundedJson(page.rows), decimals = boundedJson(page.decimals);
+    const precision = {};
+    if (Object.hasOwn(page, 'price_source')) {
+      requireThat(operation === 'read.ticker' && decimals.length === 1 && typeof decimals[0]?.price === 'string' &&
+        ['decimal-string', 'json-number'].includes(page.price_source), 'INVALID_PAGE');
+      precision.price_source = page.price_source;
+    }
     const metadata = {};
     if (Object.hasOwn(page, 'last_valid_time_ms')) metadata.last_valid_time_ms = page.last_valid_time_ms;
     if (page.pagination) metadata.pagination = boundedJson(page.pagination);
-    return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, ...metadata, observed_utc: page.observed_utc,
-      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest }),
+    return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, ...metadata, ...precision, observed_utc: page.observed_utc,
+      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest, ...precision }),
       cost: { tool_calls: opened.calls + 1, tokens_in: 'UNKNOWN', tokens_out: 'UNKNOWN', provider_fees: 'UNKNOWN' } };
   };
 }

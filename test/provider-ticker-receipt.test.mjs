@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonical, sha } from '../runtime/core.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
-import { providerCredential } from '../runtime/config.mjs';
+import { openConfiguredRuntime, providerCredential } from '../runtime/config.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 import { exportProviderTicker, providerTickerReceipt } from '../scripts/export-provider-ticker.mjs';
 
@@ -70,6 +70,7 @@ test('a single admitted provider dispatch survives HTTP/MCP retry and exports on
   }
 
   const price = '321.123456789012345600';
+  let wirePrice = price;
   const methods = [];
   const realFetch = globalThis.fetch;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -91,7 +92,7 @@ test('a single admitted provider dispatch survives HTTP/MCP retry and exports on
     else {
       assert.equal(body.method, 'tools/call');
       assert.deepEqual(body.params, { name: descriptor.name, arguments: { code: symbol } });
-      result = { structuredContent: { quotes: [{ code: symbol, last: price, currency: 'USD', market_time: issued, account: scope.account_alias }] } };
+      result = { structuredContent: { quotes: [{ code: symbol, last: wirePrice, currency: 'USD', market_time: issued, account: scope.account_alias }] } };
     }
     return Response.json({ jsonrpc: '2.0', id: body.id, result });
   });
@@ -112,6 +113,7 @@ test('a single admitted provider dispatch survives HTTP/MCP retry and exports on
   const request = requestWith(replayRight);
   const http = await post('/api/gateway', request);
   assert.equal(http.status, 'OK', JSON.stringify(http.error));
+  assert.equal(http.data.price_source, 'decimal-string');
   assert.equal((await rpc(1, 'initialize', { protocolVersion: mapping.protocol, capabilities: {}, clientInfo: { name: 'test', version: '1' } })).result.protocolVersion, mapping.protocol);
   await post('/mcp', { jsonrpc: '2.0', method: 'notifications/initialized' });
   assert.deepEqual((await rpc(2, 'tools/list', {})).result.tools.map(item => item.name).sort(), [rankOp, operation].sort());
@@ -149,6 +151,31 @@ test('a single admitted provider dispatch survives HTTP/MCP retry and exports on
   assert.equal(p.request_id, request.request_id);
   assert(!text.includes(scope.account_alias) && !text.includes('PRIVATE KEY') && !text.includes(audience) && Buffer.byteLength(text) <= 4096);
   assert.equal(methods.length, 4);
+
+  // A number and its round-trip string display identically, but only the string supplies source decimals.
+  wirePrice = 321.125;
+  const numeric = requestWith(replayRight);
+  const numericRead = await post('/api/gateway', numeric);
+  assert.equal(numericRead.status, 'OK');
+  assert.equal(numericRead.data.price_source, 'json-number');
+  assert.equal(numericRead.data.decimals[0].price, '321.125');
+  await privateFile(requestPath, numeric);
+  assert.throws(() => providerTickerReceipt(configPath, requestPath), /PRECISION_UNKNOWN/);
+
+  wirePrice = '321.125';
+  const sameDigits = requestWith(replayRight);
+  const stringRead = await post('/api/gateway', sameDigits);
+  assert.equal(stringRead.data.price_source, 'decimal-string');
+  await privateFile(requestPath, sameDigits);
+  assert.equal(providerTickerReceipt(configPath, requestPath).payload.price, '321.125');
+
+  // A retained checkpoint from before the source type was recorded has no precision proof.
+  const { store } = openConfiguredRuntime(configPath);
+  try {
+    store.transaction(scope, state => { delete state.checkpoints['gateway:' + sameDigits.request_id].result.data.price_source; });
+  } finally { store.close(); }
+  assert.throws(() => providerTickerReceipt(configPath, requestPath), /PRECISION_UNKNOWN/);
+  wirePrice = price;
 
   if (process.env.TRADING_RECEIPT_TEST_OUTPUT) {
     const dir = process.env.TRADING_RECEIPT_TEST_OUTPUT;
