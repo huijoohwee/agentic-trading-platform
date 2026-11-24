@@ -1,8 +1,7 @@
 import { researchTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
-// source (path + on-disk SHA-256), the verified MCP tool names (only tools observed in the session
-// catalog), the proposed semantic read operations, the outbound transport and an honest status.
+// source (path + on-disk SHA-256), the listed MCP tool names (see each route for evidence), the proposed semantic read operations, the outbound transport and an honest status.
 // This is brand-specific discovery metadata for the dashboard and Graph Integrations; it is NOT part
 // of the brand-neutral gateway contract and grants no admission, dispatch or write authority.
 // Statuses: mapped = semantic read implemented; candidate = doc imported, read proposed, not mapped;
@@ -17,6 +16,10 @@ const source = (path, sha256) => Object.freeze({ path, sha256, url: 'https://ope
 const family = (id, label, status, transport, operations, mcp, sources, note) =>
   Object.freeze({ id, label, status, transport, operations: Object.freeze(operations), mcp: Object.freeze(mcp), sources: Object.freeze(sources), note });
 
+const securitiesEvents = new Set(['EVENT_NEW', 'EVENT_REPLACED', 'EVENT_CANCELED', 'EVENT_EXPIRED', 'EVENT_FILL', 'EVENT_NEW_REJECTED',
+  'EVENT_REPLACE_REJECTED', 'EVENT_CANCEL_REJECTED', 'EVENT_FILL_CORRECT', 'EVENT_FILL_CANCEL', 'EVENT_WAIT_OPEN',
+  'EVENT_PRICE_PROTECT', 'EVENT_TRIGGER_WAITING', 'EVENT_TRIGGER']);
+const cryptoReports = new Set(['1', '3', '4', '5']);
 const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE', 'BROKER_QUEUE', 'MARKET_STATE']);
 
 export const providerCoverage = Object.freeze([
@@ -124,7 +127,7 @@ export const providerCoverage = Object.freeze([
   family('push', 'Realtime push subscription', 'candidate', 'PUSH',
     ['subscribe.push'], [],
     [source('api/quote/push/overview.md', '485db83bdf0dd46e4e63f042ce21c9bd473bd68745eb64c1328ebfe59c789670')],
-    `Saved quote frames supported by the desk: ${[...replayTopics].join(', ')}. An entitled stream needs its own subscription and recovery evidence.`),
+    `Saved quote frames supported by the desk: ${[...replayTopics].join(', ')}. Private file replay covers fourteen securities events and four binary crypto reports. A connected stream needs entitlement and recovery evidence.`),
   family('simulator-reads', 'Simulator account, positions, orders and buying power', 'mapped', 'MCP+REST',
     ['read.simulator-account', 'read.simulator-balances', 'read.simulator-positions', 'read.simulator-orders', 'read.simulator-order-history', 'read.simulator-buying-power'],
     ['sim_trade_account_list', 'sim_trade_cash_info', 'sim_trade_position_list', 'sim_trade_history_order_list', 'sim_trade_max_buy_sell'],
@@ -233,6 +236,11 @@ const routeKey = http => http.replace(/\{[A-Za-z_][\w]*\}/g, '{}');
 // no transport handler and supplies neither permission nor spendable headroom.
 function disposition(methodPath, topic, name) {
   if (topic) {
+    const name = topic.split('/').at(-1);
+    if (topic === '/api/trading/trade_event_push/' + name && securitiesEvents.has(name))
+      return ['offline replay', 'trade:read', 'Securities JSON · exact account match'];
+    if (topic === '/api/crypto_trading/trade_event_push/' + name && cryptoReports.has(name))
+      return ['offline replay', 'trade:read', 'Crypto Protobuf · account absent from frame'];
     const market = topic.startsWith('/api/quote/push/');
     return market && replayTopics.has(topic.split('/').at(-1))
       ? ['offline replay', 'quote:read', 'Gateway replay']
