@@ -1,3 +1,4 @@
+import { mountRouteViews } from './coverage-routes-view.mjs';
 import { providerCoverage, coverageSummary, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
 
 const limits = {
@@ -85,68 +86,32 @@ export async function mountCoverageView(host) {
   finder.id = 'coverage-routes';
   finder.append(node('h4', 'Find a provider route'), summaryLine,
     node('p', 'Gateway owns provider route definitions. Trading owns mappings and admission. Each connected read requires host-specific rights, a provider-enforced $0 limit and remaining quota.'));
-  const label = node('label', 'Route or tool ');
-  const query = node('input');
-  query.type = 'search';
-  label.append(query);
-  const filterLabel = node('label', ' Disposition ');
-  const filter = node('select');
-  for (const value of ['All', ...new Set(rows.map(row => row.status))]) filter.append(node('option', value));
-  filterLabel.append(filter);
-  const previous = node('button', 'Previous'), next = node('button', 'Next');
-  previous.type = next.type = 'button';
-  const results = node('ul'), range = node('p');
-  range.setAttribute('role', 'status');
-  let offset = 0;
-  function render() {
-    const term = query.value.trim().toLowerCase();
-    const matches = rows.filter(row => (filter.value === 'All' || row.status === filter.value) &&
-      (row.transport + ' ' + row.label).toLowerCase().includes(term));
-    const page = matches.slice(offset, offset + 12);
-    range.textContent = page.length ? (offset + 1) + '–' + (offset + page.length) + ' of ' + matches.length : 'No matching routes';
-    results.replaceChildren(...page.map(row => {
-      const item = node('li'), detail = node('details');
-      detail.append(node('summary', row.transport + ' · ' + row.label + ' · ' + row.status),
-        node('p', row.scope + ' · ' + row.evidence), node('p', row.units));
-      const tools = [...new Set(row.sources.map(source => source.tool).filter(Boolean))];
-      if (tools.length) {
-        const fields = node('div');
-        detail.append(fields);
-        let ready = false;
-        detail.addEventListener('toggle', async () => {
-          if (!detail.open || ready) return;
-          ready = true;
-          try {
-            const index = await loadFieldRegister();
-            fields.replaceChildren(...tools.map(name => {
-              if (!index.has(name)) throw Error('MISSING_FIELD_DEFINITION');
-              return showHttpFields(index.get(name), node);
-            }));
-          } catch {
-            fields.textContent = 'Field definitions unavailable. Reopen this route to retry.';
-            ready = false;
-          }
-        });
+  mountRouteViews(finder, rows, node, (row, detail) => {
+    detail.append(node('h5', row.label), node('p', row.scope + ' · ' + row.evidence), node('p', row.units));
+    for (const source of row.sources) {
+      const link = node('a', source.tool ?? new URL(source.url).pathname);
+      link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      const line = node('p'); line.append(link, node('code', ' SHA-256 ' + source.digest)); detail.append(line);
+    }
+    const tools = [...new Set(row.sources.map(source => source.tool).filter(Boolean))];
+    if (!tools.length) return;
+    const fields = node('div');
+    detail.append(fields);
+    async function show() {
+      try {
+        const index = await loadFieldRegister();
+        fields.replaceChildren(...tools.map(name => {
+          if (!index.has(name)) throw Error('MISSING_FIELD_DEFINITION');
+          return showHttpFields(index.get(name), node);
+        }));
+      } catch {
+        const retry = node('button', 'Retry field definitions');
+        retry.type = 'button'; retry.addEventListener('click', show, { once: true });
+        fields.replaceChildren(node('p', 'Field definitions unavailable.'), retry);
       }
-      for (const source of row.sources) {
-        const link = node('a', source.tool ?? new URL(source.url).pathname);
-        link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-        const line = node('p'); line.append(link, node('code', ' SHA-256 ' + source.digest));
-        detail.append(line);
-      }
-      item.append(detail);
-      return item;
-    }));
-    previous.disabled = offset === 0;
-    next.disabled = offset + page.length >= matches.length;
-  }
-  for (const [element, event] of [[query, 'input'], [filter, 'change']]) {
-    element.addEventListener(event, () => { offset = 0; render(); });
-  }
-  previous.addEventListener('click', () => { offset -= 12; render(); });
-  next.addEventListener('click', () => { offset += 12; render(); });
-  finder.append(label, filterLabel, range, results, previous, next);
-  render();
+    }
+    show();
+  });
   const supplement = node('details');
   supplement.append(node('summary', references.length + ' additional public references'));
   const paths = node('ul');

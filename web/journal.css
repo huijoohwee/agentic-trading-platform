@@ -58,3 +58,11 @@ input, select { width: 100%; min-width: 0; }
 
 #coverage-body { min-width: 0; overflow-wrap: anywhere; }
 #coverage-routes :is(input, select) { max-width: 100%; }
+#coverage-routes { display: grid; gap: var(--agentic-control-padding-inline); min-inline-size: 0; }
+#coverage-routes .route-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--agentic-control-padding-inline); }
+.route-controls label, .route-cards { display: grid; gap: var(--agentic-control-padding-block); align-content: start; }
+#route-views, #route-views [role="tabpanel"] { min-inline-size: 0; }
+#route-views .route-table { margin-block: var(--agentic-control-padding-inline); }
+.route-board { align-items: start; }
+.route-cards .route-card { display: grid; width: 100%; text-align: start; white-space: normal; overflow-wrap: anywhere; }
+.route-card small { color: var(--agentic-text-secondary, currentColor); }

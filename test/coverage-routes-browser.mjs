@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+
+export async function verifyRouteViews(page) {
+  const routes = page.locator('#coverage-routes');
+  const tab = name => routes.getByRole('tab', { name, exact: true });
+  await routes.getByText('1–12 of 389', { exact: true }).waitFor();
+  await routes.getByRole('button', { name: 'Next', exact: true }).click();
+  await routes.getByText('13–24 of 389', { exact: true }).waitFor();
+  await tab('Multi-dimensional table').click();
+  let matrix = routes.getByRole('tabpanel', { name: 'Multi-dimensional table' });
+  for (const total of ['258', '107', '24', '389']) await matrix.getByRole('cell', { name: total, exact: true }).first().waitFor();
+  await matrix.getByRole('button', { name: /Current table orientation/ }).click();
+  await matrix.getByText('389', { exact: true }).first().waitFor();
+  await tab('Kanban').click();
+  const board = routes.getByRole('tabpanel', { name: 'Kanban' });
+  await board.getByRole('heading', { name: 'offline replay (24)' }).waitFor();
+  const more = board.getByRole('button', { name: 'Show more candidate routes' });
+  const before = await board.locator('[data-route]').count(); await more.click();
+  assert.equal(await board.locator('[data-route]').count(), before + 12);
+  await routes.getByLabel('Transport', { exact: true }).selectOption('Push');
+  await routes.getByText('24 matching routes').waitFor();
+  assert.equal(await board.getByRole('heading').count(), 1);
+  await board.locator('[data-route]').first().click();
+  await routes.getByRole('region', { name: 'Selected route evidence' }).getByRole('link').first().waitFor();
+  await routes.getByLabel('Transport', { exact: true }).selectOption('All');
+  await tab('Table').click();
+  await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('quote_stock_quote');
+  await routes.getByRole('cell', { name: 'quote_stock_quote', exact: true }).click();
+  await routes.getByText('quote:read · Desktop and hosted captures').waitFor();
+  await routes.getByText('Public HTTP fields · quote_stock_quote', { exact: true }).waitFor();
+  await routes.getByText('code_list', { exact: true }).waitFor();
+  await routes.getByText('Minimum items 1 · Maximum items 400', { exact: true }).waitFor();
+  await routes.getByText(/^Response fields \(\d+\)$/).click();
+  assert.match(await routes.innerText(), /last_price|lastPrice/);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('/rt-ticker');
+  await routes.getByRole('cell', { name: 'GET /api/v1.0/quote/{symbol}/rt-ticker', exact: true }).click();
+  await routes.getByText('quote:read · Signed local market REST fixture').waitFor();
+  await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('news_search');
+  await routes.getByRole('cell', { name: 'news_search', exact: true }).click();
+  await routes.getByText('review news access · Signed local MCP research fixture').waitFor();
+  await routes.getByRole('combobox', { name: 'Disposition', exact: true }).selectOption('excluded');
+  await routes.getByText('No matching routes').waitFor();
+  await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('trading_order_place');
+  await routes.getByRole('cell', { name: 'trading_order_place', exact: true }).waitFor();
+}
