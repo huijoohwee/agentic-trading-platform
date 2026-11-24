@@ -92,6 +92,15 @@ async function verifySavedResearch(page, calendar) {
   await view.getByText(calendar.code + ' · ' + calendar.earnings_date, { exact: true }).click();
   await view.getByText('Unknown', { exact: true }).waitFor();
   await view.getByText('AFTER', { exact: true }).waitFor();
+  const { code, name, earnings_date, earnings_timestamp, pub_type, period_text, price, published } = calendar;
+  const calendarRow = { code, name, earnings_date, earnings_timestamp, pub_type, period_text, price: Number(price),
+    published, eps_actual: 0, eps_predict: null };
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'calendar-fixture', operation: 'read.calendar' },
+    data: { source: 'AUTHENTICATED_ADAPTER', at: 1800000000000, rows: [calendarRow], decimals: [{ price, earnings_timestamp: String(earnings_timestamp) }] } });
+  await view.getByText('calendar-fixture · PROVIDER', { exact: true }).waitFor();
+  await view.getByText(code + ' · ' + earnings_date, { exact: true }).click();
+  assert.equal(await view.getByText('Estimated EPS', { exact: true }).evaluate(dt => dt.nextElementSibling.textContent), 'Unknown');
+  assert.equal(await view.getByText('Actual EPS', { exact: true }).evaluate(dt => dt.nextElementSibling.textContent), '0');
   const rows = Array.from({ length: 11 }, (_, i) => ({ symbol: 'HK.' + i, name: 'Example ' + i,
     factors: [{ factor: 'market_cap', raw: '9007199254740993', value: '9007199254740.993' }] }));
   const result = { status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'screen-fixture', operation: 'read.stock-screen' },
