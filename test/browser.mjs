@@ -1,4 +1,5 @@
 import { verifyRouteViews } from './coverage-routes-browser.mjs';
+import { verifyJournalUpdate } from './journal-update-browser.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {verifyLaboratory} from './laboratory-browser.mjs';
@@ -572,6 +573,7 @@ try {
     await context.close();
   }
   assert.deepEqual(errors,[]);
+  await verifyJournalUpdate(browser);
   await verifyDesk(browser);
   await verifyLaboratory(browser);console.log('Landing and desk WebMCP actions, paper revision parity, observer and research workflows passed.');
 } finally { if (server.listening) server.close(); await browser.close(); }
