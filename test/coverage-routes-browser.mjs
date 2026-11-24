@@ -71,11 +71,15 @@ export async function verifyRouteViews(page) {
   await routes.getByRole('cell', { name: 'quote_stock_quote', exact: true }).click();
   await routes.getByText('quote:read · Desktop and hosted captures').waitFor();
   await routes.getByText('POST /api/v1.0/quote/stock-quote', { exact: true }).last().waitFor();
-  await routes.getByText('Public HTTP fields · quote_stock_quote', { exact: true }).waitFor();
-  await routes.getByText('code_list', { exact: true }).waitFor();
-  await routes.getByText('Minimum items 1 · Maximum items 400', { exact: true }).waitFor();
-  await routes.getByText(/^Response fields \(\d+\)$/).click();
-  assert.match(await routes.innerText(), /last_price|lastPrice/);
+  const fields = page.locator('#coverage-fields'), routeDetail = routes.getByRole('region', { name: 'Selected route evidence' });
+  await routeDetail.getByRole('link', { name: 'View fields for quote_stock_quote', exact: true }).click();
+  await fields.getByText('1–12 of 23', { exact: true }).waitFor();
+  await fields.getByRole('cell', { name: 'code_list', exact: true }).click();
+  const fieldDetail = fields.getByRole('region', { name: 'Selected field evidence' });
+  await fieldDetail.getByText('Minimum items 1 · Maximum items 400', { exact: true }).waitFor();
+  await fieldDetail.getByRole('link', { name: 'MCP · quote_stock_quote', exact: true }).click();
+  await routes.locator('tr[aria-selected=true]:focus').getByRole('cell', { name: 'quote_stock_quote', exact: true }).waitFor();
+  await routeDetail.getByRole('heading', { name: 'quote_stock_quote', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('/rt-ticker');
   await routes.getByRole('cell', { name: 'GET /api/v1.0/quote/{symbol}/rt-ticker', exact: true }).click();
@@ -87,4 +91,47 @@ export async function verifyRouteViews(page) {
   await routes.getByText('No matching routes').waitFor();
   await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('trading_order_place');
   await routes.getByRole('cell', { name: 'trading_order_place', exact: true }).waitFor();
+
+  // A document link can reach an off-page route even while the routes view excludes it.
+  const doc = '/api/quote/basic-data/search-hot-stocks', get = 'GET /api/v1.0/quote/search-hot-stocks';
+  await reference.getByRole('button', { name: 'Search references' }).click();
+  await reference.getByRole('searchbox').fill(doc);
+  await reference.getByRole('cell', { name: doc, exact: true }).click();
+  const refDetail = reference.getByRole('region', { name: 'Selected reference evidence' });
+  await refDetail.getByRole('link', { name: get, exact: true }).click();
+  await routes.locator('tr[aria-selected=true]:focus').getByRole('cell', { name: get, exact: true }).waitFor();
+  assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('route'), 'REST ' + get);
+  await routeDetail.getByRole('link', { name: doc, exact: true }).click();
+  await reference.getByRole('row', { name: 'Data row: ' + doc, selected: true }).waitFor();
+  await page.goBack();
+  await routes.locator('tr[aria-selected=true]:focus').getByRole('cell', { name: get, exact: true }).waitFor();
+  assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('route'), 'REST ' + get);
+
+  const cancel = 'DELETE /api/v1/crypto/accounts/{acc_id}/orders/{order_id}', tool = 'crypto_account_cancel_order';
+  await routes.getByRole('searchbox').fill(cancel);
+  await routes.getByRole('cell', { name: cancel, exact: true }).click();
+  const forward = routeDetail.locator('a[href^="#provider-coverage?fields="]');
+  await forward.click();
+  await fields.getByText('1–3 of 3', { exact: true }).waitFor();
+  await fields.getByRole('cell', { name: 'orderId', exact: true }).click();
+  await fieldDetail.getByText(tool + ' · Path · string · Required', { exact: true }).waitFor();
+  const fieldUrl = page.url();
+  await fieldDetail.getByRole('link', { name: 'REST · ' + cancel, exact: true }).click();
+  await routes.getByRole('row', { name: 'Data row: ' + cancel, selected: true }).waitFor();
+  await routeDetail.getByText('trade:write · Live effect excluded', { exact: true }).waitFor();
+
+  const bookmark = await page.context().newPage();
+  try {
+    await bookmark.goto(fieldUrl);
+    const restored = bookmark.locator('#coverage-fields');
+    await restored.getByRole('row', { name: 'Data row: orderId', selected: true }).waitFor();
+    await restored.getByRole('combobox', { name: 'View layout' }).selectOption('multiDimensional');
+    await restored.getByRole('cell', { name: '3', exact: true }).first().waitFor();
+    await restored.getByLabel('Tool', { exact: true }).selectOption('All');
+    await restored.getByRole('cell', { name: '1568', exact: true }).first().waitFor();
+    await restored.getByRole('combobox', { name: 'View layout' }).selectOption('kanban');
+    await restored.getByText('1–48 of 1568', { exact: true }).waitFor();
+    await restored.getByRole('button', { name: 'Next', exact: true }).click();
+    await restored.getByText('49–96 of 1568', { exact: true }).waitFor();
+  } finally { await bookmark.close(); }
 }

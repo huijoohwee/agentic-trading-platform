@@ -47,12 +47,16 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   }
   shadow.append(css, localStyle, toolbarHost, searchPanel, filterPanel, measurePanel, content);
   host.append(root, evidence);
-  let layout = 'table', orientation = 'rows', offset = 0, sorted = false, selected, table, toolbar, matches = rows;
+  let layout = config.layout ?? 'table', orientation = 'rows', offset = 0, sorted = false, selected, table, toolbar, matches = rows;
 
-  function selectRecord(id) {
-    selected = matches.find(row => row.recordId === id);
+  function showEvidence(row) {
+    selected = row;
     evidence.replaceChildren();
     if (selected) inspect(selected, evidence);
+  }
+  function selectRecord(id) {
+    showEvidence(matches.find(row => row.recordId === id));
+    if (selected) config.onSelect?.(selected);
     if (layout === 'table') table.update(viewState());
   }
   function matrixState() {
@@ -67,9 +71,11 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     return { layout, columns, rows: records, orientation, ariaLabel: title + ' counts',
       onOrientationChange(value) { orientation = value; render(); } };
   }
+  const pageLength = () => layout === 'table' ? pageSize : layout === 'kanban' ? config.boardPageSize : undefined;
   function viewState() {
     if (layout === 'multiDimensional') return matrixState();
-    const tableView = layout === 'table', page = tableView ? matches.slice(offset, offset + pageSize) : matches;
+    const tableView = layout === 'table', length = pageLength();
+    const page = length ? matches.slice(offset, offset + length) : matches;
     return { layout, wrapText: tableView, columns: fields, rows: page.map(row => ({ id: row.recordId, cells: fields.map(field => String(row[field.id] ?? '')) })),
       ariaLabel: tableView ? title + ' table' : title + ' by ' + labelFor(groupDimension).toLowerCase(), onActivateRow: selectRecord,
       ...(tableView ? { selectedRowId: page.some(row => row === selected) ? selected.recordId : null } : { groupByColumnId: groupDimension }) };
@@ -81,20 +87,20 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   }
   function changePage(delta) { offset += delta; selected = null; evidence.replaceChildren(); render(); }
   function refreshToolbar() {
-    const count = matches.length;
-    const status = !count ? 'No matching ' + plural : layout === 'table'
-      ? (offset + 1) + '–' + Math.min(offset + pageSize, count) + ' of ' + count : count + ' matching ' + plural;
+    const count = matches.length, length = pageLength();
+    const status = !count ? 'No matching ' + plural : length
+      ? (offset + 1) + '–' + Math.min(offset + length, count) + ' of ' + count : count + ' matching ' + plural;
     const actions = [
       { id: 'search', label: 'Search ' + plural, pressed: !searchPanel.hidden, invoke: () => toggle(searchPanel, search) },
       { id: 'filter', label: 'Filter ' + plural, pressed: !filterPanel.hidden, invoke: () => toggle(filterPanel, dimensionFilter) },
     ];
     if (layout !== 'multiDimensional') actions.push({ id: 'sort', label: 'Sort by ' + fields[0].name.toLowerCase(), pressed: sorted,
       invoke() { sorted = !sorted; applyFilters(); } });
-    if (layout === 'table') actions.push(
-      { id: 'previous', label: 'Previous', disabled: !offset, invoke: () => changePage(-pageSize) },
-      { id: 'next', label: 'Next', disabled: offset + pageSize >= count, invoke: () => changePage(pageSize) });
+    if (length) actions.push(
+      { id: 'previous', label: 'Previous', disabled: !offset, invoke: () => changePage(-length) },
+      { id: 'next', label: 'Next', disabled: offset + length >= count, invoke: () => changePage(length) });
     const state = { layout, status, actions, label: title + ' views',
-      onLayoutChange(value) { layout = value; selected = null; evidence.replaceChildren(); render(); } };
+      onLayoutChange(value) { layout = value; offset = 0; selected = null; evidence.replaceChildren(); render(); } };
     if (toolbar) toolbar.update(state); else toolbar = mountRecordViewToolbar(toolbarHost, state);
   }
   function render() {
@@ -105,14 +111,53 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     const state = viewState();
     if (table) table.update(state); else table = mountDataView(content, state);
   }
-  function applyFilters() {
+  function filterRows() {
+    config.onDimension?.(dimensionFilter.value);
     const term = search.value.trim().toLowerCase();
     matches = rows.filter(row => (dimensionFilter.value === 'All' || row[rowDimension] === dimensionFilter.value) &&
       (groupFilter.value === 'All' || row[groupDimension] === groupFilter.value) && fields.some(field => String(row[field.id] ?? '').toLowerCase().includes(term)));
     if (sorted) matches.sort((a, b) => a.label.localeCompare(b.label, 'en'));
-    offset = 0; selected = null; evidence.replaceChildren(); render();
+  }
+  function applyFilters() {
+    filterRows(); offset = 0; showEvidence(null); render();
   }
   search.addEventListener('input', applyFilters);
   for (const control of [dimensionFilter, groupFilter]) control.addEventListener('change', applyFilters);
   render();
+  // A relationship opens the exact record even when a different page, layout or filter is active.
+  let focusObserver;
+  return { open({ key, dimension }) {
+    focusObserver?.disconnect();
+    const row = key === undefined ? null : rows.find(item => config.key(item) === key);
+    if ((key !== undefined && !row) || (dimension !== undefined && !dimensions.includes(dimension)) ||
+        (row && dimension !== undefined && row[rowDimension] !== dimension)) return false;
+    if (dimension !== undefined) {
+      dimensionFilter.value = dimension; groupFilter.value = 'All'; search.value = ''; filterPanel.hidden = false;
+    } else if (!matches.includes(row)) {
+      if (dimensionFilter.value !== row[rowDimension]) dimensionFilter.value = 'All';
+      if (groupFilter.value !== row[groupDimension]) groupFilter.value = 'All';
+      if (!fields.some(f => String(row[f.id] ?? '').toLowerCase().includes(search.value.trim().toLowerCase()))) search.value = '';
+    }
+    layout = 'table'; filterRows();
+    if (row && !matches.includes(row)) return false;
+    offset = row ? Math.floor(matches.indexOf(row) / pageSize) * pageSize : 0;
+    showEvidence(row); render();
+    const focus = element => { element.focus({ preventScroll: true }); element.scrollIntoView({ block: 'center' }); };
+    if (row) {
+      // Base commits the new page asynchronously. Focus the selected row after its DOM update.
+      focusObserver = new MutationObserver(() => {
+        if (selected !== row) { focusObserver.disconnect(); return; }
+        const target = content.querySelector('tr[aria-selected="true"]');
+        if (target) { focusObserver.disconnect(); focus(target); }
+      });
+      focusObserver.observe(content, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-selected'] });
+      const current = content.querySelector('tr[aria-selected="true"]');
+      if (current && fields.every((f, i) => current.cells[i]?.textContent === String(row[f.id] ?? ''))) {
+        focusObserver.disconnect(); focus(current);
+      }
+    } else {
+      const heading = host.querySelector('h4'); heading.tabIndex = -1; focus(heading);
+    }
+    return true;
+  } };
 }

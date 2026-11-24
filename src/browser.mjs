@@ -49,11 +49,13 @@ if ('IntersectionObserver' in window) {
 }
 async function followSectionLink() {
   const hash = location.hash.slice(1);
-  const id = hash === 'replay-dashboard' ? 'rehearsal' : hash;
+  const coverageRecord = hash.startsWith('provider-coverage?');
+  const id = coverageRecord ? 'provider-coverage' : hash === 'replay-dashboard' ? 'rehearsal' : hash;
   if (!sections.has(id)) return;
-  byId(id).scrollIntoView({ block: 'start' });
+  if (!coverageRecord) byId(id).scrollIntoView({ block: 'start' });
   const view = await loadSection(id);
   if (location.hash.slice(1) !== hash) return;
+  if (coverageRecord) await view?.follow(hash);
   if (hash === 'replay-dashboard') await view?.showDashboard();
 }
 window.addEventListener('hashchange', followSectionLink);
