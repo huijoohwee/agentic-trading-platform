@@ -124,8 +124,13 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
       }
       const response_digest = sha(response);
       const observed_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+      const precision = {};
+      if (operation === 'read.ticker' && decimals.length === 1 && typeof decimals[0]?.price === 'string') {
+        const wirePrice = ownPath(spec.object_result ? raw : raw[0], spec.fields.price.path);
+        precision.price_source = typeof wirePrice === 'string' ? 'decimal-string' : 'json-number';
+      }
       return issue('provider-market-page', { operation, rows, decimals, observed_utc,
-        source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest: allowed.schema_digest });
+        ...precision, source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest: allowed.schema_digest });
     },
   };
 }

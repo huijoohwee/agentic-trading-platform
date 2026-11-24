@@ -26,7 +26,7 @@ function quoteFields(data, symbol, now) {
   const price = data.decimals?.[0]?.price;
   requireThat(data.source === 'AUTHENTICATED_ADAPTER' && data.market?.venue === 'provider' &&
     data.market.symbol === symbol && row?.symbol === symbol && typeof symbol === 'string' && symbolPattern.test(symbol), 'QUOTE_BINDING');
-  requireThat(data.decimals?.length === 1 && typeof price === 'string' && price.length <= 64 &&
+  requireThat(data.price_source === 'decimal-string' && data.decimals?.length === 1 && typeof price === 'string' && price.length <= 64 &&
     pricePattern.test(price) && Number.isFinite(row.price) && row.price > 0 && row.price === Number(price), 'PRECISION_UNKNOWN');
   requireThat(typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency) &&
     Number.isSafeInteger(data.at) && data.at >= 0 && data.at <= now, 'INVALID_QUOTE');
