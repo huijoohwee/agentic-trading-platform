@@ -232,6 +232,12 @@ try {
     await routes.getByLabel('Route or tool').fill('quote_stock_quote');
     await routes.getByText('MCP · quote_stock_quote · mapped', { exact: true }).click();
     await routes.getByText('quote:read · Desktop and hosted captures').waitFor();
+    await routes.getByText('Public HTTP fields · quote_stock_quote', { exact: true }).waitFor();
+    await routes.getByText('code_list', { exact: true }).waitFor();
+    await routes.getByText('Minimum items 1 · Maximum items 400', { exact: true }).waitFor();
+    await routes.getByText(/^Response fields \(\d+\)$/).click();
+    assert.match(await routes.innerText(), /last_price|lastPrice/);
+    assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await routes.getByLabel('Disposition').selectOption('excluded');
     await routes.getByText('No matching routes').waitFor();
     await routes.getByLabel('Route or tool').fill('trading_order_place');

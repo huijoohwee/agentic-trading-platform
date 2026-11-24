@@ -1,10 +1,56 @@
 import { providerCoverage, coverageSummary, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
 
+const limits = {
+  default: 'Default', enum: 'Values', min: 'Minimum', max: 'Maximum', maximum: 'Maximum',
+  minLength: 'Minimum length', maxLength: 'Maximum length', minItems: 'Minimum items', maxItems: 'Maximum items', pattern: 'Pattern'
+};
+
+function fieldList(fields, node) {
+  const list = node('ul');
+  for (const field of fields) {
+    const item = node('li');
+    const requirement = field.required === undefined ? '' : field.required ? ' · required' : ' · optional';
+    item.append(node('code', field.name), document.createTextNode(' · ' + field.type + requirement));
+    const rules = Object.entries(limits).filter(([key]) => Object.hasOwn(field, key))
+      .map(([key, label]) => label + ' ' + (Array.isArray(field[key]) ? field[key].join(', ') : String(field[key])));
+    if (rules.length) item.append(node('p', rules.join(' · ')));
+    if (field.fields?.length) item.append(fieldList(field.fields, node));
+    list.append(item);
+  }
+  return list;
+}
+
+function showHttpFields(tool, node) {
+  const section = node('section');
+  section.append(node('h5', 'Public HTTP fields · ' + tool.name));
+  if (tool.path.length) section.append(node('p', 'Path variables · ' + tool.path.join(', ')));
+  for (const [name, fields] of [['Parameters', tool.params], ['Request body', tool.body]]) {
+    if (fields.length) section.append(node('h6', name), fieldList(fields, node));
+  }
+  if (tool.response.length) {
+    const response = node('details');
+    response.append(node('summary', 'Response fields (' + tool.response.length + ')'),
+      node('p', (tool.wrap ? tool.wrap + ' · ' : '') + tool.response.join(', ')));
+    section.append(response);
+  }
+  if (tool.pagination?.length) section.append(node('p', 'Pagination · ' + tool.pagination.join(', ')));
+  return section;
+}
+
 // Lazy, read-only discovery surface for the moomoo OpenAPI feature-family coverage. It renders the
 // reviewed inventory metadata only: no provider call, no credential, no dispatch authority. Host-specific captures are labelled independently.
 export async function mountCoverageView(host) {
   const { default: catalog } = await import('../qualification/moomoo/route-inventory.json', { with: { type: 'json' } });
   const node = (tag, text) => { const element = document.createElement(tag); if (text !== undefined) element.textContent = text; return element; };
+  let register;
+  function loadFieldRegister() {
+    register ??= import('../qualification/moomoo/route-fields.json', { with: { type: 'json' } }).then(({ default: data }) => {
+      if (data.schema !== 'moomoo-public-http-fields/v1' || data.authority !== false ||
+          data.directory_sha256 !== catalog.directory_sha256) throw Error('FIELD_REGISTER_DRIFT');
+      return new Map(data.tools.map(tool => [tool.name, tool]));
+    }).catch(error => { register = undefined; throw error; });
+    return register;
+  }
   const summary = coverageSummary();
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
@@ -61,6 +107,26 @@ export async function mountCoverageView(host) {
       const item = node('li'), detail = node('details');
       detail.append(node('summary', row.transport + ' · ' + row.label + ' · ' + row.status),
         node('p', row.scope + ' · ' + row.evidence), node('p', row.units));
+      const tools = [...new Set(row.sources.map(source => source.tool).filter(Boolean))];
+      if (tools.length) {
+        const fields = node('div');
+        detail.append(fields);
+        let ready = false;
+        detail.addEventListener('toggle', async () => {
+          if (!detail.open || ready) return;
+          ready = true;
+          try {
+            const index = await loadFieldRegister();
+            fields.replaceChildren(...tools.map(name => {
+              if (!index.has(name)) throw Error('MISSING_FIELD_DEFINITION');
+              return showHttpFields(index.get(name), node);
+            }));
+          } catch {
+            fields.textContent = 'Field definitions unavailable. Reopen this route to retry.';
+            ready = false;
+          }
+        });
+      }
       for (const source of row.sources) {
         const link = node('a', source.tool ?? new URL(source.url).pathname);
         link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';

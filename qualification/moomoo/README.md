@@ -56,3 +56,5 @@ For these nineteen reads, the operator signs an `inputs_digest` on the grant’s
 ## Simulator route coverage
 
 Search for `/sim-trade/` in the route inventory. Six GETs cover account discovery, cash, positions, buying power, current orders and order history. Three POSTs describe placing, modifying and cancelling a simulator ticket. Each route lists its required fields or units. Connected simulation requires the named account, a signed simulator grant and independent approval for each ticket effect. The local paper broker signs its observations as MOCK. It refuses a provider source label and refuses to reuse retained balances or fills with a conflicting origin. The original ledger remains available for reconciliation.
+
+Opening an advertised tool in the route finder loads its public HTTP field register from the sealed site. The field list shows path variables, declared parameters, body fields, limits and top-level response names. Required and optional labels reflect explicit values in the published schema. Connected MCP admission still checks the host’s own descriptor.
