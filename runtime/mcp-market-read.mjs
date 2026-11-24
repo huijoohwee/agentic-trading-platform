@@ -43,7 +43,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
   requireThat(privateKey.asymmetricKeyType === 'ed25519', 'ATTESTATION_REQUIRED');
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
-    requireThat(MARKET_READ_OPERATIONS.includes(operation) && id(spec.tool) && Array.isArray(spec.rows_path), 'INVALID_MAPPING');
+    requireThat(MARKET_READ_OPERATIONS.includes(operation) && id(spec.tool) && !spec.tool.startsWith('sim_trade_') && Array.isArray(spec.rows_path), 'INVALID_MAPPING');
     requireThat((operation === 'read.stock-screen') === (spec.tool === STOCK_SCREEN_TOOL), 'INVALID_MAPPING');
     if (spec.profile === researchGetProfile) {
       const reviewed = researchMcpMapping.operations[operation];
