@@ -1,14 +1,20 @@
-import { createHmac } from 'node:crypto';
-import { canonical, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import { canonical, fail, hash, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
 
 const root = '/api/v1.0/sim-trade/';
 export const accountOperation = 'read.simulator-account';
 const balanceOperation = 'read.simulator-balances';
 const positionOperation = 'read.simulator-positions';
+export const ordersOperation = 'read.simulator-orders';
+export const historyOperation = 'read.simulator-order-history';
+export const powerOperation = 'read.simulator-buying-power';
 export const simulatorSpecs = Object.fromEntries([
   [accountOperation, 'sim_trade_account_list', 'accounts'],
   [balanceOperation, 'sim_trade_cash_info', '{acc_id}/cash-info'],
   [positionOperation, 'sim_trade_position_list', '{acc_id}/positions'],
+  [ordersOperation, 'simulator_today_orders', '{acc_id}/orders'],
+  [historyOperation, 'sim_trade_history_order_list', '{acc_id}/history-orders'],
+  [powerOperation, 'sim_trade_max_buy_sell', '{acc_id}/max-buy-sell'],
 ].map(([operation, tool, route]) => {
   const spec = { profile: 'moomoo-simulator-read/v1', tool, method: 'GET', path: root + route, rows_path: [], pin_inputs: true };
   return [operation, { ...spec, schema_digest: sha(spec) }];
@@ -34,20 +40,93 @@ export function simulatorBindingDigest({ provider, scope, account, secret }) {
   return privateHash(secret, { profile: 'moomoo-simulator-read/v1', provider, scope, account_id, market_id, account_type });
 }
 
+const maxPage = 600;
+const decimalText = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
+const has = (value, key) => Object.hasOwn(value, key);
+function micros(value) {
+  const text = Number.isSafeInteger(value) ? String(value) : value;
+  requireThat(typeof text === 'string' && /^\d{1,19}$/.test(text) && BigInt(text) <= 9223372036854775807n, 'INVALID_PARAMETER');
+  return text;
+}
+function historyFrame(parameters) {
+  const frame = {};
+  for (const key of ['time_begin', 'time_end']) if (has(parameters, key)) frame[key] = micros(parameters[key]);
+  if (has(frame, 'time_begin') && has(frame, 'time_end')) requireThat(BigInt(frame.time_begin) <= BigInt(frame.time_end), 'INVALID_PARAMETER');
+  const size = has(parameters, 'page_size') ? parameters.page_size : 50;
+  requireThat(Number.isSafeInteger(size) && size >= 1 && size <= maxPage, 'INVALID_PARAMETER');
+  frame.page_size = size;
+  return frame;
+}
+
+function cursorContext(binding, frame) {
+  return Buffer.from(canonical({ operation: historyOperation, account: simulatorBindingDigest(binding), candidate: binding.candidate ?? null, frame }));
+}
+function cursorKey(binding) {
+  return createHmac('sha256', binding.secret).update('moomoo-simulator-history/cursor-key/v1').digest();
+}
+function sealCursor(key, binding, frame) {
+  requireThat(typeof key === 'string' && key.length > 0 && Buffer.byteLength(key) <= 1024, 'INVALID_PAGE');
+  const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', cursorKey(binding), iv);
+  cipher.setAAD(cursorContext(binding, frame));
+  const encrypted = Buffer.concat([cipher.update(key, 'utf8'), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url');
+}
+function openCursor(token, binding, frame) {
+  requireThat(typeof token === 'string' && /^[A-Za-z0-9_-]{39,1403}$/.test(token), 'SCOPE_DENIED');
+  const bytes = Buffer.from(token, 'base64url');
+  requireThat(bytes.toString('base64url') === token && bytes.length > 28 && bytes.length <= 1052, 'SCOPE_DENIED');
+  try {
+    const cipher = createDecipheriv('aes-256-gcm', cursorKey(binding), bytes.subarray(0, 12));
+    cipher.setAAD(cursorContext(binding, frame));
+    cipher.setAuthTag(bytes.subarray(12, 28));
+    return Buffer.concat([cipher.update(bytes.subarray(28)), cipher.final()]).toString('utf8');
+  } catch { fail('SCOPE_DENIED'); }
+}
+
+function simulatorQuery(operation, parameters, binding) {
+  const accepted = operation === historyOperation ? ['time_begin', 'time_end', 'page_size', 'cursor'] :
+    operation === powerOperation ? ['symbol', 'order_type', 'price', 'order_ref'] : [];
+  requireThat(Object.keys(parameters).every(key => accepted.includes(key)), 'SCOPE_DENIED');
+  if (operation === historyOperation) {
+    const query = historyFrame(parameters);
+    if (has(parameters, 'cursor')) query.next_key = openCursor(parameters.cursor, binding, query);
+    return query;
+  }
+  if (operation !== powerOperation) return {};
+  const { symbol, order_type, price, order_ref } = parameters;
+  requireThat(typeof symbol === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(symbol) && [1, 3].includes(order_type), 'INVALID_PARAMETER');
+  if (order_type === 1 || has(parameters, 'price')) {
+    requireThat(typeof price === 'string' && price.length <= 64 && decimalText.test(price) &&
+      !price.startsWith('-') && /[1-9]/.test(price.split(/e/i)[0]), 'INVALID_PARAMETER');
+  }
+  if (has(parameters, 'order_ref')) requireThat(hash(order_ref), 'INVALID_PARAMETER');
+  return { symbol, order_type, ...(has(parameters, 'price') && { price }) };
+}
+
 export function validateSimulatorRead(operation, inputs, grant, binding) {
-  requireThat(Object.keys(inputs).every(key => key === 'grant'), 'SCOPE_DENIED');
+  const { grant: envelope, ...parameters } = inputs;
+  simulatorQuery(operation, parameters, binding);
   const digest = simulatorBindingDigest(binding);
-  for (const op of new Set([operation, accountOperation])) {
+  const required = new Set([operation, accountOperation]);
+  if (operation === powerOperation && parameters.order_ref) required.add(ordersOperation);
+  for (const op of required) {
     const grants = grant.tools.filter(tool => tool.operation === op);
     const expected = simulatorSpecs[op];
     requireThat(grants.length === 1 && grants[0].effect === 'read' && grants[0].name === expected.tool &&
-      grants[0].schema_digest === expected.schema_digest && grants[0].inputs_digest === sha({}) &&
+      grants[0].schema_digest === expected.schema_digest && grants[0].inputs_digest === sha(op === operation ? parameters : {}) &&
       grants[0].account_binding_digest === digest, 'SCOPE_DENIED');
   }
 }
-export function simulatorPath(operation, account) {
-  const path = simulatorSpecs[operation].path.replace('{acc_id}', encodeURIComponent(account.account_id));
-  return operation === positionOperation ? path + '?market=' + account.market_id : path;
+export function simulatorPath(operation, account, parameters = {}, binding, originalOrderId) {
+  const spec = simulatorSpecs[operation];
+  const path = spec.path.replace('{acc_id}', encodeURIComponent(account.account_id));
+  if (operation === balanceOperation || operation === accountOperation) return path;
+  const query = new URLSearchParams({ market: String(account.market_id), ...simulatorQuery(operation, parameters, binding) });
+  if (operation === powerOperation && parameters.order_ref) {
+    requireThat(opaqueId(originalOrderId), 'ACCOUNT_BINDING');
+    query.set('order_id', originalOrderId);
+  }
+  return path + '?' + query;
 }
 
 function data(body) {
@@ -76,7 +155,7 @@ function exactFields(row, required, nullable) {
     const value = row[key];
     if (value == null && nullable.includes(key)) fields[key] = null;
     else {
-      requireThat(typeof value === 'string' && value.length <= 64 && /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value),
+      requireThat(typeof value === 'string' && value.length <= 64 && decimalText.test(value),
         'PRECISION_UNKNOWN');
       fields[key] = value;
     }
@@ -84,19 +163,68 @@ function exactFields(row, required, nullable) {
   return fields;
 }
 
-export function simulatorPage(operation, body, binding) {
+function checkAccount(row, account) {
+  requireThat(object(row) && ['acc_id', 'account_id'].every(key =>
+    !has(row, key) || row[key] === account.account_id), 'ACCOUNT_BINDING');
+}
+function orderRows(payload, binding) {
+  requireThat(Array.isArray(payload.orders) && payload.orders.length <= maxPage, 'INVALID_PAGE');
+  const account = simulatorBindingDigest(binding), seen = new Set();
+  return payload.orders.map(row => {
+    checkAccount(row, binding.account);
+    requireThat(opaqueId(row.order_id) && !seen.has(row.order_id) && [1, 2, 3, 4].includes(row.side) &&
+      [1, 3].includes(row.order_type) && Number.isInteger(row.status) && row.status >= 1 && row.status <= 7 &&
+      (row.market == null || positiveInt(row.market)) && (row.time_in_force == null || [0, 1].includes(row.time_in_force)) &&
+      (row.order_trade_time_type == null || [0, 1, 2].includes(row.order_trade_time_type)) &&
+      typeof row.symbol === 'string' && row.symbol.trim() && row.symbol.length <= 128 &&
+      typeof row.stock_name === 'string' && row.stock_name.length <= 256 && typeof row.text === 'string', 'INVALID_PAGE');
+    seen.add(row.order_id);
+    requireThat(typeof row.create_time === 'string' && typeof row.update_time === 'string', 'PRECISION_UNKNOWN');
+    const created = micros(row.create_time), updated = micros(row.update_time);
+    requireThat(BigInt(created) <= BigInt(updated), 'INVALID_PAGE');
+    return { order_ref: privateHash(binding.secret, { account, order: row.order_id }), side: row.side, status: row.status,
+      order_type: row.order_type, instrument_market: row.market ?? null, symbol: row.symbol, stock_name: row.stock_name,
+      ...exactFields(row, ['qty', 'cum_qty', 'price', 'avg_fill_price'], ['aux_price']), time_in_force: row.time_in_force ?? null,
+      order_trade_time_type: row.order_trade_time_type ?? null, create_time_us: created, update_time_us: updated, has_remark: row.text.length > 0 };
+  });
+}
+
+export function resolveOriginalOrder(body, binding, { order_ref, symbol }) {
+  const rows = simulatorPage(ordersOperation, body, binding);
+  const index = rows.findIndex(row => row.order_ref === order_ref);
+  requireThat(index >= 0, 'ACCOUNT_BINDING');
+  const row = rows[index];
+  const prefix = ({ 1: 'HK', 2: 'US', 3: 'US' })[row.instrument_market];
+  requireThat(symbol === row.symbol || (prefix && symbol === prefix + '.' + row.symbol), 'ACCOUNT_BINDING');
+  return body.data.orders[index].order_id;
+}
+
+export function historyPagination(body, parameters, binding) {
+  const frame = historyFrame(parameters), page = body.pagination;
+  requireThat(Array.isArray(body.data?.orders) && body.data.orders.length <= frame.page_size &&
+    object(page) && typeof page.has_more === 'boolean', 'INVALID_PAGE');
+  if (!page.has_more) return { completed: true, next_cursor: null };
+  const previous = has(parameters, 'cursor') ? openCursor(parameters.cursor, binding, frame) : null;
+  requireThat(page.next_key !== previous, 'INVALID_PAGE');
+  return { completed: false, next_cursor: sealCursor(page.next_key, binding, frame) };
+}
+
+export function simulatorPage(operation, body, binding, parameters = {}) {
   if (operation === accountOperation) return [selectedSimulatorAccount(body, binding)];
   const payload = data(body);
-  const checkAccount = row => {
-    requireThat(object(row) && ['acc_id', 'account_id'].every(key =>
-      !Object.hasOwn(row, key) || row[key] === binding.account.account_id), 'ACCOUNT_BINDING');
-  };
-  checkAccount(payload);
+  checkAccount(payload, binding.account);
+  if (operation === ordersOperation || operation === historyOperation) return orderRows(payload, binding);
+  if (operation === powerOperation) {
+    const { symbol, order_type, price = null, order_ref = null } = parameters;
+    return [{ symbol, order_type, price, order_ref, ...exactFields(payload,
+      ['max_cash_buy_qty_round_lot', 'max_sell_qty_round_lot', 'max_sell_short_qty', 'max_buy_back_qty'],
+      ['max_margin_buy_qty_round_lot', 'required_im_long', 'required_im_short']) }];
+  }
   if (operation === balanceOperation) return [exactFields(payload, balanceFields, profitFields)];
   requireThat(operation === positionOperation && Array.isArray(payload.positions) && payload.positions.length <= 600, 'INVALID_PAGE');
   const seen = new Set();
   return payload.positions.map(row => {
-    checkAccount(row);
+    checkAccount(row, binding.account);
     requireThat(opaqueId(row.pstn_id) && !seen.has(row.pstn_id) && [0, 1].includes(row.pstn_type) && positiveInt(row.market) &&
       typeof row.symbol === 'string' && row.symbol.trim() && row.symbol.length <= 128 &&
       typeof row.stock_name === 'string' && row.stock_name.length <= 256, 'INVALID_PAGE');
@@ -109,29 +237,59 @@ export function simulatorPage(operation, body, binding) {
 
 // Authenticate private reads before the gateway can return a previous receipt. The same
 // facade owns both inward transports. A replay checks current keys, scope and host binding.
-export function withSimulatorAdmission(gateway, { scope, candidate, keys, credentialFor }) {
+export function withSimulatorAdmission(gateway, { store, scope, candidate, keys, providers, credentialFor }) {
   const capabilities = new Map(gateway.discover().map(record => [record.capability_digest, record]));
+  function authorized(request) {
+    requireThat(simulatorOperation(request?.operation) && id(request.request_id), 'SCOPE_DENIED');
+    const record = capabilities.get(request.capability_digest), now = Date.now();
+    requireThat(record?.source === 'PROVIDER' && record.transport === 'REST' && record.operations.includes(accountOperation) &&
+      record.operations.includes(request.operation) && record.qualification.status === 'QUALIFIED', 'SCOPE_DENIED');
+    const selected = providers.bind(record);
+    requireThat(selected.definition.qualification.status === 'QUALIFIED', 'SCOPE_DENIED');
+    requireThat(scopeKey(request.scope) === scopeKey(scope), 'ACCOUNT_BINDING');
+    const grant = verifyEnvelope(request.inputs?.grant, { keys, role: 'operator', kind: 'read', scope, candidate, now });
+    requireProofs(grant, ['cost', 'rights', 'account'], now);
+    const expires = Math.min(...[record.qualification, selected.definition.qualification, grant, ...grant.proofs].map(row => utcMillis(row.expires_utc)));
+    requireThat(expires > now, 'STALE_EVIDENCE');
+    requireThat(grant.mapping_digest === record.mapping_digest && Array.isArray(grant.tools) &&
+      grant.tools.every(tool => tool?.effect === 'read' && record.allowlist.includes(tool.name)), 'SCOPE_DENIED');
+    if (request.operation === powerOperation && has(request.inputs, 'order_ref')) {
+      requireThat(record.operations.includes(ordersOperation), 'SCOPE_DENIED');
+    }
+    const credential = credentialFor(record);
+    const signer = credential?.attestation, key = signer && keys[signer.key_id];
+    requireThat(key?.role === 'integration' && key.revoked !== true && key.principal === signer.principal &&
+      key.runtime === signer.runtime, 'SCOPE_DENIED');
+    validateSimulatorRead(request.operation, request.inputs, grant, { provider: record.provider, scope,
+      candidate, account: credential.simulator_account, secret: credential.alias_secret });
+    return { record, definitionDigest: selected.definition_digest, expires };
+  }
+  function refusal(request, error) {
+    const codes = { STALE_EVIDENCE: 'STALE', FINAL_READ_REQUIRED: 'FINAL_READ_REQUIRED', BUDGET_HALT: 'BUDGET_HALT' };
+    return { request_id: id(request?.request_id) ? request.request_id : null, status: 'REFUSED',
+      error: { code: codes[error.code] ?? 'UNAUTHORIZED' }, provenance: null, ledger_revision: null };
+  }
   return { ...gateway, async admit(request, authorization) {
     if (!simulatorOperation(request?.operation)) return gateway.admit(request, authorization);
     requireThat(gateway.authenticate(authorization), 'UNAUTHORIZED');
     try {
-      const record = capabilities.get(request.capability_digest), now = Date.now();
-      requireThat(record?.source === 'PROVIDER' && record.transport === 'REST' && record.operations.includes(accountOperation) &&
-        record.operations.includes(request.operation) && record.qualification.status === 'QUALIFIED', 'SCOPE_DENIED');
-      requireThat(utcMillis(request.deadline_utc) > now && utcMillis(record.qualification.expires_utc) > now, 'STALE_EVIDENCE');
-      requireThat(scopeKey(request.scope) === scopeKey(scope), 'ACCOUNT_BINDING');
-      const grant = verifyEnvelope(request.inputs?.grant, { keys, role: 'operator', kind: 'read', scope, candidate, now });
-      requireProofs(grant, ['cost', 'rights', 'account'], now);
-      requireThat(grant.mapping_digest === record.mapping_digest && Array.isArray(grant.tools) &&
-        grant.tools.every(tool => tool?.effect === 'read' && record.allowlist.includes(tool.name)), 'SCOPE_DENIED');
-      const credential = credentialFor(record);
-      validateSimulatorRead(request.operation, request.inputs, grant, { provider: record.provider, scope,
-        account: credential?.simulator_account, secret: credential?.alias_secret });
-    } catch (error) {
-      return { request_id: id(request.request_id) ? request.request_id : null, status: 'REFUSED',
-        error: { code: error.code === 'STALE_EVIDENCE' ? 'STALE' : error.code === 'BUDGET_HALT' ? 'BUDGET_HALT' : 'UNAUTHORIZED' },
-        provenance: null, ledger_revision: null };
-    }
+      authorized(request);
+      requireThat(utcMillis(request.deadline_utc) > Date.now(), 'STALE_EVIDENCE');
+    } catch (error) { return refusal(request, error); }
     return gateway.admit(request, authorization);
+  }, inspectSimulatorReceipt(request, authorization) {
+    requireThat(gateway.authenticate(authorization), 'UNAUTHORIZED');
+    try {
+      const { record, definitionDigest, expires } = authorized(request);
+      const checkpoint = store.read(scope).checkpoints['gateway:' + request.request_id];
+      requireThat(checkpoint?.status === 'FINAL' && checkpoint.binding === sha(request) && checkpoint.result?.status === 'OK', 'FINAL_READ_REQUIRED');
+      const receipt = checkpoint.result, { provenance, data } = receipt;
+      requireThat(receipt.request_id === request.request_id && provenance?.operation === request.operation &&
+        provenance.source === 'PROVIDER' && provenance.capability_digest === request.capability_digest &&
+        provenance.definition_digest === definitionDigest && provenance.provider === record.provider &&
+        data?.source === 'AUTHENTICATED_ADAPTER' && data.account?.account_alias === scope.account_alias &&
+        data.account.profile === scope.profile && data.account.environment === scope.environment && hash(data.digest), 'SCOPE_DENIED');
+      return { ...receipt, display_until_utc: new Date(expires).toISOString() };
+    } catch (error) { return refusal(request, error); }
   } };
 }

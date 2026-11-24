@@ -133,7 +133,7 @@ export async function runtimeCommand(args) {
       }
       const nativeGateway = createGateway({ store, scope: config.scope, candidate: config.candidate,
         capabilities: config.gateway.capabilities, readers, guard, keys: config.keys, audienceToken: config.gateway.audience_token, providers: registry });
-      const gateway = withSimulatorAdmission(nativeGateway, { ...common,
+      const gateway = withSimulatorAdmission(nativeGateway, { ...common, providers: registry,
         credentialFor: record => providerCredential(config, record.provider, record.transport) });
       const gatewayApi = createGatewayApi({ gateway, mcp: createGatewayMcp({ gateway }) });
       const runtimeApi = createRuntimeApi({ ...common, viewerToken: config.viewer_token });

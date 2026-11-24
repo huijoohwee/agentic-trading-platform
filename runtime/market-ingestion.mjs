@@ -40,7 +40,7 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       requireThat(!dispatchSignal?.aborted, 'WINDOW_CLOSED');
       return fn(dispatchSignal ? AbortSignal.any([dispatchSignal, signal]) : signal);
     }, Math.min(grant.limits.timeout_ms, deadline - now()));
-    const opened = verifyEnvelope(await invoke(signal => adapter.open({ operation, grant, signal })),
+    const opened = verifyEnvelope(await invoke(signal => adapter.open({ operation, inputs: boundedJson(inputs), grant, signal })),
       { keys, role: 'integration', kind: 'read-capabilities', scope, candidate, now: now() });
     requireThat(opened.tools && canonical(opened.tools) === canonical(grant.tools) &&
       Number.isSafeInteger(opened.calls) && opened.calls >= 0 && opened.calls < grant.limits.max_calls, 'SCHEMA_DRIFT');
@@ -66,7 +66,7 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
     if (Object.hasOwn(page, 'last_valid_time_ms')) metadata.last_valid_time_ms = page.last_valid_time_ms;
     if (page.pagination) metadata.pagination = boundedJson(page.pagination);
     return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, ...metadata, ...precision, observed_utc: page.observed_utc,
-      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest, ...(metadata.account && { account: metadata.account }), ...precision }),
+      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest, ...(metadata.account && metadata), ...precision }),
       cost: { tool_calls: opened.calls + 1, tokens_in: 'UNKNOWN', tokens_out: 'UNKNOWN', provider_fees: 'UNKNOWN' } };
   };
 }
