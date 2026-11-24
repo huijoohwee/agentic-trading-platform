@@ -1,5 +1,8 @@
 import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL } from 'agentic-gateway/connectors/moomoo-stock-screen';
-import { sha } from './core.mjs';
+import { requireThat, sha } from './core.mjs';
+import fieldRegister from 'agentic-gateway/connectors/moomoo-fields.json' with { type: 'json' };
+import { researchTools } from '../src/moomoo-research-tools.mjs';
+import { marketReadParameters, marketReadSymbol } from './market-read-projection.mjs';
 
 // Reviewed REST response fields. The digest identifies this local projection.
 // Provider qualification, credentials and each signed read grant remain host-owned.
@@ -209,3 +212,35 @@ export const researchMapping = {
   protocol: '1.0', operations: Object.fromEntries(Object.entries(operations)
     .map(([operation, projection]) => [operation, { ...projection, schema_digest: sha(projection) }]))
 };
+
+const publishedFields = new Map(fieldRegister.tools.map(tool => [tool.name, tool]));
+export const researchGetProfile = 'moomoo-research-get/v1';
+export const researchMcpMapping = {
+  protocol: stockScreenMcpMapping.protocol, operations: { ...stockScreenMcpMapping.operations,
+    ...Object.fromEntries(Object.entries(researchTools).map(([operation, tool]) => {
+      const spec = researchMapping.operations[operation], publicFields = publishedFields.get(tool);
+      requireThat(spec.method === 'GET' && publicFields && !publicFields.body.length, 'INVALID_MAPPING');
+      return [operation, { profile: researchGetProfile, tool, rows_path: spec.rows_path, pin_inputs: true,
+        projection_digest: sha({ projection: spec, public_fields: publicFields }) }];
+    })) }
+};
+
+export function researchToolArguments(operation, inputs) {
+  const spec = researchMapping.operations[operation];
+  const parameters = marketReadParameters(spec, inputs, true);
+  if (spec.symbol_path) parameters.symbol = marketReadSymbol(spec, inputs);
+  const fields = publishedFields.get(researchTools[operation]).params;
+  requireThat(Object.keys(parameters).every(name => fields.some(field => field.name === name)), 'INVALID_MAPPING');
+  for (const field of fields) {
+    if (!Object.hasOwn(parameters, field.name)) { requireThat(!field.required, 'INVALID_PARAMETER'); continue; }
+    const value = parameters[field.name];
+    if (field.type === 'int') {
+      requireThat(Number.isSafeInteger(value) && value >= (field.min ?? -Infinity) && value <= (field.max ?? field.maximum ?? Infinity), 'INVALID_PARAMETER');
+    } else {
+      requireThat(field.type === 'string' && typeof value === 'string' && [...value].length >= (field.minLength ?? 0) &&
+        [...value].length <= (field.maxLength ?? Infinity) && (!field.pattern || new RegExp(field.pattern).test(value)), 'INVALID_PARAMETER');
+    }
+    requireThat(!field.enum || field.enum.includes(value), 'INVALID_PARAMETER');
+  }
+  return parameters;
+}

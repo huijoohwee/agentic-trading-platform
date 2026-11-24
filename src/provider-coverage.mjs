@@ -1,3 +1,4 @@
+import { researchTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
 // source (path + on-disk SHA-256), the verified MCP tool names (only tools observed in the session
@@ -28,44 +29,44 @@ export const providerCoverage = Object.freeze([
     ['read.calendar'], [],
     [source('api/quote/calendar/earnings-calendar.md', '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2')],
     'REST-only (no MCP tool). Market-local dates, Unix-microsecond publication time, session and null estimates preserved; ≤7-day inclusive window.'),
-  family('capital-flow', 'Capital flow', 'mapped', 'REST',
+  family('capital-flow', 'Capital flow', 'mapped', 'MCP+REST',
     ['read.capital-flow'], ['quote_capital_flow'],
     [],
-    'The route finder links the public quote_capital_flow HTTP definition. Its local REST fixture preserves signed native-currency flows and millisecond timestamps.'),
+    'MCP and REST fixtures preserve signed native-currency flows and millisecond timestamps.'),
   family('rank', 'Stock screening and rankings', 'mapped', 'MCP+REST',
     ['read.rank', 'read.stock-screen'], [],
     [source('api/quote/screening/stock-screen.md', 'e19263aeea9615a0262950b57df146deffd945ec1fd5ba329057d316008b6f88'),
      source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
      source('api/quote/rank/rank-earnings-beat.md', '4689cb06a31b34f6a020aaa32b977b8a9ed8f0ba6d2a2d4521703f1680f7f934')],
     'Signed local fixtures cover market-wide screening over MCP and REST, plus the REST hot list. Each screen binds its market, factor bounds, sorting, columns and cursor.'),
-  family('plate-industry', 'Sector directory', 'mapped', 'REST',
+  family('plate-industry', 'Sector directory', 'mapped', 'MCP+REST',
     ['read.plate'], ['quote_plate_list', 'quote_plate_stock', 'quote_owner_plate'],
     [source('api/quote/industry/heatmap.md', 'a636ade5e00f7018f4cb7461b1bd82e607119f3714483eff68476bb8665a0297'),
      source('api/quote/industry/industrial-chain-list.md', 'b446c6175a9198f884c20864327a1f300307ea460c516767dc68449befea20c5')],
-    'The public quote_plate_list HTTP definition covers sector codes, IDs and names. The imported heatmap and industrial-chain documents cover related routes.'),
-  family('news-research', 'News search and analyst ratings', 'mapped', 'REST',
+    'MCP and REST sector-list fixtures preserve sector codes, IDs and names. The imported heatmap and industrial-chain documents cover related routes.'),
+  family('news-research', 'News search and analyst ratings', 'mapped', 'MCP+REST',
     ['read.news', 'read.research'], ['news_search'],
     [source('api/quote/research/research-analyst-ratings.md', '31cf7fb1d42fa1da41dcda3c8bb3b036ac4ec648fd79c7b7a3baf4b31a22ea28')],
-    'REST fixtures cover headline metadata and bounded rating pages. Article bodies and attachments stay outside the projection.'),
-  family('ipo', 'Hong Kong IPO listings', 'mapped', 'REST',
+    'MCP and REST fixtures cover headline metadata. Analyst rating pages use the REST mapping.'),
+  family('ipo', 'Hong Kong IPO listings', 'mapped', 'MCP+REST',
     ['read.ipo'], ['quote_ipo_list_us', 'quote_ipo_list_hk', 'quote_ipo_list_cn', 'quote_ipo_list_sg', 'quote_ipo_list_my'],
     [],
-    'The HK REST fixture maps public listing dates, lot sizes and HKD offer prices. Other IPO markets await qualification.'),
-  family('financials', 'Company profile and financial statements', 'mapped', 'REST',
+    'The HK MCP and REST fixtures map public listing dates, lot sizes and HKD offer prices. Other IPO markets await qualification.'),
+  family('financials', 'Company profile and financial statements', 'mapped', 'MCP+REST',
     ['read.financials', 'read.financial-statements'], ['quote_financials_statements'],
     [source('api/quote/company/profile.md', 'de67cc6e2ac7fd84acb650086fc38830e50d41fb2ae6a09569edfcc8b7c370d4'),
      source('api/quote/financials/statements.md', 'f879dec57ec725c119c0e7d31e595198cbc8c890ba94d5c788b54a5e42085f8a')],
     'Local fixtures cover profile labels and reported line items by fiscal period, currency, accounting standard and value type.'),
-  family('corporate-actions', 'Dividend announcements', 'mapped', 'REST',
+  family('corporate-actions', 'Dividend announcements', 'mapped', 'MCP+REST',
     ['read.corporate-actions'], [],
     [source('api/quote/corporate-actions/dividends.md', '8d1688ba5a6003fe96da5c6a002fbd1c32f403b84a8076d7f7bc2db95b1b54ed')],
-    'Provider statements and market-local dividend dates. Signed local REST fixture.'),
-  family('holders', 'Main shareholders', 'mapped', 'REST',
+    'MCP and REST fixtures preserve provider statements and market-local dividend dates.'),
+  family('holders', 'Main shareholders', 'mapped', 'MCP+REST',
     ['read.holders'], [],
     [source('api/quote/shareholders/overview.md', '522a012101fe093cf4faca3bf79de297c8a6e3e54e0e8195ce078a343e978ed4'),
      source('api/quote/institution/institution-holding-list.md', '00983e8f58dcbfae1262c6ce85d9b40ae881f4bd4308eddf191e760a67cd411c'),
      source('api/quote/ark/ark-fund-holding.md', '589fd7c7ff9f5c0bcbbb9fa1c1b56fa0a0080eb28f0d4fff489c41955df7d7db')],
-    'Portfolio percentages and dated holder identifiers. Signed local REST fixture.'),
+    'MCP and REST fixtures preserve portfolio percentages and dated holder identifiers. The published MCP period selector accepts zero.'),
   family('influencer', 'Reported influencer holdings', 'mapped', 'REST',
     ['read.influencer'], [],
     [source('api/quote/influencer/holdings.md', 'c1c9a069b296fb0e96bf1c594184936f6f355532f68115d91d09549dac1abc4e'),
@@ -75,7 +76,7 @@ export const providerCoverage = Object.freeze([
     ['read.macro'], [],
     [source('api/quote/macro/macro-indicators.md', '05793610fec13ef1dc4daebfc70ccba885945cd7bf225bd8b5f75d110ee17299')],
     'Regional category names and indicator identifiers. Signed local REST fixture.'),
-  family('derivatives', 'Options and futures research', 'mapped', 'REST',
+  family('derivatives', 'Options and futures research', 'mapped', 'MCP+REST',
     ['read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events',
      'read.futures-positions', 'read.futures-seasonality', 'read.futures-correlation'],
     ['quote_future_info', 'quote_option_chain', 'quote_option_expiration_date'],
@@ -86,7 +87,7 @@ export const providerCoverage = Object.freeze([
      source('api/quote/derivatives/quote-future-position-analysis.md', '293b0cba0cca7cb6346d19ddf1e81e7e7be7b3bd20b9775bd42c251136bd51d9'),
      source('api/quote/derivatives/quote-future-seasonal.md', '1b1e2917fada8cb035a27b0da9bc650ac61fe26bb2e223a20b31379a8d41aded'),
      source('api/quote/derivatives/quote-future-correlation.md', '0f6e7004b2d91c3c1f037ce70928a48646fbd05b4d9077f29a9e0d0c14cca416')],
-    'Signed local fixtures cover option trades, chains and expiries, reported futures positions, seasonal prices and contract correlations.'),
+    'MCP and REST fixtures cover unusual derivatives, option chains and expiries. Option trades and the three futures reads use REST.'),
   family('etf', 'ETF top holdings', 'mapped', 'REST',
     ['read.etf'], [],
     [source('api/quote/etf/quote-etf-top-holdings.md', 'f64d56a974cb6c7d8ea6993f68e883f27a4740b2f8a98098807ccd764681b9c4')],
@@ -99,22 +100,22 @@ export const providerCoverage = Object.freeze([
     ['read.crypto-market'], [],
     [source('api/quote/crypto-market/crypto-market-overview.md', 'f4b0eb0e96c62513cca891e6a880367335e410dfb6f47b6207338c9119bddb1b')],
     'Aggregate USD market cap and turnover, 24-hour percentage changes. Signed local REST fixture.'),
-  family('valuation', 'Historical valuation ratios', 'mapped', 'REST',
+  family('valuation', 'Historical valuation ratios', 'mapped', 'MCP+REST',
     ['read.valuation'], [],
     [source('api/quote/valuation/detail.md', 'f51a510e4a27bfc15c8711bd33bebd54a8f94711be0e1f6d605e029a2e6d2f30')],
-    'PE, PB or PS ratios and Unix seconds. Signed local REST fixture.'),
-  family('short', 'Hong Kong short interest', 'mapped', 'REST',
+    'MCP and REST fixtures preserve PE, PB or PS ratios and Unix seconds.'),
+  family('short', 'Hong Kong short interest', 'mapped', 'MCP+REST',
     ['read.short'], [],
     [source('api/quote/short/interest.md', '5fb77899253871812da937ddf4f0b26a2d4e4eb1c506114eb7f06062999e5469')],
-    'Exact share counts, float percentages and market dates. Signed local REST fixture.'),
+    'MCP and REST fixtures preserve exact share counts, float percentages and market dates.'),
   family('stock-connect', 'Daily Stock Connect flows', 'mapped', 'REST',
     ['read.stock-connect'], [],
     [source('api/quote/stock-connect/quote-stock-connect-flow.md', '12d1b508fe619fc3f7de81c3e02552b5c77f7da1bc3b60b1d4aee6ef6221059d')],
     'Signed daily shares and yuan amounts. Signed local REST fixture.'),
-  family('top-brokers', 'Hong Kong broker rankings', 'mapped', 'REST',
+  family('top-brokers', 'Hong Kong broker rankings', 'mapped', 'MCP+REST',
     ['read.top-brokers'], [],
     [source('api/quote/top-brokers/top-brokers.md', '4829004be19ed773465303f76f7342ac79e4badb46bbc1d53d955f1090471dc8')],
-    'Separate net-buy and net-sell share counts and Unix milliseconds. Signed local REST fixture.'),
+    'MCP and REST fixtures preserve net-buy and net-sell share counts and Unix milliseconds.'),
   family('chip-cbbc', 'Chip distribution and CBBC outstanding volumes', 'mapped', 'REST',
     ['read.chip', 'read.cbbc'], [],
     [source('api/quote/chip/quote-chip-distribution.md', 'e135c006a96cedabb95df63efb0b1e2b9018a8b17ee667248e6c41012fb045f7'),
@@ -151,6 +152,7 @@ export function coverageSummary(entries = providerCoverage) {
   });
 }
 const deskTools = new Set(Object.values(captureMapping.operations).map(operation => operation.tool));
+const researchMcpNames = new Set(Object.values(researchTools));
 const screenPath = 'POST /api/v1.0/quote/stock-screen';
 const stockScreenEvidence = { evidence: 'Signed local stock-screen fixture',
   units: 'Prices and market cap ×1000, valuation multiples ×100000, dividend yield percent ×1000, listing time in seconds. Exact raw integer and decimal text.' };
@@ -233,6 +235,9 @@ function disposition(methodPath, topic, name) {
     return ['excluded', 'trade:write', 'Live effect excluded'];
   }
   if (name === 'quote_stock_screen' && methodPath === screenPath) return ['mapped', 'quote:read', stockScreenEvidence.evidence];
+  if (name && researchMcpNames.has(name) && reviewedRest.has(methodPath)) {
+    return ['mapped', path.startsWith('/api/v1.0/news/') ? 'review news access' : 'quote:read', 'Signed local MCP research fixture'];
+  }
   if (name && deskTools.has(name)) {
     return ['mapped', 'quote:read', name === 'quote_stock_quote' ? 'Desktop and hosted captures' : 'Desktop capture'];
   }
@@ -254,7 +259,7 @@ export function routeInventory(catalog) {
     if (!route) {
       const [status, scope, evidence] = disposition(methodPath, topic, name);
       const units = transport === 'REST' ? (reviewedRest.get(methodPath) ?? simulationRoutes.get(methodPath))?.units
-        : name === 'quote_stock_screen' ? stockScreenEvidence.units : undefined;
+        : name === 'quote_stock_screen' ? stockScreenEvidence.units : researchMcpNames.has(name) ? reviewedRest.get(methodPath)?.units : undefined;
       route = { transport, label, status, scope, evidence, units: units ?? 'See source field definitions', sources: [] };
       routes.set(key, route);
     }

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { compareResearchTransports } from './research-mcp-fixture.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -183,7 +184,8 @@ async function researchRead(t, operation, inputs, response, inspect = () => {}, 
   const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter, now });
   const permit = grant('research', 'research', { mapping_digest: sha(researchMapping),
     tools: [{ operation, name: spec.tool, effect: 'read', schema_digest: spec.schema_digest, inputs_digest: sha(permittedInputs) }] });
-  try { return await boundary({ operation, inputs, grant: permit }); }
+  try { return await compareResearchTransports(() => boundary({ operation, inputs, grant: permit }),
+    { operation, inputs, permittedInputs, response, definition, restCalls: fake.calls, grant, store, scope, candidate, keys, now, attestation }); }
   finally { inspect(fake.calls); }
 }
 

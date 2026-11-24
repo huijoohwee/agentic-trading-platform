@@ -2,6 +2,8 @@ import { STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } f
 import { createPrivateKey, sign } from 'node:crypto';
 import { listReviewedTools, ownPath, rpcResponse } from './mcp-read.mjs';
 import { validateProviderDefinition } from './provider-mapping.mjs';
+import { researchGetProfile, researchMapping, researchMcpMapping, researchToolArguments } from './moomoo-research.mjs';
+import { projectMarketReadPage } from './market-read-projection.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
@@ -15,8 +17,23 @@ export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.tic
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 
+// The public directory names some fields in camelCase. Preserve scalar bytes and reject ambiguous aliases.
+function researchFields(source, depth = 0) {
+  if (source === null || typeof source !== 'object') return source;
+  requireThat(depth < 40, 'INVALID_PAGE');
+  if (Array.isArray(source)) return source.map(value => researchFields(value, depth + 1));
+  const result = Object.create(null);
+  for (const [key, value] of Object.entries(source)) {
+    const name = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+    requireThat(!Object.hasOwn(result, name), 'INVALID_PAGE');
+    result[name] = researchFields(value, depth + 1);
+  }
+  return result;
+}
+
 export function createMcpMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, fetchImpl = fetch, now = Date.now }) {
   const { definition } = validateProviderDefinition(provider);
+  requireThat(definition.transport.kind === 'MCP', 'INVALID_TRANSPORT_PIN');
   const endpoint = definition.transport.origin;
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
@@ -28,6 +45,10 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
   for (const [operation, spec] of Object.entries(mapping.operations)) {
     requireThat(MARKET_READ_OPERATIONS.includes(operation) && id(spec.tool) && Array.isArray(spec.rows_path), 'INVALID_MAPPING');
     requireThat((operation === 'read.stock-screen') === (spec.tool === STOCK_SCREEN_TOOL), 'INVALID_MAPPING');
+    if (spec.profile === researchGetProfile) {
+      const reviewed = researchMcpMapping.operations[operation];
+      requireThat(reviewed?.profile === researchGetProfile && sha(spec) === sha(reviewed), 'INVALID_MAPPING');
+    }
     requireThat(!writeBan.test(spec.tool), 'SCOPE_DENIED');
   }
   let session, version, sequence = 0, calls = 0, grant, beforeCall;
@@ -80,7 +101,16 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
     }
     return { row, precise };
   };
+  function researchArguments(operation, inputs, allowed) {
+    const { grant: envelope, ...parameters } = inputs;
+    requireThat(allowed.name === mapping.operations[operation].tool, 'SCHEMA_DRIFT');
+    requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');
+    return researchToolArguments(operation, parameters);
+  }
   return {
+    validateInputs(operation, inputs, allowed) {
+      if (mapping.operations[operation]?.profile === researchGetProfile) researchArguments(operation, inputs, allowed);
+    },
     async open({ grant: admitted, signal, beforeCall: revalidate }) {
       requireThat(admitted.mapping_digest === sha(mapping), 'MAPPING_DRIFT');
       grant = admitted; beforeCall = revalidate; session = undefined; version = undefined; calls = 0;
@@ -103,11 +133,14 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
       requireThat(grant && spec && allowed, 'SCOPE_DENIED');
       const { grant: envelopeInput, ...request } = boundedJson(inputs);
       const screen = operation === 'read.stock-screen';
+      const research = spec.profile === researchGetProfile;
       if (screen || allowed.inputs_digest !== undefined) requireThat(allowed.inputs_digest === sha(request), 'SCOPE_DENIED');
       let parameters;
       if (screen) {
         requireThat(allowed.name === STOCK_SCREEN_TOOL, 'SCHEMA_DRIFT');
         parameters = buildMoomooStockScreen(request);
+      } else if (research) {
+        parameters = researchArguments(operation, request, allowed);
       } else {
         parameters = boundedJson(spec.parameters ?? {});
         for (const [parameter, inputKey] of Object.entries(spec.input_map ?? {})) {
@@ -123,12 +156,13 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         requireThat(response.content?.length === 1 && response.content[0].type === 'text', 'SOURCE_MAPPING_REQUIRED');
         try { source = JSON.parse(response.content[0].text); } catch { fail('SOURCE_MAPPING_REQUIRED'); }
       }
-      const raw = screen ? undefined : ownPath(source, spec.rows_path);
-      const decimals = [];
-      let rows, pagination;
+      const raw = screen || research ? undefined : ownPath(source, spec.rows_path);
+      let rows, decimals = [], metadata = {};
       if (screen) {
-        ({ rows, pagination } = projectMoomooStockScreen(request, source));
-        for (const row of rows) decimals.push({});
+        ({ rows, ...metadata } = projectMoomooStockScreen(request, source));
+        decimals = rows.map(() => ({}));
+      } else if (research) {
+        ({ rows, decimals, ...metadata } = projectMarketReadPage(researchMapping.operations[operation], request, researchFields(source)));
       } else if (spec.object_result) {
         requireThat(raw !== null && typeof raw === 'object' && !Array.isArray(raw), 'INVALID_PAGE');
         const { row, precise } = project(raw, spec);
@@ -144,7 +178,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         const wirePrice = ownPath(spec.object_result ? raw : raw[0], spec.fields.price.path);
         precision.price_source = typeof wirePrice === 'string' ? 'decimal-string' : 'json-number';
       }
-      return issue('provider-market-page', { operation, rows, decimals, ...(pagination && { pagination }), observed_utc,
+      return issue('provider-market-page', { operation, rows, decimals, ...metadata, observed_utc,
         ...precision, source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest: allowed.schema_digest });
     },
   };
