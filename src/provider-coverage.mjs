@@ -28,8 +28,8 @@ export const providerCoverage = Object.freeze([
     'REST-only (no MCP tool). Market-local dates, Unix-microsecond publication time, session and null estimates preserved; ≤7-day inclusive window.'),
   family('capital-flow', 'Capital flow', 'mapped', 'REST',
     ['read.capital-flow'], ['quote_capital_flow'],
-    [source('api/quote/unusual/capital.md', '6822c10b8faf8c50ddac9440f2efdbf1446c7c76130c3268e349ec15a633e6f9')],
-    'Local REST fixture preserves signed native-currency flows and millisecond timestamps. The Desktop directory separately advertised quote_capital_flow.'),
+    [],
+    'The route finder links the public quote_capital_flow HTTP definition. Its local REST fixture preserves signed native-currency flows and millisecond timestamps.'),
   family('rank', 'Ranking hot list', 'mapped', 'REST',
     ['read.rank'], [],
     [source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
@@ -39,7 +39,7 @@ export const providerCoverage = Object.freeze([
     ['read.plate'], ['quote_plate_list', 'quote_plate_stock', 'quote_owner_plate'],
     [source('api/quote/industry/heatmap.md', 'a636ade5e00f7018f4cb7461b1bd82e607119f3714483eff68476bb8665a0297'),
      source('api/quote/industry/industrial-chain-list.md', 'b446c6175a9198f884c20864327a1f300307ea460c516767dc68449befea20c5')],
-    'The REST list maps market and plate class to sector codes, IDs and names. Constituents and industrial chains await separate mappings.'),
+    'The public quote_plate_list HTTP definition covers sector codes, IDs and names. The imported heatmap and industrial-chain documents cover related routes.'),
   family('news-research', 'News search and analyst ratings', 'mapped', 'REST',
     ['read.news', 'read.research'], ['news_search'],
     [source('api/quote/research/research-analyst-ratings.md', '31cf7fb1d42fa1da41dcda3c8bb3b036ac4ec648fd79c7b7a3baf4b31a22ea28')],
@@ -209,7 +209,7 @@ function disposition(methodPath, topic, name) {
   if (!name && reviewedRest.has(methodPath)) {
     return ['mapped', path.startsWith('/api/v1.0/news/') ? 'review news access' : 'quote:read', reviewedRest.get(methodPath).evidence];
   }
-  const scope = path.includes('/quote/') || name === 'news_search' ? 'quote:read'
+  const scope = path.startsWith('/api/v1.0/news/') ? 'review news access' : path.includes('/quote/') ? 'quote:read'
     : path.includes('/accounts/') ? 'trade:read' : 'scope review';
   return ['candidate', scope, 'Review fields, rights and quota'];
 }

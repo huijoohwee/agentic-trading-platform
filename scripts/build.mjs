@@ -102,6 +102,8 @@ export async function assemble({ devDocumentPolicy } = {}) {
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   assets.set('qualification/moomoo/route-inventory.json',
     await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo-catalog.json'))));
+  assets.set('qualification/moomoo/route-fields.json',
+    await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo-fields.json'))));
   const deskRows = { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles };
   assets.set('src/provider-desk.mjs', Buffer.from(Object.entries(deskRows)
     .map(([name, value]) => 'export const ' + name + ' = ' + JSON.stringify(value) + ';').join('\n')));
