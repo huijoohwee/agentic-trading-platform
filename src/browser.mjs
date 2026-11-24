@@ -33,6 +33,13 @@ byId('provider-capture').addEventListener('toggle', async event => {
   try { const { mountCaptureView } = await import('./capture-view.mjs'); await mountCaptureView(byId('capture-body')); }
   catch { byId('capture-body').textContent = 'Provider capture unavailable. The offline rehearsal is unchanged.'; }
 });
+let hostedOpened = false;
+byId('provider-hosted').addEventListener('toggle', async event => {
+  if (!event.target.open || hostedOpened) return;
+  hostedOpened = true;
+  try { const { mountHostedView } = await import('./hosted-view.mjs'); await mountHostedView(byId('hosted-body')); }
+  catch { byId('hosted-body').textContent = 'Hosted capture unavailable. The offline rehearsal is unchanged.'; }
+});
 const form = byId('ticket');
 const fields = byId('fields');
 const feedback = byId('feedback');

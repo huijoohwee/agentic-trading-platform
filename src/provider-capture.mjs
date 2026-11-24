@@ -11,7 +11,7 @@ export const captureProvenance = {
   market_date: '2026-11-23',
   cost_usd: 0,
   hosted_n3: false,
-  note: 'Real entitled $0 reads captured through the available Desktop moomoo binding. The hosted https://mcp.moomoo.com/mcp OAuth milestone (N3) remains open and requires separate qualification. Prices are JSON numbers; the reviewed projection records their exact round-trip decimal string.'
+  note: 'Real entitled $0 reads captured through the available Desktop moomoo binding. The hosted https://mcp.moomoo.com/mcp OAuth milestone (N3) is qualified separately by the hosted capture surface below; this Desktop binding remains OpenD-backed. Prices are JSON numbers; the reviewed projection records their exact round-trip decimal string.'
 };
 
 export const captureMapping = {
