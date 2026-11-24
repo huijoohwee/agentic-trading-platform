@@ -14,11 +14,12 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = 'd4fa596b459eb7eecb62f4743d3238b6f25fc7c5';
+const REVISION = 'fefeb0e76fc059d02231b41dc30e78dacac9b7c5';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-Qwn0Qjd01X7xJs5KzHvs6WFyAs4rBZeRgYryaDlwTcLxA8hmT9xg6PUexzToYR+OKMPgDB0+Pd3qbVtZiY0nMQ==';
+const LOCK_INTEGRITY = 'sha512-Fesom+yIWYlR9Gpm+LDvxUXlw9rB8PreUhFlN0PtIrYwkAS7ZfN4lkb7Tpv05awl8AaXgTw6fBNUKHFdNNNTOA==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
+  'connectors/moomoo-fields.json': '5a3adf13c7925ef33884fcbe87b882992a93733933fbd631f572218b6d7c1d13',
   'connectors/moomoo-catalog.json': '6953d2136c5eec2cb355867230e9afbbb561d4d35e02389f7353659e32149b77',
   'connectors/profiles.json': 'a7a6277d17d485d8387892c987b00d6b477e0038891309b770d72427b4c7b845',
   'connectors/moomoo.mjs': 'b3f9770be3210d05c6fdd7aabd3254268dc2701bcf1c8c6aa437ef7b6c3b95a3',
@@ -49,7 +50,7 @@ test('Trading pins the exact reviewed Gateway manifest, lock and installed impor
   const installed = JSON.parse(read('node_modules/agentic-gateway/package.json'));
   assert.equal(installed.name, 'agentic-gateway');
   assert.equal(installed.version, INSTALLED_VERSION);
-  for (const key of ['.', './connectors/moomoo', './provider-profiles', './connectors/moomoo-catalog.json']) {
+  for (const key of ['.', './connectors/moomoo', './provider-profiles', './connectors/moomoo-catalog.json', './connectors/moomoo-fields.json']) {
     assert.equal(typeof installed.exports[key], 'string');
   }
   for (const rel of Object.keys(INSTALLED_DIGESTS)) guardInstalled(rel);
@@ -59,6 +60,8 @@ test('an edited Gateway fixture, connector or profile fails the consumer digest 
   const profiles = JSON.parse(read('node_modules/agentic-gateway/connectors/profiles.json'));
   profiles[0].features.push('tampered-route');
   assert.throws(() => guardBytes('connectors/profiles.json', Buffer.from(JSON.stringify(profiles))), /GATEWAY_FIXTURE_DRIFT/);
+  const fields = read('node_modules/agentic-gateway/connectors/moomoo-fields.json');
+  assert.throws(() => guardBytes('connectors/moomoo-fields.json', Buffer.concat([fields, Buffer.from(' ')])), /GATEWAY_FIXTURE_DRIFT/);
   const connector = read('node_modules/agentic-gateway/connectors/moomoo.mjs');
   assert.throws(() => guardBytes('connectors/moomoo.mjs', Buffer.concat([connector, Buffer.from('\n// edited\n')])), /GATEWAY_FIXTURE_DRIFT/);
   const discovery = read('node_modules/agentic-gateway/provider-profiles.mjs');
