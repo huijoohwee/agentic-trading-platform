@@ -31,6 +31,53 @@ const watch = context => context.on('page', page => {
   page.on('requestfailed', request => errors.push(request.url() + ' ' + request.failure()?.errorText));
   page.on('request', request => { if (!request.url().startsWith(origin + '/')) errors.push(request.url()); });
 });
+async function verifySavedQuotePush(page) {
+  const inspector = page.locator('#quote-push-inspector');
+  await inspector.locator('summary').click();
+  const file = inspector.getByLabel('Quote push JSON file');
+  const target = inspector.getByLabel('Expected symbol or market');
+  const status = inspector.getByRole('status');
+  const select = async frame => {
+    await file.setInputFiles({ name: 'quote.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(frame)) });
+  };
+  const symbol = 'HK.00700';
+  for (const [type, data, expected] of [
+    ['QUOTE', { last_price: 320, suspension: false }, '320'],
+    ['ORDER_BOOK', { bid_list: [], ask_list: [] }, 'Bid levels'],
+    ['TICKER', { ticker_list: [{ time_ms: 1710000000000, direction: 'BUY', price: 320, volume: 10, turnover: 3200 }] }, 'Trade volume'],
+    ['KLINE', { period: '1m', adjust: 'none', kl_list: [] }, '1m'],
+  ]) {
+    await select({ type, symbol, data });
+    await inspector.getByText('Local file · ' + type + ' · origin unverified', { exact: true }).waitFor();
+    await inspector.getByText(expected, { exact: true }).waitFor();
+  }
+  await select({ type: 'BROKER_QUEUE', symbol, data: { bid_brokers: [{ rank: 1, broker_id: '0007' }] } });
+  await inspector.getByText('Not supplied', { exact: true }).waitFor();
+  await inspector.getByText('Broker queue details', { exact: true }).click();
+  await inspector.getByRole('cell', { name: '0007', exact: true }).waitFor();
+  await select({ type: 'MARKET_STATE', data: { market: 'HK', status: 6, trade_date: 20260720 } });
+  await inspector.getByText('CLOSED', { exact: true }).waitFor();
+  await inspector.getByText('2026-07-20', { exact: true }).waitFor();
+  assert.equal(await inspector.getByRole('cell', { name: '0007', exact: true }).count(), 0);
+  await target.fill('US');
+  await target.press('Enter');
+  await status.filter({ hasText: 'MARKET_MISMATCH' }).waitFor();
+  assert.equal(await inspector.getByText('CLOSED', { exact: true }).count(), 0);
+  await select({ type: 'MARKET_STATE', data: { market: 'US', status: 99 } });
+  await inspector.getByText('Unrecognized', { exact: true }).waitFor();
+  await inspector.getByText('99', { exact: true }).waitFor();
+  await select({ type: 'ORDER_FILL', data: {} });
+  await status.filter({ hasText: 'Unsupported quote push type' }).waitFor();
+  await file.setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{') });
+  await status.filter({ hasText: 'Expected a UTF-8 file' }).waitFor();
+  await file.setInputFiles({ name: 'big.json', mimeType: 'application/json', buffer: Buffer.alloc(500000) });
+  await status.filter({ hasText: 'under 500 kB' }).waitFor();
+  await inspector.getByRole('button', { name: 'Clear file' }).click();
+  assert.equal(await status.innerText(), '');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await inspector.locator(':scope > summary').click();
+}
+
 async function checkDashboard(page, columns) {
   const dashboard = page.getByRole('region', { name: 'Dashboard content', exact: true });
   assert.equal(await dashboard.getAttribute('data-agentic-base-dashboard-layout'), 'true');
@@ -254,6 +301,7 @@ try {
     assert.ok(await reopened.locator('#desk-body').getByText('343.8', { exact: true }).count() >= 1);
     assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
+    await verifySavedQuotePush(reopened);
     await dashboard.getByRole('button', {name:'Inspect 23 source events'}).click();
     const logTable = reopened.getByRole('table', { name: 'Replay events' });
     const evidence = reopened.getByRole('region', { name: 'Event evidence' });

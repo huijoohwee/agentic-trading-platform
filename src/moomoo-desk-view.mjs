@@ -88,6 +88,25 @@ export async function mountMoomooDeskView(host) {
   for (const item of ['currency', 'delay class', 'per-quote feed attribution']) unknowns.append(node('li', item));
   sections.append(unknownsHeading, unknowns);
 
+  const inspector = node('details');
+  inspector.id = 'quote-push-inspector';
+  inspector.append(node('summary', 'Inspect a saved quote push'));
+  const body = node('div');
+  inspector.append(body);
+  sections.append(inspector);
+  inspector.addEventListener('toggle', async function openInspector() {
+    if (!inspector.open) return;
+    inspector.removeEventListener('toggle', openInspector);
+    try {
+      const { mountQuotePushView } = await import('./quote-push-view.mjs');
+      body.replaceChildren();
+      mountQuotePushView(body, s.symbol, { node, table, diagram, diagrams });
+    } catch {
+      body.textContent = 'Quote push reader unavailable. Reopen the desk after refreshing its offline files.';
+      inspector.addEventListener('toggle', openInspector);
+    }
+  });
+
   host.replaceChildren(DashboardCanvasLayout({
     ariaLabel: 'Moomoo market desk',
     beforeHeader: before,
