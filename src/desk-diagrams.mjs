@@ -70,9 +70,9 @@ export function mountDeskDiagrams(document) {
     svg.append(el('line', { x1: 10, x2: width - 10, y1: height - bottom, y2: height - bottom, stroke: 'currentColor', 'stroke-opacity': 0.3 }));
   };
   return {
-    candles(candles) {
+    candles(candles, caption) {
       const width = 640, height = 220, g = candleGeometry(candles, { width, height });
-      const svg = frame(width, height, `Daily candlestick chart · ${candles.length} sessions · open/high/low/close`);
+      const svg = frame(width, height, caption ?? `Daily candlestick chart · ${candles.length} sessions · open/high/low/close`);
       axis(svg, g, width, height, 22);
       for (const c of g.candles) {
         const color = c.up ? UP : DOWN;
