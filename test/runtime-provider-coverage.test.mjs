@@ -64,3 +64,20 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   for (const row of rows) assert.ok(row.sources.length && row.sources.every(source => hex(source.digest)));
   assert.throws(() => routeInventory({ ...catalog, index_sha256: 'changed' }), /COVERAGE_SOURCE_DRIFT/);
 });
+
+test('all nine simulator bindings distinguish six research reads from three independently approved paper effects', () => {
+  const routes = routeInventory(catalog).filter(row => row.transport === 'REST' && row.label.includes('/sim-trade/'));
+  assert.equal(routes.length, 9);
+  const reads = routes.filter(row => row.label.startsWith('GET '));
+  const effects = routes.filter(row => row.label.startsWith('POST '));
+  assert.equal(reads.length, 6);
+  assert.equal(effects.length, 3);
+  assert.equal(new Set(routes.map(row => row.evidence)).size, 9);
+  for (const row of routes) {
+    assert.equal(row.status, 'paper candidate');
+    assert.notEqual(row.units, 'See source field definitions');
+    assert(row.sources.some(source => new URL(source.url).pathname.startsWith('/api/sim-trade/')));
+  }
+  assert(reads.every(row => row.scope === 'Simulator account read'));
+  assert(effects.every(row => row.scope === 'Independent paper approval and simulator grant'));
+});
