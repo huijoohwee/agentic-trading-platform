@@ -36,8 +36,7 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   const summary = coverageSummary();
   assert.ok(summary.mapped_operations.includes('read.calendar'));
   assert.ok(summary.mapped_operations.includes('read.ticker'));
-  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'capital-flow', 'plate-industry', 'news-research', 'ipo',
-    'financials', 'corporate-actions', 'holders', 'influencer', 'macro', 'derivatives', 'etf', 'event-contract', 'crypto-market', 'valuation', 'short', 'stock-connect', 'top-brokers', 'chip-cbbc']);
+  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'influencer', 'macro', 'etf', 'event-contract', 'crypto-market', 'stock-connect', 'chip-cbbc']);
   assert.ok(summary.excluded.includes('trading') && summary.excluded.includes('crypto-trading'));
   const calendar = providerCoverage.find(entry => entry.id === 'calendar');
   assert.equal(calendar.transport, 'REST');
@@ -76,7 +75,15 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
   const researchPaths = Object.values(researchMapping.operations).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
-  assert.equal(on('MCP').find(row => row.label === 'quote_capital_flow').status, 'candidate');
+  assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 19);
+  const dual = on('MCP').filter(row => row.evidence === 'Signed local MCP research fixture');
+  assert.equal(dual.length, 14);
+  for (const row of dual) {
+    const rest = on('REST').find(entry => entry.sources.some(source => source.tool === row.label));
+    assert.equal(rest.status, 'mapped');
+    assert.equal(row.units, rest.units);
+    assert.equal(row.scope, rest.scope);
+  }
   assert.equal(on('REST').find(row => row.label.endsWith('/modify-user-security')).status, 'blocked');
   assert.equal(on('REST').find(row => row.label === 'POST /api/v1/crypto/accounts/{acc_id}/orders').status, 'excluded');
   for (const row of rows) assert.ok(row.sources.length && row.sources.every(source => hex(source.digest)));

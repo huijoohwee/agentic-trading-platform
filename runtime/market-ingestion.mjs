@@ -20,6 +20,7 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       id(tool.name) && hash(tool.schema_digest) && tool.effect === 'read' && MARKET_READ_OPERATIONS.includes(tool.operation)), 'SCOPE_DENIED');
     const allowed = grant.tools.find(tool => tool.operation === operation);
     requireThat(allowed, 'SCOPE_DENIED');
+    adapter.validateInputs?.(operation, inputs, allowed);
     if (operation === 'read.stock-screen' || allowed.inputs_digest !== undefined) {
       const { grant: envelopeInput, ...parameters } = boundedJson(inputs);
       requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');

@@ -338,6 +338,9 @@ try {
     await routes.getByText(/^Response fields \(\d+\)$/).click();
     assert.match(await routes.innerText(), /last_price|lastPrice/);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await routes.getByLabel('Route or tool').fill('news_search');
+    await routes.getByText('MCP · news_search · mapped', { exact: true }).click();
+    await routes.getByText('review news access · Signed local MCP research fixture').waitFor();
     await routes.getByLabel('Disposition').selectOption('excluded');
     await routes.getByText('No matching routes').waitFor();
     await routes.getByLabel('Route or tool').fill('trading_order_place');

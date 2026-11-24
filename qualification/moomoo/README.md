@@ -68,8 +68,14 @@ Search for `/sim-trade/` in the route inventory. Six GETs cover account discover
 
 Opening an advertised tool in the route finder loads its public HTTP field register from the sealed site. The field list shows path variables, declared parameters, body fields, limits and top-level response names. Required and optional labels reflect explicit values in the published schema. Connected MCP admission still checks the host’s own descriptor.
 
-The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Thirty REST reads have local mappings. Five MCP tools have mappings, including the stock-screen fixture. The connected captures retain their own host, operation and grant.
+The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Thirty REST reads have local mappings. Nineteen MCP tools have mappings. Four have Desktop captures, one serves stock screens, and fourteen serve locally tested research reads. The connected captures retain their own host, operation and grant.
 
+
+## Research over MCP
+
+The `researchMcpMapping` export in `runtime/moomoo-research.mjs` supplies the fourteen research projections and the stock-screen projection. Choose the operation and tool in the private provider definition. Pin the host's own `tools/list` descriptor, mapping, rights, account, expiry and zero-cost budget. Sign the exact parameters including any cursor. For example, `read.capital-flow` takes `{"symbol":"HK.00700","section":"NORMAL"}` and maps to `quote_capital_flow`. The shareholder tool accepts `period_id=0` when specified.
+
+Signed fixtures exercise sector lists, HK IPOs, headline search, profiles, statements, dividends, shareholders, unusual derivatives, option chains and expiries, capital flow, valuation, short interest and top brokers. Each successful fixture uses four MCP messages including one business call. The offline viewer opens saved Gateway pages from either transport. A connected result requires its own host and grant evidence.
 
 ## Stock screening over REST and MCP
 
