@@ -192,3 +192,63 @@ test('the two profiles degrade and recover independently', async () => {
   assert.equal(trades.status().cursor, 2);
   assert.equal(trades.status().recoveries, 0);
 });
+
+test('buffered and applied redeliveries compare canonical bytes inside the bounded replay window', () => {
+  const quote = hub({ bufferLimit: 2 }).open('quote');
+  quote.subscribe(grant(['quote:read']));
+  quote.push(frame(1)); quote.push(frame(2)); quote.push(frame(3));
+  assert.deepEqual(quote.push(frame(1)), { stale: true, duplicate: false, cursor: 3 });
+  assert.equal(quote.push(frame(2)).duplicate, true);
+  assert.throws(() => quote.push(frame(2, { payload: { price: '301.0' } })), /CONFLICTING_EVENT/);
+  assert.equal(quote.status().state, 'conflict');
+  assert.equal(quote.status().cursor, 3);
+  const trades = hub().open('trade-event');
+  trades.subscribe(grant(['trade:read']));
+  trades.push(frame(3, { payload: { price: '303.0', size: 1 } }));
+  assert.equal(trades.push(frame(3, { payload: { size: 1, price: '303.0' } })).duplicate, true);
+  assert.throws(() => trades.push(frame(3)), /CONFLICTING_EVENT/);
+  assert.equal(trades.status().appliedCount, 0);
+});
+
+test('history refuses contradictory bytes atomically and a quote recovery returns the validated snapshot', async () => {
+  const trades = hub().open('trade-event');
+  const g = grant(['trade:read']);
+  trades.subscribe(g); trades.push(frame(1)); trades.disconnect(); trades.resume({ ...g, nonce: 'recovery' });
+  await assert.rejects(trades.recover({ history: async () => [frame(2), frame(3), frame(3, { payload: { price: '304.0' } })] }), /CONFLICTING_EVENT/);
+  assert.equal(trades.status().cursor, 1);
+  assert.equal(trades.status().appliedCount, 1);
+  assert.equal(trades.status().state, 'conflict');
+  const quote = hub().open('quote');
+  quote.subscribe(grant(['quote:read'])); quote.disconnect(); quote.resume(grant(['quote:read'], { nonce: 'readback' }));
+  const snapshot = { cursor: 10, state: { bid: '302.35', ask: null } };
+  assert.deepEqual((await quote.recover({ snapshot })).snapshot, snapshot);
+});
+
+test('history cannot reactivate an unsubscribed or replaced session, and concurrent recovery is refused', async () => {
+  const trades = hub().open('trade-event'), g = grant(['trade:read']);
+  trades.subscribe(g); trades.disconnect(); trades.resume({ ...g, nonce: 'first' });
+  let release;
+  const pending = trades.recover({ history: () => new Promise(resolve => { release = resolve; }) });
+  await assert.rejects(trades.recover({ history: async () => [frame(1)] }), /STREAM_RECOVERY_IN_PROGRESS/);
+  trades.unsubscribe(); trades.subscribe({ ...g, nonce: 'second' }); trades.disconnect(); trades.resume({ ...g, nonce: 'third' });
+  release([frame(1)]);
+  await assert.rejects(pending, /STREAM_INACTIVE/);
+  assert.equal(trades.status().state, 'recovering');
+  assert.equal(trades.status().cursor, 0);
+  assert.equal((await trades.recover({ history: async () => [frame(1)] })).cursor, 1);
+});
+
+test('grant expiry fences active frames, heartbeats and outstanding history before cursor commit', async () => {
+  let time = Date.parse('2026-11-20T15:59:59Z');
+  const hub = createStreamHub({ scope, now: () => time });
+  const quote = hub.open('quote'), trades = hub.open('trade-event');
+  quote.subscribe(grant(['quote:read']));
+  trades.subscribe(grant(['trade:read'])); trades.disconnect(); trades.resume(grant(['trade:read'], { nonce: 'reload' }));
+  const pending = trades.recover({ history: async () => { time += 1000; return [frame(1)]; } });
+  await assert.rejects(pending, /STREAM_EXPIRED/);
+  assert.throws(() => quote.push(frame(1)), /STREAM_EXPIRED/);
+  assert.throws(() => quote.heartbeat(), /STREAM_INACTIVE/);
+  assert.equal(quote.status().cursor, 0);
+  assert.equal(trades.status().cursor, 0);
+  assert.equal(trades.status().state, 'expired');
+});
