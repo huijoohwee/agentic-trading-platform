@@ -81,8 +81,35 @@ const optionFilters = {
   filter_standard: { enum: ['ALL', 'STANDARD', 'NON_STANDARD'] }
 };
 const greeks = ['delta', 'gamma', 'vega', 'theta', 'rho', 'iv'];
+const concretePeriods = [1, 2, 3, 4, 5, 6, 7];
+const statementItem = {
+  fields: fields(['field_id', 'display_name', 'value_type', 'data', 'yoy', 'qoq']),
+  integer: ['field_id'], text: ['display_name', 'value_type'], wire_decimal: ['data', 'yoy', 'qoq'],
+  nullable: ['data', 'yoy', 'qoq'], allowed_values: { value_type: ['amount', 'percent', ''] }
+};
+const futuresPositionFields = ['long', 'short', 'spread', 'net', 'net_change_weekly', 'open_interest', 'open_interest_change_weekly'];
+const seasonalPoint = { fields: fields(['timestamp', 'close', 'prev_close']), integer: ['timestamp'],
+  decimal_text: ['close', 'prev_close'], nullable: ['close', 'prev_close'] };
+const correlationPoint = { fields: fields(['timestamp', 'correlation']), integer: ['timestamp'],
+  decimal_text: ['correlation'], unit_interval: ['correlation'] };
 const operations = {
   'read.capital-flow': capitalFlow, 'read.rank': hotList, 'read.plate': plate, 'read.ipo': ipo,
+  'read.futures-positions': quote('future-positions', symbol + 'future/position-analysis', items,
+    { integer: ['report_time'], text: ['variety'], exact_integer: futuresPositionFields, decimal_text: ['open_interest_change_rate_weekly'] },
+    { params: { report_type: { length: [1, 64] }, page_size: boundedCount(1, 100), page_flag: {} },
+      nullable: ['net_change_weekly', 'open_interest', 'open_interest_change_weekly', 'open_interest_change_rate_weekly'],
+      pagination: ['pagination'], total_path: ['data', 'total'], default_page_size: 20 }),
+  'read.futures-seasonality': quote('future-seasonal', symbol + 'future/seasonal', items,
+    { integer: ['year'] }, { nullable: ['year'], unique_by: 'year', params: { period: { enum: ['MONTH', 'DAY'] } },
+      source_fields: fields(['points']), nested: { points: seasonalPoint } }),
+  'read.futures-correlation': quote('future-correlation', symbol + 'future/correlation', items,
+    { text: ['code', 'related_code'] }, { params: { related_codes: { required: true, symbols: 4 },
+      cycle: { enum: ['THREE_MONTH', 'SIX_MONTH', 'ONE_YEAR', 'THREE_YEAR'] },
+      range: { enum: ['ONE_DAY', 'THREE_MONTH', 'SIX_MONTH', 'ONE_YEAR', 'THREE_YEAR'] },
+      page_size: boundedCount(1, 200), page_flag: {} }, match_inputs: { code: 'symbol' },
+      match_filters: { related_code: { input: 'related_codes' } }, unique_by: 'related_code', series_limit: 4,
+      source_fields: fields(['points']), nested: { points: correlationPoint }, nested_limits: { points: { input: 'page_size', fallback: 30 } },
+      pagination: ['pagination'], total_path: ['data', 'total'], total_series: 'points' }),
   'read.option-chain': quote('option-chain', symbol + 'option-chain', ['data', 'option_chain'],
     { text: ['code', 'stock_owner', 'option_type', 'expiration_cycle', 'option_standard_type'], date: ['strike_time'],
       numeric: ['strike_price'], integer: ['lot_size'] },
@@ -108,6 +135,16 @@ const operations = {
   'read.news': news, 'read.research': ratings,
   'read.financials': quote('company-profile', symbol + 'company/profile', items,
     { text: ['name', 'value'], integer: ['field_type', 'attribute_type'] }, { nullable: ['value'] }),
+  'read.financial-statements': quote('financial-statements', symbol + 'financials/statements', ['data', 'report_list'],
+    { integer: ['date_time', 'structure'], text: ['fiscal_year', 'financial_type', 'period_text', 'structure_name',
+      'accounting_standards', 'auditor_report'], currency: ['currency_code'] },
+    { source_fields: fields(['item_list']), nested: { item_list: statementItem },
+      params: { statement_type: { enum: [1, 2, 3, 4] }, financial_type: { enum: [...concretePeriods, 9, 10, 11] },
+        currency_code: { currency: true, allow_empty: true }, limit: boundedCount(1, 50),
+        next_key: { length: [0, 1000] } }, row_limit: { input: 'limit', fallback: 10 },
+      pagination: ['pagination'], pagination_mode: 'next_key', cursor_limit: 1000,
+      allowed_values: { financial_type: concretePeriods.map(String) }, match_inputs: { currency_code: 'currency_code' },
+      match_filters: { financial_type: { input: 'financial_type', when: concretePeriods } } }),
   'read.corporate-actions': quote('dividends', symbol + 'corporate-actions/dividends', ['data', 'dividend_list'],
     { text: ['statement', 'currency', 'process'], local_date: ['ex_date', 'record_date', 'dividend_payable_date'] },
     { nullable: ['currency', 'process', 'ex_date', 'record_date', 'dividend_payable_date'],

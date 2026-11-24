@@ -8,8 +8,8 @@ import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, 
 // the reviewed private mapping binds each native operation to one read-only tool and projection.
 export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank',
   'read.plate', 'read.ipo', 'read.news', 'read.research', 'read.financials', 'read.corporate-actions', 'read.holders',
-  'read.influencer', 'read.macro', 'read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events',
-  'read.etf', 'read.event-contract', 'read.crypto-market',
+  'read.financial-statements', 'read.influencer', 'read.macro', 'read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events',
+  'read.futures-positions', 'read.futures-seasonality', 'read.futures-correlation', 'read.etf', 'read.event-contract', 'read.crypto-market',
   'read.valuation', 'read.short', 'read.stock-connect', 'read.top-brokers', 'read.chip', 'read.cbbc'];
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;

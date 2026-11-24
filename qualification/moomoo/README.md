@@ -46,13 +46,15 @@ The route inventory now identifies 22 REST mappings. Nineteen additional GETs ha
 | --- | --- |
 | Sector directory, HK IPOs | Market and sector IDs, listing dates, prices and lot size. Undisclosed IPO dates and prices are null. |
 | News search, analyst ratings | Headline, source, publication epoch and opaque ID. Analyst pages retain provider target-price text, market date and continuation. |
+| Financial statements | A signed statement type selects income, balance sheet, cash flow or key metrics. The report preserves currency, accounting standard, fiscal period and the provider’s value type for each line item. An opaque `next_key` continues the same query under a fresh grant. |
 | Company profile, dividends, shareholders, influencer holdings | Localized profile fields, dividend statement and dates, reported holder weights, and estimated positions. |
 | Macro, ETF, event contracts, crypto | Indicator directory by region, ETF weights and disclosure time, event directory by series, and aggregate USD market cap and turnover. |
+| Futures | Read CFTC contract counts and weekly changes, seasonal series with an optional year or price, and correlations for up to four signed related symbols. Page size on correlation reads applies to each series. The published samples contain placeholders. Local fixtures exercise the documented field types. |
 | Options | Chains bind the underlying and expiry window. Expiry reads preserve signed days and cycles. Option trade events preserve source price strings, Unix microseconds, nullable Greeks and IV in percent. |
 | Derivatives activity, valuation, HK short interest | Provider movement summary, historical PE/PB/PS ratios, and HK short shares and float percentages. |
 | Stock Connect, top brokers, chip distribution, CBBC | Daily flow in yuan and shares, both sides of HK broker rankings, chip prices and profit ratio, and outstanding bull/bear quantities with the supplied currency. |
 
-For these twenty-two reads, the operator signs an `inputs_digest` on the grant’s tool entry. Compute it with `sha(parameters)` from `runtime/core.mjs`, using the exact request parameters including any cursor and excluding the grant envelope. Trading checks it before the provider GET. A fresh page or symbol requires its corresponding authorization. The existing calendar, capital-flow and ranking contracts continue to accept their reviewed grants. The signed fixtures use a local response transport. Connected research requires private REST credentials, current rights and call headroom for the named operation.
+For these twenty-six reads, the operator signs an `inputs_digest` on the grant’s tool entry. Compute it with `sha(parameters)` from `runtime/core.mjs`, using the exact request parameters including any cursor and excluding the grant envelope. Trading checks it before the provider GET. A fresh page or symbol requires its corresponding authorization. The existing calendar, capital-flow and ranking contracts continue to accept their reviewed grants. The signed fixtures use a local response transport. Connected research requires private REST credentials, current rights and call headroom for the named operation.
 
 ## Simulator route coverage
 
@@ -60,4 +62,4 @@ Search for `/sim-trade/` in the route inventory. Six GETs cover account discover
 
 Opening an advertised tool in the route finder loads its public HTTP field register from the sealed site. The field list shows path variables, declared parameters, body fields, limits and top-level response names. Required and optional labels reflect explicit values in the published schema. Connected MCP admission still checks the host’s own descriptor.
 
-The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Twenty-five REST reads have local mappings. The connected captures retain their own host, operation and grant.
+The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Twenty-nine REST reads have local mappings. The connected captures retain their own host, operation and grant.

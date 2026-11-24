@@ -493,3 +493,88 @@ test('option trade Greeks retain zero and absent values, source price strings an
   await assert.rejects(researchRead(t, op, { ...filter, page_flag: cursor }, end,
     calls => assert.equal(calls.length, 0), filter), /SCOPE_DENIED/);
 });
+
+test('financial statements keep reported periods, nested amounts, percentages and source precision', async t => {
+  const op = 'read.financial-statements';
+  const line = { field_id: 1, display_name: 'Fixture revenue', value_type: 'amount',
+    data: '9007199254740993.000', yoy: '0.00', qoq: null };
+  const ratio = { field_id: 2, display_name: 'Fixture margin', value_type: 'percent', data: 12.375, yoy: 0 };
+  const report = { date_time: 1774886400000, fiscal_year: '2026', financial_type: '1', structure: 5,
+    structure_name: 'NORMAL_HK', period_text: '2026/Q1', currency_code: 'CNY', accounting_standards: 'IAS',
+    auditor_report: '', item_list: [{ ...line, private_attachment: 'discard' }, ratio] };
+  const cursor = 'a+/='.repeat(250);
+  const body = (reports, page = { has_more: true, next_key: cursor }) =>
+    ({ ...response({ report_list: reports }), pagination: page });
+  const failBeforeCall = calls => assert.equal(calls.length, 0);
+  const parameters = { ...hk, currency_code: 'CNY', limit: 1, statement_type: 1, financial_type: 1 };
+  for (const type of [1, 2, 3, 4]) {
+    const fixture = { ...report, accounting_standards: type === 4 ? '' : 'IAS' };
+    const result = await researchRead(t, op, { ...parameters, statement_type: type }, body([fixture]), calls => {
+      const url = new URL(calls[0].url);
+      assert.equal(url.pathname, '/api/v1.0/quote/HK.00700/financials/statements');
+      assert.equal(url.searchParams.get('statement_type'), String(type));
+    });
+    assert.deepEqual(result.rows[0], { ...fixture, item_list: [line, { ...ratio, qoq: null }] });
+    assert.deepEqual(result.pagination, { completed: false, next_cursor: cursor });
+  }
+  const final = await researchRead(t, op, { ...parameters, next_key: cursor }, body([], { has_more: false, next_key: '' }),
+    calls => assert.equal(new URL(calls[0].url).searchParams.get('next_key'), cursor));
+  assert.deepEqual(final.pagination, { completed: true, next_cursor: null });
+  assert.deepEqual((await researchRead(t, op, { ...hk, financial_type: 10 }, { ret_code: -10 })).rows, []);
+  for (const patch of [{ currency_code: 'USD' }, { financial_type: '7' }])
+    await assert.rejects(researchRead(t, op, parameters, body([{ ...report, ...patch }])), /SOURCE_MAPPING_REQUIRED/);
+  for (const patch of [{ data: 2 ** 53 }, { data: '12%' }, { yoy: false }])
+    await assert.rejects(researchRead(t, op, parameters, body([{ ...report, item_list: [{ ...line, ...patch }] }])), /PRECISION_UNKNOWN/);
+  await assert.rejects(researchRead(t, op, parameters, body([{ ...report, item_list: {} }])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, parameters, body([report, report])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, { ...parameters, next_key: cursor }, body([report])), /INVALID_PAGE/);
+  for (const patch of [{ limit: 51 }, { currency_code: 'Cny' }, { financial_type: 8 }, { statement_type: 5 }])
+    await assert.rejects(researchRead(t, op, { ...parameters, ...patch }, {}, failBeforeCall), /INVALID_PARAMETER/);
+  await assert.rejects(researchRead(t, op, { ...parameters, next_key: cursor }, {}, failBeforeCall, parameters), /SCOPE_DENIED/);
+});
+
+test('CFTC positioning preserves exact signed contracts and report totals across pages', async t => {
+  const op = 'read.futures-positions', inputs = { symbol: 'US.CLmain', report_type: 'TOTAL', page_size: 1 };
+  const row = { report_time: 1795478400, variety: 'Fixture crude', long: '9007199254740993', short: 87,
+    spread: '0', net: '-87', net_change_weekly: -2, open_interest_change_rate_weekly: '-0.050' };
+  const body = { ...response({ items: [row], total: 2 }), pagination: { completed: false, page_flag: '1' } };
+  const result = await researchRead(t, op, inputs, body, calls => assert.match(calls[0].url, /US.CLmain\/future\/position-analysis/));
+  assert.deepEqual(result.rows[0], { ...row, short: '87', net_change_weekly: '-2', open_interest: null, open_interest_change_weekly: null });
+  assert.deepEqual(result.pagination, { completed: false, next_cursor: '1', total: 2 });
+  await assert.rejects(researchRead(t, op, inputs, { ...body, data: { total: 'example', items: [row] } }), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, inputs, { ...body, data: { total: 1, items: [{ ...row, long: 2 ** 53 }] } }), /PRECISION_UNKNOWN/);
+  await assert.rejects(researchRead(t, op, { ...inputs, page_size: 101 }, {}, calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+});
+
+test('futures seasonality keeps the historical mean and timestamp-only observations', async t => {
+  const op = 'read.futures-seasonality', inputs = { symbol: 'US.CLmain', period: 'MONTH' };
+  const price = { timestamp: 1795478400, close: '-37.630', prev_close: '0.000' }, empty = { timestamp: 1795564800 };
+  const series = [{ year: 2020, points: [price] }, { points: [empty] }];
+  const result = await researchRead(t, op, inputs, response({ items: series }));
+  assert.deepEqual(result.rows, [series[0], { year: null, points: [{ ...empty, close: null, prev_close: null }] }]);
+  await assert.rejects(researchRead(t, op, inputs, response({ items: [series[0], series[0]] })), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, inputs, response({ items: [{ year: 0, points: 'example' }] })), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, { ...inputs, period: 'DAY' }, {}, calls => assert.equal(calls.length, 0), inputs), /SCOPE_DENIED/);
+});
+
+test('futures correlations bind the related series and apply page size and total to points per future', async t => {
+  const op = 'read.futures-correlation', inputs = { symbol: 'US.CLmain', related_codes: 'US.GCmain,US.ESmain', page_size: 1 };
+  const point = { timestamp: 1795478400, correlation: '-1.0000' };
+  const series = inputs.related_codes.split(',').map(related_code => ({ code: inputs.symbol, related_code, points: [point] }));
+  const body = items => ({ ...response({ items, total: 1 }), pagination: pageEnd });
+  const result = await researchRead(t, op, inputs, body(series));
+  assert.deepEqual(result.rows, series);
+  assert.deepEqual(result.pagination, { completed: true, next_cursor: null, total: 1 });
+  for (const value of ['1.000000000000000001', '-10.01e-1', '1e400']) {
+    await assert.rejects(researchRead(t, op, inputs, body([{ ...series[0], points: [{ ...point, correlation: value }] }])), /INVALID_PAGE/);
+  }
+  const tiny = { ...point, correlation: '1e-300' };
+  assert.deepEqual((await researchRead(t, op, inputs, body([{ ...series[0], points: [tiny] }]))).rows[0].points, [tiny]);
+  await assert.rejects(researchRead(t, op, inputs, body([{ ...series[0], points: [point, point] }])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, inputs, body([{ ...series[0], related_code: 'US.OTHER' }])), /SOURCE_MAPPING_REQUIRED/);
+  await assert.rejects(researchRead(t, op, inputs, body([series[0], series[0]])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, { ...inputs, related_codes: 'US.A,US.B,US.C,US.D,US.E' }, {},
+    calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+  await assert.rejects(researchRead(t, op, { ...inputs, page_flag: '1' }, {}, calls => assert.equal(calls.length, 0), inputs), /SCOPE_DENIED/);
+  assert.deepEqual((await researchRead(t, op, inputs, { ret_code: -10 })).rows, []);
+});
