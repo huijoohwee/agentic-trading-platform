@@ -110,6 +110,17 @@ async function verifySavedResearch(page, calendar) {
   await view.getByText('Unmapped holding', { exact: true }).click();
   await view.getByText('Empty text', { exact: true }).waitFor();
   await view.getByText('1.500', { exact: true }).waitFor();
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'session-fixture', operation: 'read.trading-days' },
+    data: { source: 'AUTHENTICATED_ADAPTER', at: 1800000000000, decimals: [{}],
+      rows: [{ market: 'HK', market_date: '2025-12-24', trade_date_type: 'MORNING', trade_second: 14400 }] } });
+  await view.getByRole('heading', { name: 'Reported trading seconds · 1 of 1 days' }).waitFor();
+  await view.getByText('HK · 2025-12-24', { exact: true }).click();
+  await view.getByText('MORNING', { exact: true }).waitFor();
+  const state = { symbol: 'US.DIA', market_state: 'OVERNIGHT', broker_id: null, time_date: null, stock_name: null, sc_name: null,
+    tc_name: null, traded_seconds: null, total_seconds: null, trade_section: null, broker_ids: null };
+  await select({ status: 'OK', ledger_revision: 3, provenance: { source: 'PROVIDER', provider: 'session-fixture', operation: 'read.market-state' },
+    data: { source: 'AUTHENTICATED_ADAPTER', at: 1800000000000, decimals: [{}], rows: [state] } });
+  await view.getByRole('table', { name: 'Market sessions · 1 of 1 rows' }).getByText('OVERNIGHT').waitFor();
   const book = { symbol: 'HK.00700', name: 'Example', time_ms: 1800000000000, volume_precision: 2, bid_flag: 1, ask_flag: 0,
     bids: [{ price: '340.00', raw_volume: '120', volume: '1.20', order_count: 1 }], asks: [] };
   await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'book-fixture', operation: 'read.depth' },

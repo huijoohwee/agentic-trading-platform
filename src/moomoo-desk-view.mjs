@@ -17,6 +17,11 @@ export async function mountMoomooDeskView(host) {
     region.append(heading, frame); parent.append(region);
     return mount;
   };
+  const showTable = (parent, heading, title, columns, rows) => mountDataView(viewport(parent, heading), {
+    ariaLabel: title, columns: columns.map(name => ({ id: name, name })),
+    rows: rows.map((cells, index) => ({ id: title + '-' + index,
+      cells: cells.map(value => value == null ? 'UNKNOWN' : String(value)) }))
+  });
   const table = (parent, title, columns, rows) => {
     const details = node('details');
     details.append(node('summary', title));
@@ -24,11 +29,7 @@ export async function mountMoomooDeskView(host) {
     details.addEventListener('toggle', function reveal() {
       if (!details.open) return;
       details.removeEventListener('toggle', reveal);
-      mountDataView(viewport(details, 'Exact values'), {
-        ariaLabel: title, columns: columns.map(name => ({ id: name, name })),
-        rows: rows.map((cells, index) => ({ id: title + '-' + index,
-          cells: cells.map(value => value == null ? 'UNKNOWN' : String(value)) }))
-      });
+      showTable(details, 'Exact values', title, columns, rows);
     });
   };
   const clock = epoch => epoch == null ? null : new Date(epoch).toISOString().slice(11, 23);
@@ -76,10 +77,11 @@ export async function mountMoomooDeskView(host) {
     deskTape.map(tick => [clock(tick.time), tick.price, tick.volume, tick.turnover, tick.direction]));
 
   diagram(sections, 'Daily candles · open / high / low / close', diagrams.candles(deskCandles));
-  const volumeChart = (parent, title, candles) => mountDashboardChart(viewport(parent, title), {
-    type: 'column', tone: 'blue', gridEnabled: true,
-    series: candles.map(candle => ({ label: candle.date, value: Number(candle.volume), detail: String(candle.volume) }))
+  const columnChart = (parent, title, series) => mountDashboardChart(viewport(parent, title), {
+    type: 'column', tone: 'blue', gridEnabled: true, series
   });
+  const volumeChart = (parent, title, candles) => columnChart(parent, title,
+    candles.map(candle => ({ label: candle.date, value: Number(candle.volume), detail: String(candle.volume) })));
   volumeChart(sections, 'Daily volume', deskCandles);
   table(sections, `Daily candles (${deskCandles.length})`, ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Change %'],
     deskCandles.map(candle => [candle.date, candle.open, candle.high, candle.low, candle.close, candle.volume, candle.change_rate]));
@@ -116,7 +118,7 @@ export async function mountMoomooDeskView(host) {
   });
   inspector('research-page-inspector', 'Inspect a saved research result', async body => {
     const { mountResearchPageView } = await import('./research-page-view.mjs');
-    mountResearchPageView(body, node, { diagrams, diagram, volumeChart });
+    mountResearchPageView(body, node, { diagrams, diagram, volumeChart, columnChart, showTable });
   });
 
   host.replaceChildren(DashboardCanvasLayout({

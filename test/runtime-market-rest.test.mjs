@@ -81,6 +81,13 @@ test('running gateway signs current and historical market REST reads, replays th
   const historicBar = { time_key: time, date: 20260603, time_zone: 480, open: 344, high: 346, low: 343, close: '345.0000',
     volume: '9007199254740993', turnover: '34500.0' };
   const cases = [
+    ['read.market-state', { symbols: [symbol, 'CC.BTCUSD'], is_need_crypto_multi_broker: true }, 'POST', 'market-state',
+      { code_list: [symbol, 'CC.BTCUSD'], is_need_crypto_multi_broker: true }, { market_state_list: [
+        { code: symbol, market_state: 'AFTERNOON' }, { code: 'CC.BTCUSD', market_state: 'TRADING', broker_id: 1 },
+        { code: 'CC.BTCUSD', market_state: 'REST', broker_id: 2 }] }],
+    ['read.trading-days', { market: 'HK', start: '2025-12-22', end: '2025-12-24' }, 'GET',
+      'trading-days?market=HK&start=2025-12-22&end=2025-12-24', null,
+      { trading_days: [{ time: '2025-12-24', trade_date_type: 'MORNING', trade_second: 14400 }] }],
     [history, historyInputs, 'GET', symbol + '/history-kline?start=2026-06-03&end=2026-06-04&ktype=110&num=1', null,
       { kline_list: [historicBar], volume_precision: 3, next_time: time }],
     ['read.ticker', { symbol }, 'POST', 'stock-quote', { code_list: [symbol] }, { quote_list: [{ code: symbol, name: 'Example', last_price: '345.600',
@@ -158,6 +165,8 @@ test('running gateway signs current and historical market REST reads, replays th
       assert.equal(active.status, 'OK', JSON.stringify(active.error)); assert.equal(calls.length, before + 2);
     }
   }
+  assert.deepEqual(pages['read.market-state'].map(row => [row.symbol, row.broker_id]), [[symbol, null], ['CC.BTCUSD', 1], ['CC.BTCUSD', 2]]);
+  assert.deepEqual(pages['read.trading-days'][0], { market: 'HK', market_date: '2025-12-24', trade_date_type: 'MORNING', trade_second: 14400 });
   assert.equal(pages[history][0].volume, '9007199254740.993'); assert.equal(pages[history][0].close, '345.0000');
   assert.equal(pages['read.ticker'][0].volume, '9007199254740993');
   assert.equal(pages['read.ticker'][0].last, '345.600');

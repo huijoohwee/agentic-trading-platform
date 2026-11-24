@@ -1,4 +1,5 @@
 import { STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } from 'agentic-gateway/connectors/moomoo-stock-screen';
+import { sessionMcpSpecs, isSessionMcp, verifySessionMcp, sessionMcpArguments, marketPage } from './moomoo-market-rest.mjs';
 import { createPrivateKey, sign } from 'node:crypto';
 import { accountOperation, historyOperation, simulatorOperation, verifySimulatorMcpSpec, verifySimulatorDescriptor,
   validateSimulatorRead, simulatorMcpArguments, selectedSimulatorAccount, simulatorPage, historyPagination } from './moomoo-simulator-read.mjs';
@@ -11,7 +12,7 @@ import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
 // transport owner (endpoint/protocols/ownPath/rpcResponse) and never exposes raw provider tools:
 // the reviewed private mapping binds each native operation to one read-only tool and projection.
-export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.candle-history', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank', 'read.stock-screen',
+export const MARKET_READ_OPERATIONS = [...Object.keys(sessionMcpSpecs), 'read.catalog', 'read.candles', 'read.candle-history', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank', 'read.stock-screen',
   'read.plate', 'read.ipo', 'read.news', 'read.research', 'read.financials', 'read.corporate-actions', 'read.holders',
   'read.financial-statements', 'read.influencer', 'read.macro', 'read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events',
   'read.futures-positions', 'read.futures-seasonality', 'read.futures-correlation', 'read.etf', 'read.event-contract', 'read.crypto-market',
@@ -46,6 +47,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
     requireThat(operation !== 'read.candle-history' && spec.tool !== 'quote_history_kline', 'INVALID_MAPPING');
+    if (isSessionMcp(operation, spec)) { verifySessionMcp(operation, spec); continue; }
     if (simulatorOperation(operation) || spec.tool?.startsWith('sim_trade_') || spec.profile === 'moomoo-simulator-mcp-read/v1') {
       verifySimulatorMcpSpec(operation, spec, endpoint);
       continue;
@@ -131,6 +133,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         validateSimulatorRead(operation, inputs, admitted, binding);
         requireThat(admitted.limits.max_calls >= (operation === accountOperation ? 4 : 5), 'BUDGET_HALT');
       }
+      if (Object.hasOwn(sessionMcpSpecs, operation)) sessionMcpArguments(mapping.operations[operation], inputs, allowed);
       if (mapping.operations[operation]?.profile === researchGetProfile) researchArguments(operation, inputs, allowed);
     },
     async open({ grant: admitted, operation, inputs = {}, signal, beforeCall: revalidate }) {
@@ -168,6 +171,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
       const { grant: envelopeInput, ...request } = boundedJson(inputs);
       const screen = operation === 'read.stock-screen';
       const privateRead = simulatorOperation(operation);
+      const sessionRead = Object.hasOwn(sessionMcpSpecs, operation);
       const research = spec.profile === researchGetProfile;
       if (screen || allowed.inputs_digest !== undefined) requireThat(allowed.inputs_digest === sha(request), 'SCOPE_DENIED');
       let parameters;
@@ -175,6 +179,8 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         validateSimulatorRead(operation, request, grant, binding);
         requireThat(operation === accountOperation || selected, 'ACCOUNT_BINDING');
         parameters = simulatorMcpArguments(operation, request, binding);
+      } else if (sessionRead) {
+        parameters = sessionMcpArguments(spec, request, allowed);
       } else if (screen) {
         requireThat(allowed.name === STOCK_SCREEN_TOOL, 'SCHEMA_DRIFT');
         parameters = buildMoomooStockScreen(request);
@@ -189,7 +195,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         }
       }
       const { source, response } = await callTool(allowed.name, parameters, signal);
-      const raw = privateRead || screen || research ? undefined : ownPath(source, spec.rows_path);
+      const raw = privateRead || screen || research || sessionRead ? undefined : ownPath(source, spec.rows_path);
       let rows, decimals = [], metadata = {};
       if (privateRead) {
         const body = providerFields(source);
@@ -197,6 +203,8 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
         decimals = rows.map(() => ({}));
         metadata.account = operation === accountOperation ? rows[0] : selected;
         if (operation === historyOperation) metadata.pagination = historyPagination(body, request, binding);
+      } else if (sessionRead) {
+        ({ rows, decimals } = marketPage(spec, request, JSON.stringify(providerFields(source))));
       } else if (screen) {
         ({ rows, ...metadata } = projectMoomooStockScreen(request, source));
         decimals = rows.map(() => ({}));

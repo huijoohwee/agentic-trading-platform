@@ -25,6 +25,11 @@ function columns(spec) {
 const level = { columns: ['price', 'raw_volume', 'volume', 'order_count'], decimalText: ['price', 'volume'],
   exactIntegers: ['raw_volume'], integers: ['order_count'], nullable: ['volume'] };
 const marketColumns = {
+  'read.market-state': { columns: ['symbol', 'market_state', 'broker_id', 'time_date', 'stock_name', 'sc_name', 'tc_name', 'traded_seconds', 'total_seconds', 'trade_section', 'broker_ids'],
+    text: ['symbol', 'market_state', 'stock_name', 'sc_name', 'tc_name', 'traded_seconds', 'total_seconds', 'trade_section', 'broker_ids'],
+    integers: ['time_date', 'broker_id'], nullable: ['time_date', 'broker_id', 'stock_name', 'sc_name', 'tc_name', 'traded_seconds', 'total_seconds', 'trade_section', 'broker_ids'] },
+  'read.trading-days': { columns: ['market', 'market_date', 'trade_date_type', 'trade_second'],
+    text: ['market', 'market_date', 'trade_date_type'], integers: ['trade_second'] },
   'read.ticker': { columns: ['symbol', 'name', 'market_date', 'time_ms', 'last', 'price_source', 'open', 'high', 'low', 'prev_close', 'volume', 'turnover', 'suspended'],
     text: ['symbol', 'name', 'market_date', 'price_source'], integers: ['time_ms'], booleans: ['suspended'], exactIntegers: ['volume'],
     decimalText: ['last', 'open', 'high', 'low', 'prev_close', 'turnover'], nullable: ['open', 'high', 'low', 'prev_close', 'volume', 'turnover', 'suspended'] },
