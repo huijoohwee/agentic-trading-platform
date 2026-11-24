@@ -14,11 +14,13 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = 'd96977a4d54b7cf74f29cbe1ef75915304c2a2fc';
+const REVISION = '49bcc03e06afda983c2bc6b8893b89c79d4bab9c';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-WcnZ/23dzS5Qy9yf5IyqnBweBGOld9sltTyeYNox9YBVqnNe8xIKsAGibE7VxQODZml6I/M3UbNTjJboAKrmbQ==';
+const LOCK_INTEGRITY = 'sha512-zHUvFXfLwETxJG650fT/ZQywVlLRclHO+Ayl/4ZioZQSnKuDP0iCxyFIQS3Ryq4xuRPTlilGTmEh5ZSo7zitVg==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
+  'vendor/agentic-base/record-links.mjs': 'abe47bd1d080c4522b3f3808c724ddaf7283abb75e6499bba213a1cbfb301b1f',
+  'resolver.mjs': '3beccdaaa511086434c8628edab831ad47ebe3a585c04947fc9020b7f66d4116',
   'connectors/moomoo-quote-socket.mjs': 'be9510659679fd40c798867bd359de4eeca77c726b8fae9503511e79dedb7ff8',
   'connectors/moomoo-trade-event.mjs': 'b8cf85cd4c4f84c44bc9cedd2a90cc2ef5e271b321349fb9e1829e9b59a990f5',
   'connectors/moomoo-crypto-report.mjs': 'c2b3243017953859f0a3bd62488039fd9c9c52d2ce74e0459f7e033929d7cbb1',
@@ -28,7 +30,7 @@ const INSTALLED_DIGESTS = {
   'connectors/moomoo-catalog.json': 'b6046103367e103e9eca1424a1984d35c4cd9ef72ff1813cc1aca3c47dcbfe64',
   'connectors/profiles.json': '795ecdd823357d65438d6a061e05e58b7b11cc3c6e830d9e9eef2c1fc8a69b32',
   'connectors/moomoo.mjs': '22bd38033b876dde4da4fd035681bad57efb3d5afb5639d12c92eb2257faf1e0',
-  'provider-profiles.mjs': 'dfee64327556cdf48bf3dbcee9d4a86938e010ab07985ea655083226055d1dea',
+  'provider-profiles.mjs': '243a2445984b0257fb0d8b56baa33a1f93f52d530a7d4fe4ee99daf45edbe77e',
 };
 
 function guardDependency(url) {
