@@ -1,0 +1,137 @@
+{
+  "schema": "trading-moomoo-hosted-capture/v1",
+  "provenance": {
+    "binding": "hosted-mcp",
+    "host": "https://mcp.moomoo.com/mcp (hosted moomoo MCP, OAuth 2.1)",
+    "scope": "quote:read",
+    "captured_utc": "2026-11-24T00:32:42Z",
+    "symbol": "HK.00700",
+    "market": "HK",
+    "market_date": "2026-11-23",
+    "cost_usd": 0,
+    "entitlement": "Hosted OAuth quote:read scope; one entitled subscription read for HK.00700. Credentials remain with the host; no token is stored or forwarded here.",
+    "hosted_n3": true,
+    "note": "One real entitled $0 read.ticker captured through the hosted moomoo MCP OAuth binding (N3). The hosted quote_stock_quote descriptor is byte-identical to the reviewed Desktop pin (schema digest 5abc6284b856ea946ad158c96252c99e4d5c4ef3e7a65bb442d201f8b11399fb), so the reviewed read.ticker mapping binds it unchanged. Discovery descriptor metadata plus one business read; replay uses this fixture with zero extra provider calls. Prices are JSON numbers; the reviewed projection records their exact round-trip decimal string. Currency, delay class and per-quote feed attribution remain unknown."
+  },
+  "tools": [
+    {
+      "name": "quote_stock_quote",
+      "description": "Batch get realtime stock quotes for the symbols (realtime quote, subscription required). Returns: stock symbol/name, data_time (ms exchange time), data_date (market timezone), last/open/high/low/previous-close prices, volume/turnover, turnover rate, amplitude, security status/suspension/dark-pool status, listing date; option_ex_data (strike/contract size/open interest/IV/premium/Delta/Gamma/Vega/Theta/Rho/net open interest/contract nominal value/owner lot multiplier/contract multiplier/index option type/expiry-date distance/American-European); future_ex_data (last settlement/position/position change); pre_market/after_market/overnight sub-objects. Leaner field set than quote.market_snapshot, better for multi-symbol polling.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code_list": {
+            "description": "Stock symbol list, format {market}.{code}, e.g. [\"HK.00700\", \"US.AAPL\"]; recommended ≤400 symbols per call; subscription required for each symbol",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "code_list"
+        ]
+      }
+    }
+  ],
+  "calls": {
+    "quote_stock_quote": {
+      "arguments": {
+        "code_list": [
+          "HK.00700"
+        ]
+      },
+      "structuredContent": {
+        "ret_code": 0,
+        "ret_msg": "success",
+        "data": {
+          "quote_list": [
+            {
+              "after_market": {
+                "amplitude": 0,
+                "change_rate": 0,
+                "change_val": 0,
+                "high_price": 0,
+                "low_price": 0,
+                "price": 0,
+                "turnover": 0,
+                "volume": 0
+              },
+              "amplitude": 3.372,
+              "code": "HK.00700",
+              "dark_status": "N/A",
+              "data_date": "2026-11-23",
+              "data_time": 1795421270000,
+              "event_contract_ex_data": {
+                "liquidity": "",
+                "open_interest": "",
+                "settle_result": 0,
+                "settle_time": 0,
+                "settle_value": 0
+              },
+              "future_ex_data": {
+                "last_settle_price": 0,
+                "position": 0,
+                "position_change": 0
+              },
+              "high_price": 344.6,
+              "last_price": 344,
+              "listing_date": "2004-06-16",
+              "low_price": 333,
+              "name": "TENCENT",
+              "open_price": 335,
+              "option_ex_data": {
+                "contract_multiplier": 0,
+                "contract_nominal_value": 0,
+                "contract_size": 0,
+                "delta": 0,
+                "expiry_date_distance": 0,
+                "gamma": 0,
+                "implied_volatility": 0,
+                "index_option_type": 0,
+                "net_open_interest": 0,
+                "open_interest": 0,
+                "option_area_type": "",
+                "option_type": "",
+                "owner_lot_multiplier": 0,
+                "premium": 0,
+                "rho": 0,
+                "strike_price": 0,
+                "theta": 0,
+                "vega": 0
+              },
+              "overnight": {
+                "amplitude": 0,
+                "change_rate": 0,
+                "change_val": 0,
+                "high_price": 0,
+                "low_price": 0,
+                "price": 0,
+                "turnover": 0,
+                "volume": 0
+              },
+              "pre_market": {
+                "amplitude": 0,
+                "change_rate": 0,
+                "change_val": 0,
+                "high_price": 0,
+                "low_price": 0,
+                "price": 0,
+                "turnover": 0,
+                "volume": 0
+              },
+              "prev_close_price": 344,
+              "sc_name": "腾讯控股",
+              "sec_status": "NORMAL",
+              "suspension": false,
+              "tc_name": "騰訊控股",
+              "turnover": 11960782218,
+              "turnover_rate": 0.388,
+              "volume": 35289665
+            }
+          ]
+        }
+      }
+    }
+  }
+}
