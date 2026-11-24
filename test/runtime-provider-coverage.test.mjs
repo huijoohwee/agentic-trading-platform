@@ -65,7 +65,9 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   assert.equal(futures.filter(row => row.status === 'mapped').length, 3);
   assert.ok(futures.filter(row => row.status === 'mapped').every(row => row.sources.some(source => source.url.endsWith('.md'))));
   assert.deepEqual(on('MCP').map(row => row.label).sort(), catalog.tools.map(tool => tool.name).sort());
-  assert.equal(on('Push').filter(row => row.status === 'offline replay').length, 4);
+  assert.deepEqual(on('Push').filter(row => row.status === 'offline replay').map(row => row.label.split('/').at(-1)).sort(),
+    ['BROKER_QUEUE', 'KLINE', 'MARKET_STATE', 'ORDER_BOOK', 'QUOTE', 'TICKER']);
+  assert.equal(on('Push').filter(row => row.status === 'candidate').length, 18);
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
   const researchPaths = Object.values(researchMapping.operations).map(spec => 'GET ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());

@@ -198,7 +198,7 @@ const simulationRoutes = new Map([
   ['POST ' + simOrder + 'modify', simEffect('Amend an independently approved paper ticket', 'Original order ID, new quantity and price')],
   ['POST ' + simOrder + 'cancel', simEffect('Cancel an independently approved paper ticket', 'Account market ID and original order ID')]
 ]);
-const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE']);
+const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE', 'BROKER_QUEUE', 'MARKET_STATE']);
 const routeKey = http => http.replace(/\{[A-Za-z_][\w]*\}/g, '{}');
 
 // Labels describe the evidence needed at Trading admission. This inventory has
