@@ -2,6 +2,7 @@ import { createNativeDashboard } from '../owners/design/site/dashboard.mjs';
 import { mountDataView, mountDashboardChart } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 import { captureSummary } from './provider-capture.mjs';
 import { deskProvenance, deskDepth, deskTape, deskCandles } from './provider-desk.mjs';
+import { mountDeskDiagrams } from './desk-diagrams.mjs';
 
 // Moomoo-inspired read-only market desk: quote board, order-book ladder, time & sales and daily
 // candles, composed from pinned Agentic Design System / Base owner primitives (no token forks).
@@ -21,6 +22,8 @@ export async function mountMoomooDeskView(host) {
     rows: rows.map((cells, index) => ({ id: title + '-' + index, cells: cells.map(value => value === null || value === undefined ? 'UNKNOWN' : String(value)) }))
   });
   const clock = epoch => new Date(epoch).toISOString().slice(11, 23);
+  const diagrams = mountDeskDiagrams(document);
+  const diagram = (parent, title, svg) => { const region = node('section'); region.append(node('h4', title), svg); parent.append(region); };
 
   const s = captureSummary, p = deskProvenance;
   const status = node('p', `${s.symbol} ${s.name} · last ${s.last} · ${p.binding} replay · $${p.cost_usd} · read-only desk`);
@@ -51,6 +54,7 @@ export async function mountMoomooDeskView(host) {
   add('Exchange', deskDepth.exchange); add('Captured UTC', p.captured_utc); add('Binding', p.binding);
   sections.append(facts);
 
+  diagram(sections, 'Order book depth · bar length is volume', diagrams.depth(deskDepth));
   const ladder = [
     ...[...deskDepth.ask].reverse().map(level => ['ASK', level.price, level.volume, level.orders]),
     ...deskDepth.bid.map(level => ['BID', level.price, level.volume, level.orders])
@@ -58,12 +62,14 @@ export async function mountMoomooDeskView(host) {
   table(sections, `Order book · ${deskDepth.exchange} (${deskDepth.ask.length} ask / ${deskDepth.bid.length} bid)`,
     ['Side', 'Price', 'Volume', 'Orders'], ladder);
 
+  diagram(sections, 'Time & sales volume · color is direction', diagrams.tape(deskTape));
   table(sections, `Time & sales (${deskTape.length} ticks)`, ['Time (UTC)', 'Price', 'Volume', 'Turnover', 'Side'],
     deskTape.map(tick => [clock(tick.time), tick.price, tick.volume, tick.turnover, tick.direction]));
 
-  mountDashboardChart(viewport(sections, 'Daily close'), {
-    type: 'line', tone: 'blue', gridEnabled: true,
-    series: deskCandles.map(candle => ({ label: candle.date, value: Number(candle.close), detail: candle.close }))
+  diagram(sections, 'Daily candles · open / high / low / close', diagrams.candles(deskCandles));
+  mountDashboardChart(viewport(sections, 'Daily volume'), {
+    type: 'column', tone: 'blue', gridEnabled: true,
+    series: deskCandles.map(candle => ({ label: candle.date, value: candle.volume, detail: String(candle.volume) }))
   });
   table(sections, `Daily candles (${deskCandles.length})`, ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Change %'],
     deskCandles.map(candle => [candle.date, candle.open, candle.high, candle.low, candle.close, candle.volume, candle.change_rate]));

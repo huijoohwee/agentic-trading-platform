@@ -126,7 +126,10 @@ try {
     assert.ok((await page.locator('#desk-status').innerText()).includes('desktop-mcp'));
     assert.ok((await page.locator('#desk-status').innerText()).includes('read-only desk'));
     const deskText = await page.locator('#desk-body').innerText();
-    for (const fragment of ['Order book · SEHK', 'Time & sales', 'Daily candles', 'Daily close']) assert.ok(deskText.includes(fragment), 'desk missing ' + fragment);
+    for (const fragment of ['Order book · SEHK', 'Time & sales', 'Daily candles', 'Daily volume']) assert.ok(deskText.includes(fragment), 'desk missing ' + fragment);
+    assert.equal(await page.locator('#desk-body svg.desk-diagram').count(), 3);
+    assert.equal(await page.locator('#desk-body svg[aria-label*="candlestick"]').count(), 1);
+    assert.equal(await page.locator('#desk-body svg[aria-label*="depth diagram"]').count(), 1);
     assert.ok(await page.locator('#desk-body').getByText('343.8', { exact: true }).count() >= 1);
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.includes('mcp.moomoo.com'))), false);
@@ -226,6 +229,7 @@ try {
     assert.ok((await reopened.locator('#desk-status').innerText()).includes('read-only desk'));
     const offlineDeskText = await reopened.locator('#desk-body').innerText();
     for (const fragment of ['Order book · SEHK', 'Time & sales', 'Daily candles']) assert.ok(offlineDeskText.includes(fragment), 'offline desk missing ' + fragment);
+    assert.equal(await reopened.locator('#desk-body svg.desk-diagram').count(), 3);
     assert.ok(await reopened.locator('#desk-body').getByText('343.8', { exact: true }).count() >= 1);
     assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
