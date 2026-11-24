@@ -1,10 +1,12 @@
 """Build a local, fixed-inventory ZIP from the sealed browser output and headless replay."""
+import bz2
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import zlib
 from zipfile import ZIP_BZIP2, ZIP_DEFLATED, ZipFile, ZipInfo
 
 root = Path(__file__).resolve().parent.parent
@@ -71,12 +73,13 @@ with tempfile.NamedTemporaryFile(dir=build.parent, suffix='.zip') as stage:
             entry = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             entry.create_system = 3
             entry.external_attr = 0o100644 << 16
-            # Use standard ZIP method 12 for the large sealed owner and catalog assets.
-            # Python's zipfile and libarchive extract both methods without add-ons.
-            dense = name in ('owners/base/packages/views-react/dist/browser-data-view.js',
-                             'owners/base/packages/views-react/dist/browser-data-view.css',
-                             'qualification/moomoo/route-fields.json', 'qualification/moomoo/route-inventory.json')
-            archive.writestr(entry, body, compress_type=ZIP_BZIP2 if dense else ZIP_DEFLATED, compresslevel=9)
+            method = ZIP_DEFLATED
+            if len(body) >= 4096:
+                deflater = zlib.compressobj(level=9, wbits=-zlib.MAX_WBITS)
+                deflated_size = len(deflater.compress(body)) + len(deflater.flush())
+                if len(bz2.compress(body, compresslevel=9)) < deflated_size:
+                    method = ZIP_BZIP2
+            archive.writestr(entry, body, compress_type=method, compresslevel=9)
     stage.flush()
     body = Path(stage.name).read_bytes()
     if len(body) >= 500_000:

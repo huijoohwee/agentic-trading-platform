@@ -137,3 +137,30 @@ test('coverage separates operation IDs from distinct mapped reads and retains ea
     assert.equal((doc?.reference ?? doc)?.sha256, evidence.sha256, evidence.path);
   }
 });
+
+test('every declared reference route and public field has a reversible catalog identity', async () => {
+  const { coverageRelations, httpFieldInventory, routeId } = await import('../src/coverage-relations.mjs');
+  const { default: register } = await import('agentic-gateway/connectors/moomoo-fields.json', { with: { type: 'json' } });
+  const routes = routeInventory(catalog), links = coverageRelations(catalog, routes);
+  for (const doc of catalog.sources.filter(doc => doc.reference)) {
+    for (const spelling of doc.reference.routes) {
+      const route = links.byReference.get(doc.path).get(spelling);
+      assert(links.byRoute.get(routeId(route)).has(doc.path));
+      assert(route.sources.some(s => s.digest === doc.reference.sha256 && s.url.endsWith('/' + doc.reference.file)));
+    }
+  }
+  const fields = httpFieldInventory(register, catalog);
+  assert.equal(fields.length, 1568);
+  assert.equal(new Set(fields.map(row => row.key)).size, fields.length);
+  for (const tool of register.tools) {
+    const records = fields.filter(r => r.tool === tool.name);
+    assert.deepEqual(new Set([...links.byTool.get(tool.name)].map(r => r.transport)), new Set(['REST', 'MCP']));
+    assert.deepEqual(records.filter(r => r.section === 'Path').map(r => r.label), tool.path);
+    assert.deepEqual(records.filter(r => r.section === 'Response').map(r => r.label), tool.response);
+    assert.deepEqual(records.filter(r => r.section === 'Pagination').map(r => r.label), tool.pagination ?? []);
+  }
+  const nested = fields.find(r => r.label.endsWith('leg_infos.leg_ratio_qty'));
+  assert.equal(nested.type, 'string'); assert.equal(nested.requirement, 'Required');
+  assert.equal(fields.find(r => r.tool === 'account_orders_detail' && r.section === 'Path' && r.label === 'acc_id').type, 'Unspecified');
+  assert.throws(() => httpFieldInventory({ ...register, directory_sha256: 'other' }, catalog), /FIELD_REGISTER_DRIFT/);
+});
