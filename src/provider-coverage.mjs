@@ -48,10 +48,11 @@ export const providerCoverage = Object.freeze([
     ['read.ipo'], ['quote_ipo_list_us', 'quote_ipo_list_hk', 'quote_ipo_list_cn', 'quote_ipo_list_sg', 'quote_ipo_list_my'],
     [],
     'The HK REST fixture maps public listing dates, lot sizes and HKD offer prices. Other IPO markets await qualification.'),
-  family('financials', 'Company profile', 'mapped', 'REST',
-    ['read.financials'], [],
-    [source('api/quote/company/profile.md', 'de67cc6e2ac7fd84acb650086fc38830e50d41fb2ae6a09569edfcc8b7c370d4')],
-    'Localized labels and source field types. Signed local REST fixture.'),
+  family('financials', 'Company profile and financial statements', 'mapped', 'REST',
+    ['read.financials', 'read.financial-statements'], ['quote_financials_statements'],
+    [source('api/quote/company/profile.md', 'de67cc6e2ac7fd84acb650086fc38830e50d41fb2ae6a09569edfcc8b7c370d4'),
+     source('api/quote/financials/statements.md', 'f879dec57ec725c119c0e7d31e595198cbc8c890ba94d5c788b54a5e42085f8a')],
+    'Local fixtures cover profile labels and reported line items by fiscal period, currency, accounting standard and value type.'),
   family('corporate-actions', 'Dividend announcements', 'mapped', 'REST',
     ['read.corporate-actions'], [],
     [source('api/quote/corporate-actions/dividends.md', '8d1688ba5a6003fe96da5c6a002fbd1c32f403b84a8076d7f7bc2db95b1b54ed')],
@@ -144,6 +145,8 @@ export function coverageSummary(entries = providerCoverage) {
 }
 const deskTools = new Set(Object.values(captureMapping.operations).map(operation => operation.tool));
 const reviewedRest = new Map([
+  ['GET /api/v1.0/quote/{symbol}/financials/statements', { evidence: 'Local financial statements fixture',
+    units: 'Amounts in the reported currency, percentages as supplied, and report dates in Unix milliseconds' }],
   ['GET /api/v1.0/quote/{symbol}/option-chain', { evidence: 'Local option-chain fixture', units: 'Contract, underlying, strike price, lot size and market-local expiry date' }],
   ['GET /api/v1.0/quote/{symbol}/option-expiration', { evidence: 'Local expiry fixture', units: 'Market-local strike date, signed days to expiry and expiration cycle' }],
   ['GET /api/v1.0/quote/option-event', { evidence: 'Local option trade fixture', units: 'Execution and expiry in Unix microseconds, trade price, Greeks and IV in percent' }],
