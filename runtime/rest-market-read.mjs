@@ -87,7 +87,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       runtime: attestation.runtime, issued_utc, expires_utc: grant.expires_utc, ...data };
     return { key_id: attestation.key_id, payload, signature: sign(null, Buffer.from(canonical(payload)), privateKey).toString('base64url') };
   };
-  const project = (raw, spec, body) => {
+  const project = (raw, spec, body, inputs) => {
     requireThat(raw && typeof raw === 'object' && !Array.isArray(raw), 'INVALID_PAGE');
     if (!spec.fields) return { row: boundedJson(raw), precise: {} };
     const row = {}, precise = {};
@@ -101,7 +101,8 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         row[target] = null; continue;
       }
       if (spec.numeric?.includes(target)) {
-        const text = spec.provider_doubles && typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
+        const doubles = spec.provider_doubles === true || Array.isArray(spec.provider_doubles) && spec.provider_doubles.includes(target);
+        const text = doubles && typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
         requireThat(!Object.hasOwn(projection, 'constant') && typeof text === 'string' && text.length <= 64 && decimalPattern.test(text), 'PRECISION_UNKNOWN');
         precise[target] = text;
         const number = Number(text);
@@ -141,6 +142,20 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     }
     for (const [key, values] of Object.entries(spec.allowed_values ?? {}))
       requireThat(values.includes(row[key]), 'SOURCE_MAPPING_REQUIRED');
+    for (const [field, input] of Object.entries(spec.match_inputs ?? {}))
+      if (inputs[input]) requireThat(row[field] === inputs[input], 'SOURCE_MAPPING_REQUIRED');
+    for (const [field, filter] of Object.entries(spec.match_filters ?? {})) {
+      const value = inputs[filter.input];
+      if (value && value !== filter.all) requireThat(value.split(',').includes(row[field]), 'SOURCE_MAPPING_REQUIRED');
+    }
+    if (spec.market_input) {
+      const { field, input } = spec.market_input;
+      requireThat(symbolPattern.test(row[field]) && row[field].startsWith(inputs[input].split('_')[0] + '.'), 'SOURCE_MAPPING_REQUIRED');
+    }
+    if (spec.window?.field) {
+      const { field, begin, end } = spec.window;
+      requireThat((!inputs[begin] || row[field] >= inputs[begin]) && (!inputs[end] || row[field] <= inputs[end]), 'SOURCE_MAPPING_REQUIRED');
+    }
     return { row, precise };
   };
   function query(spec, inputs) {
@@ -160,7 +175,8 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       requireThat(present || !rule.required, 'SOURCE_MAPPING_REQUIRED');
       if (!present) continue;
       const value = inputs[inputKey];
-      if (rule.enum) requireThat(typeof value === 'string' && rule.enum.includes(value), 'INVALID_PARAMETER');
+      if (rule.allow_empty && value === '') continue;
+      if (rule.enum) requireThat(rule.enum.includes(value), 'INVALID_PARAMETER');
       else if (rule.date) requireThat(validDate(value), 'INVALID_PARAMETER');
       else if (rule.length) requireThat(typeof value === 'string' && value.trim().length >= rule.length[0] &&
         [...value].length <= rule.length[1], 'INVALID_PARAMETER');
@@ -168,15 +184,20 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       else requireThat(typeof value === 'string' && value.length <= 64, 'INVALID_PARAMETER');
       if (rule.symbol) requireThat(symbolPattern.test(value), 'INVALID_PARAMETER');
       if (rule.numeric_list) requireThat(/^[0-9]+(,[0-9]+)*$/.test(value), 'INVALID_PARAMETER');
+      if (rule.one_of_list) requireThat(value.split(',').every(part => rule.one_of_list.includes(part)), 'INVALID_PARAMETER');
       parameters.set(parameter, String(value));
     }
     if (spec.window) {
       const begin = inputs[spec.window.begin], end = inputs[spec.window.end];
-      if (begin !== undefined && end !== undefined) {
+      if (begin && end) {
         requireThat(validDate(begin) && validDate(end), 'INVALID_PARAMETER');
         const span = (Date.parse(end + 'T00:00:00Z') - Date.parse(begin + 'T00:00:00Z')) / dayMs + 1;
-        requireThat(span >= 1 && span <= spec.window.max_days, 'INVALID_PARAMETER');
+        requireThat(span >= 1 && (spec.window.max_days === undefined || span <= spec.window.max_days), 'INVALID_PARAMETER');
       }
+    }
+    if (spec.market_input) {
+      const { filter, input } = spec.market_input;
+      if (inputs[filter]) requireThat(inputs[filter].startsWith(inputs[input].split('_')[0] + '.'), 'INVALID_PARAMETER');
     }
     return parameters.toString();
   }
@@ -242,7 +263,9 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         const limit = spec.row_limit ? inputs[spec.row_limit.input] ?? spec.row_limit.fallback
           : inputs.page_size ?? spec.default_page_size ?? 600;
         requireThat(Array.isArray(raw) && raw.length <= Math.min(600, limit), 'INVALID_PAGE');
-        rows = raw.map(item => { const { row, precise } = project(item, spec, body); decimals.push(precise); return row; });
+        rows = raw.map(item => { const { row, precise } = project(item, spec, body, inputs); decimals.push(precise); return row; });
+        if (spec.window?.max_distinct)
+          requireThat(new Set(rows.map(row => row[spec.window.field])).size <= spec.window.max_distinct, 'INVALID_PAGE');
       }
       const metadata = {};
       if (spec.last_valid_ms) {
@@ -253,7 +276,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (spec.pagination) {
         const page = code === 0 ? readPath(body, spec.pagination, false) : { completed: true, page_flag: '', ...(spec.optional_total ? {} : { total: 0 }) };
         requireThat(typeof page?.completed === 'boolean' && typeof page.page_flag === 'string' &&
-          page.page_flag.length <= 64 && (page.completed ? page.page_flag === '' : page.page_flag.length > 0 &&
+          page.page_flag.length <= (spec.cursor_limit ?? 64) && (page.completed ? page.page_flag === '' : page.page_flag.length > 0 &&
             page.page_flag !== inputs.page_flag) && (spec.optional_total === true && !Object.hasOwn(page, 'total') ||
           Number.isSafeInteger(page.total) && page.total >= rows.length), 'INVALID_PAGE');
         metadata.pagination = { completed: page.completed, next_cursor: page.completed ? null : page.page_flag,

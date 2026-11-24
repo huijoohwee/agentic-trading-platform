@@ -50,9 +50,13 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
 test('pinned route inventory reconciles aliases, transport-specific evidence and known gaps', () => {
   const rows = routeInventory(catalog);
   const on = transport => rows.filter(row => row.transport === transport);
-  assert.deepEqual(['REST', 'MCP', 'Push'].map(key => on(key).length), [217, 107, 24]);
+  assert.deepEqual(['REST', 'MCP', 'Push'].map(key => on(key).length), [258, 107, 24]);
   assert.equal(catalog.sources.length, 305);
   assert.equal(catalog.sources.filter(source => hex(source.sha256)).length, 196);
+  assert.equal(catalog.sources.filter(source => hex(source.reference?.sha256)).length, 109);
+  const options = on('REST').find(row => row.label.endsWith('/option-event'));
+  assert.equal(options.status, 'mapped');
+  assert.ok(options.sources.some(source => source.url.endsWith('/derivatives/option-event.md')));
   assert.deepEqual(on('MCP').map(row => row.label).sort(), catalog.tools.map(tool => tool.name).sort());
   assert.equal(on('Push').filter(row => row.status === 'offline replay').length, 4);
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
