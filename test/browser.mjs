@@ -101,6 +101,12 @@ async function verifySavedResearch(page, calendar) {
   await view.getByText(code + ' · ' + earnings_date, { exact: true }).click();
   assert.equal(await view.getByText('Estimated EPS', { exact: true }).evaluate(dt => dt.nextElementSibling.textContent), 'Unknown');
   assert.equal(await view.getByText('Actual EPS', { exact: true }).evaluate(dt => dt.nextElementSibling.textContent), '0');
+  const holding = { code: '', holding_name: 'Unmapped holding', holding_rate: 1.5, disclosure_time_ms: 1800000000000 };
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'etf-fixture', operation: 'read.etf' },
+    data: { source: 'AUTHENTICATED_ADAPTER', at: 1800000000000, rows: [holding], decimals: [{ holding_rate: '1.500' }] } });
+  await view.getByText('Unmapped holding', { exact: true }).click();
+  await view.getByText('Empty text', { exact: true }).waitFor();
+  await view.getByText('1.500', { exact: true }).waitFor();
   const rows = Array.from({ length: 11 }, (_, i) => ({ symbol: 'HK.' + i, name: 'Example ' + i,
     factors: [{ factor: 'market_cap', raw: '9007199254740993', value: '9007199254740.993' }] }));
   const result = { status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'screen-fixture', operation: 'read.stock-screen' },
