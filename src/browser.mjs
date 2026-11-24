@@ -92,10 +92,30 @@ async function prepareOffline() {
       navigator.serviceWorker.addEventListener('controllerchange', observe);
       observe();
     });
-    const show = () => { status.textContent = navigator.onLine ? 'Offline ready' : 'Working offline'; };
-    window.addEventListener('online', show);
+    function show() {
+      status.textContent = registration.waiting
+        ? 'Update ready. Save edits, close all Trading tabs at this address, then reopen.'
+        : navigator.onLine ? 'Offline ready' : 'Working offline';
+    }
+    function watchInstall() {
+      registration.installing?.addEventListener('statechange', show);
+      show();
+    }
+    // Let the browser activate the verified shell after the last old tab closes.
+    // An active journal or paper desk can still contain unsaved work.
+    let lastCheck = 0;
+    function checkOnReturn() {
+      show();
+      if (document.hidden || !navigator.onLine || registration.waiting || registration.installing ||
+          Date.now() - lastCheck < 60_000) return;
+      lastCheck = Date.now();
+      void registration.update().catch(show);
+    }
+    registration.addEventListener('updatefound', watchInstall);
+    watchInstall();
+    window.addEventListener('online', checkOnReturn);
     window.addEventListener('offline', show);
-    show();
+    document.addEventListener('visibilitychange', checkOnReturn);
   } catch { status.textContent = 'Offline shell unavailable'; }
 }
 
