@@ -19,7 +19,7 @@ export async function verifyRouteViews(page) {
     el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1));
 
   for (const grid of [
-    { id: 'references', count: 109, cell: '/', record: /Card: \/api-reference$/, evidence: 'Selected reference evidence', link: '/api-reference' },
+    { id: 'references', count: 305, cell: '/', record: /Card: \/api-reference$/, evidence: 'Selected reference evidence', link: '/api-reference' },
     { id: 'families', count: 26, cell: 'Earnings calendar', record: /Card: Earnings calendar$/, evidence: 'Selected family evidence', link: 'api/quote/calendar/earnings-calendar.md' },
   ]) {
     const surface = page.locator('#coverage-' + grid.id);
@@ -106,6 +106,20 @@ export async function verifyRouteViews(page) {
   await page.goBack();
   await routes.locator('tr[aria-selected=true]:focus').getByRole('cell', { name: get, exact: true }).waitFor();
   assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('route'), 'REST ' + get);
+
+  const earnings = '/api/quote/calendar/earnings-calendar';
+  await family.getByRole('cell', { name: 'Earnings calendar', exact: true }).click();
+  const selectedFamily = family.getByRole('region', { name: 'Selected family evidence' });
+  await selectedFamily.getByRole('link', { name: earnings.slice(1) + '.md', exact: true }).click();
+  await reference.locator('tr[aria-selected=true]:focus').getByText(earnings, { exact: true }).waitFor();
+  await refDetail.getByText('Original mirror · ' + earnings.slice(1) + '.md', { exact: true }).waitFor();
+  const earningsRoute = 'GET /api/v1.0/quote/earnings-calendar';
+  await refDetail.getByRole('link', { name: earningsRoute, exact: true }).click();
+  await routes.locator('tr[aria-selected=true]:focus').getByText(earningsRoute, { exact: true }).waitFor();
+  await routeDetail.getByRole('link', { name: earnings, exact: true }).click();
+  await refDetail.getByRole('link', { name: 'Earnings calendar', exact: true }).click();
+  await family.locator('tr[aria-selected=true]:focus').getByText('Earnings calendar', { exact: true }).waitFor();
+  assert.equal(new URLSearchParams(new URL(page.url()).hash.split('?')[1]).get('family'), 'calendar');
 
   const cancel = 'DELETE /api/v1/crypto/accounts/{acc_id}/orders/{order_id}', tool = 'crypto_account_cancel_order';
   await routes.getByRole('searchbox').fill(cancel);

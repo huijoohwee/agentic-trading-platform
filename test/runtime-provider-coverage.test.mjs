@@ -145,14 +145,29 @@ test('every declared reference route and public field has a reversible catalog i
   const { coverageRelations, httpFieldInventory, routeId } = await import(pathToFileURL(destination + '/src/coverage-relations.mjs'));
   const { default: register } = await import('agentic-gateway/connectors/moomoo-fields.json', { with: { type: 'json' } });
   const routes = routeInventory(catalog), links = coverageRelations(catalog, routes);
-  for (const doc of catalog.sources.filter(doc => doc.reference)) {
-    for (const spelling of doc.reference.routes) {
+  for (const doc of catalog.sources) {
+    const source = doc.reference ?? doc;
+    assert.equal(links.references.from(doc.path).length, source.routes.length);
+    for (const spelling of source.routes) {
       const edge = links.references.from(doc.path).find(item => item.label === spelling);
       const route = links.routesById.get(edge.target);
       assert(links.references.to(routeId(route)).includes(edge));
-      assert(route.sources.some(s => s.digest === doc.reference.sha256 && s.url.endsWith('/' + doc.reference.file)));
+      assert(route.sources.some(s => s.document === doc.path && s.digest === source.sha256 &&
+        s.url === catalog.origin + (doc.reference ? '/' + source.file : doc.path)));
     }
   }
+  for (const family of providerCoverage) {
+    const expected = catalog.sources.filter(doc => family.sources.some(item =>
+      item.path === (doc.reference ?? doc).file && item.sha256 === (doc.reference ?? doc).sha256));
+    const edges = links.familySources.from(family.id);
+    assert.deepEqual(new Set(edges.map(edge => edge.target)), new Set(expected.map(doc => doc.path)));
+    for (const edge of edges) {
+      assert(links.familySources.to(edge.target).includes(edge));
+      assert.equal(edge.label, family.label);
+    }
+  }
+  assert.throws(() => coverageRelations(catalog, routes, undefined, [{ ...providerCoverage[0],
+    sources: [{ ...providerCoverage[0].sources[0], sha256: 'changed' }] }]), /FAMILY_REFERENCE_DRIFT/);
   const fields = httpFieldInventory(register, catalog);
   assert.equal(fields.length, 1568);
   assert.equal(new Set(fields.map(row => row.key)).size, fields.length);

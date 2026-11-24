@@ -1,32 +1,42 @@
 import { createRecordRelation } from '../owners/base/packages/views-react/dist/browser-data-view.js';
+import { catalogReferences, providerCoverage } from './provider-coverage.mjs';
 
 // The catalog retains each source spelling, including aliases folded into one REST route.
 export const routeId = row => row.transport + ' ' + row.label;
 
-export function coverageRelations(catalog, routes) {
-  const documents = new Map(catalog.sources.filter(s => s.reference).map(source =>
-    [catalog.origin + '/' + source.reference.file, source]));
+export function coverageRelations(catalog, routes, documents = catalogReferences(catalog), families = providerCoverage) {
+  const documentsByPath = new Map(documents.map(doc => [doc.path, doc]));
   const toolLinks = [], documentLinks = [];
   const routeIds = routes.map(routeId);
   for (const route of routes) {
     const target = routeId(route);
     for (const source of route.sources) {
       if (source.tool) toolLinks.push({ source: source.tool, target });
-      const doc = documents.get(source.url);
-      if (!doc) continue;
+      if (!source.document) continue;
+      const doc = documentsByPath.get(source.document);
       const label = source.http ?? 'PUSH ' + route.label;
-      if (source.digest !== doc.reference.sha256 || !doc.reference.routes.includes(label)) throw Error('REFERENCE_ROUTE_DRIFT');
+      if (!doc || source.url !== doc.url || source.digest !== doc.sha256 || !doc.routes.includes(label)) throw Error('REFERENCE_ROUTE_DRIFT');
       documentLinks.push({ source: doc.path, target, label });
     }
   }
-  const references = createRecordRelation({ sources: [...documents.values()].map(doc => doc.path), targets: routeIds, links: documentLinks });
-  for (const doc of documents.values()) {
-    const declared = doc.reference.routes;
+  const references = createRecordRelation({ sources: documentsByPath.keys(), targets: routeIds, links: documentLinks });
+  for (const doc of documents) {
+    const declared = doc.routes;
     const edges = references.from(doc.path);
     if (edges.length !== declared.length || !declared.every(label => edges.some(edge => edge.label === label))) throw Error('REFERENCE_ROUTE_MISSING');
   }
   const tools = createRecordRelation({ sources: catalog.tools.map(tool => tool.name), targets: routeIds, links: toolLinks });
-  return { references, tools, routesById: new Map(routes.map(row => [routeId(row), row])) };
+  const citations = [];
+  for (const family of families) {
+    for (const source of family.sources) {
+      // Two published paths can refer to the same Markdown file. Keep every attested path.
+      const matches = documents.filter(doc => doc.file === source.path && doc.sha256 === source.sha256);
+      if (!matches.length) throw Error('FAMILY_REFERENCE_DRIFT');
+      for (const doc of matches) citations.push({ source: family.id, target: doc.path, label: family.label });
+    }
+  }
+  const familySources = createRecordRelation({ sources: families.map(family => family.id), targets: documentsByPath.keys(), links: citations });
+  return { references, familySources, documentsByPath, tools, routesById: new Map(routes.map(row => [routeId(row), row])) };
 }
 
 const limits = {
