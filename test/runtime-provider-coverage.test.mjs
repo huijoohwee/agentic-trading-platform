@@ -38,7 +38,7 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   const summary = coverageSummary();
   assert.ok(summary.mapped_operations.includes('read.calendar'));
   assert.ok(summary.mapped_operations.includes('read.ticker'));
-  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'influencer', 'macro', 'etf', 'event-contract', 'crypto-market', 'stock-connect', 'chip-cbbc', 'simulator-reads']);
+  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'influencer', 'macro', 'etf', 'event-contract', 'crypto-market', 'stock-connect', 'chip-cbbc']);
   assert.ok(summary.excluded.includes('trading') && summary.excluded.includes('crypto-trading'));
   const calendar = providerCoverage.find(entry => entry.id === 'calendar');
   assert.equal(calendar.transport, 'REST');
@@ -77,7 +77,7 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
   const researchPaths = Object.values({ ...researchMapping.operations, ...marketRestSpecs, ...simulatorSpecs }).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
-  assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 19);
+  assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 24);
   const dual = on('MCP').filter(row => row.evidence === 'Signed local MCP research fixture');
   assert.equal(dual.length, 14);
   for (const row of dual) {
@@ -94,6 +94,12 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
 
 test('all nine simulator bindings distinguish six research reads from three independently approved paper effects', () => {
   const routes = routeInventory(catalog).filter(row => row.transport === 'REST' && row.label.includes('/sim-trade/'));
+  const tools = routeInventory(catalog).filter(row => row.transport === 'MCP' && row.label.startsWith('sim_trade_'));
+  assert.equal(tools.length, 8);
+  const mapped = tools.filter(row => row.status === 'mapped');
+  assert.deepEqual(mapped.map(row => row.label).sort(), Object.values(simulatorSpecs).map(spec => spec.tool).filter(tool => tool.startsWith('sim_trade_')).sort());
+  assert(mapped.every(row => row.evidence === 'Signed local simulator MCP fixture' && row.scope === 'Simulator account read'));
+  assert(tools.filter(row => row.status === 'paper candidate').every(row => row.scope === 'Independent paper approval and simulator grant'));
   assert.equal(routes.length, 9);
   const reads = routes.filter(row => row.label.startsWith('GET '));
   const effects = routes.filter(row => row.label.startsWith('POST '));

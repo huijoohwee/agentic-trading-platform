@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import fieldRegister from 'agentic-gateway/connectors/moomoo-fields.json' with { type: 'json' };
 import { canonical, fail, hash, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
 
 const root = '/api/v1.0/sim-trade/';
@@ -26,18 +27,45 @@ export function verifySimulatorSpec(operation, spec, origin) {
     origin === 'https://webapi.moomoo.com/', 'INVALID_MAPPING');
 }
 
+const mcpOrigin = 'https://mcp.moomoo.com/mcp';
+const mcpProfile = 'moomoo-simulator-mcp-read/v1';
+const publicFields = new Map(fieldRegister.tools.map(row => [row.name, row]));
+export const simulatorMcpSpecs = Object.fromEntries(Object.entries(simulatorSpecs)
+  .filter(([operation]) => operation !== ordersOperation)
+  .map(([operation, spec]) => {
+    const fields = publicFields.get(spec.tool);
+    requireThat(fields && fields.body.length === 0, 'INVALID_MAPPING');
+    return [operation, { profile: mcpProfile, tool: spec.tool, pin_inputs: true,
+      projection_digest: sha({ rest_schema: spec.schema_digest, fields }) }];
+  }));
+
+export function verifySimulatorMcpSpec(operation, spec, origin) {
+  requireThat(origin === mcpOrigin && Object.hasOwn(simulatorMcpSpecs, operation) &&
+    sha(spec) === sha(simulatorMcpSpecs[operation]), 'INVALID_MAPPING');
+}
+
+export function verifySimulatorDescriptor(descriptor) {
+  const fields = publicFields.get(descriptor.name)?.params, schema = descriptor.inputSchema;
+  requireThat(fields && schema?.type === 'object', 'SCHEMA_DRIFT');
+  const properties = schema.properties ?? {}, required = schema.required ?? [];
+  requireThat(Array.isArray(required) && required.length === fields.filter(field => field.required).length &&
+    fields.every(field => required.includes(field.name) === field.required &&
+      (field.type === 'int' ? ['integer', 'number'].includes(properties[field.name]?.type) :
+        properties[field.name]?.type === field.type)), 'SCHEMA_DRIFT');
+}
+
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const opaqueId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const positiveInt = value => Number.isSafeInteger(value) && value > 0;
 const privateHash = (secret, value) => createHmac('sha256', secret).update(canonical(value)).digest('hex');
 
-export function simulatorBindingDigest({ provider, scope, account, secret }) {
+export function simulatorBindingDigest({ provider, scope, account, secret, transport }) {
   scopeKey(scope);
   requireThat(typeof secret === 'string' && secret.length >= 32 && opaqueId(account?.account_id) &&
     positiveInt(account.market_id) && scope.environment === 'SIMULATE' &&
     ({ practice: 1, competition: 2 })[scope.profile] === account.account_type, 'ACCOUNT_BINDING');
   const { account_id, market_id, account_type } = account;
-  return privateHash(secret, { profile: 'moomoo-simulator-read/v1', provider, scope, account_id, market_id, account_type });
+  return privateHash(secret, { profile: 'moomoo-simulator-read/v1', ...(transport === 'MCP' && { transport }), provider, scope, account_id, market_id, account_type });
 }
 
 const maxPage = 600;
@@ -106,6 +134,8 @@ function simulatorQuery(operation, parameters, binding) {
 export function validateSimulatorRead(operation, inputs, grant, binding) {
   const { grant: envelope, ...parameters } = inputs;
   simulatorQuery(operation, parameters, binding);
+  const mcp = binding.transport === 'MCP';
+  if (mcp) requireThat(Object.hasOwn(simulatorMcpSpecs, operation) && !has(parameters, 'order_ref'), 'SCOPE_DENIED');
   const digest = simulatorBindingDigest(binding);
   const required = new Set([operation, accountOperation]);
   if (operation === powerOperation && parameters.order_ref) required.add(ordersOperation);
@@ -113,10 +143,23 @@ export function validateSimulatorRead(operation, inputs, grant, binding) {
     const grants = grant.tools.filter(tool => tool.operation === op);
     const expected = simulatorSpecs[op];
     requireThat(grants.length === 1 && grants[0].effect === 'read' && grants[0].name === expected.tool &&
-      grants[0].schema_digest === expected.schema_digest && grants[0].inputs_digest === sha(op === operation ? parameters : {}) &&
+      (mcp ? hash(grants[0].schema_digest) : grants[0].schema_digest === expected.schema_digest) && grants[0].inputs_digest === sha(op === operation ? parameters : {}) &&
       grants[0].account_binding_digest === digest, 'SCOPE_DENIED');
   }
 }
+export function simulatorMcpArguments(operation, parameters, binding) {
+  requireThat(Object.hasOwn(simulatorMcpSpecs, operation) && !has(parameters, 'order_ref'), 'SCOPE_DENIED');
+  const query = simulatorQuery(operation, parameters, binding);
+  if (operation === accountOperation) return {};
+  const { account_id: acc_id, market_id: market } = binding.account;
+  if (operation === balanceOperation) return { acc_id };
+  // The native tool accepts int64 JSON numbers. Emit the original integer token even beyond 2^53.
+  for (const key of ['time_begin', 'time_end']) {
+    if (has(query, key)) query[key] = JSON.rawJSON(BigInt(query[key]).toString());
+  }
+  return { acc_id, market, ...query };
+}
+
 export function simulatorPath(operation, account, parameters = {}, binding, originalOrderId) {
   const spec = simulatorSpecs[operation];
   const path = spec.path.replace('{acc_id}', encodeURIComponent(account.account_id));
@@ -235,6 +278,21 @@ export function simulatorPage(operation, body, binding, parameters = {}) {
   });
 }
 
+// Catalog discovery and account selection can span several calls. Both qualifications must
+// still cover the next call and the completed page before it enters the private ledger.
+export function qualifySimulatorAdapter(adapter, capability, definition) {
+  const expiry = Math.min(utcMillis(capability.qualification.expires_utc), utcMillis(definition.qualification.expires_utc));
+  const revalidate = () => requireThat(Date.now() < expiry, 'STALE_EVIDENCE');
+  return { ...adapter,
+    open(options) { return adapter.open({ ...options, beforeCall: revalidate }); },
+    async read(options) {
+      const page = await adapter.read(options);
+      revalidate();
+      return page;
+    },
+  };
+}
+
 // Authenticate private reads before the gateway can return a previous receipt. The same
 // facade owns both inward transports. A replay checks current keys, scope and host binding.
 export function withSimulatorAdmission(gateway, { store, scope, candidate, keys, providers, credentialFor }) {
@@ -242,9 +300,14 @@ export function withSimulatorAdmission(gateway, { store, scope, candidate, keys,
   function authorized(request) {
     requireThat(simulatorOperation(request?.operation) && id(request.request_id), 'SCOPE_DENIED');
     const record = capabilities.get(request.capability_digest), now = Date.now();
-    requireThat(record?.source === 'PROVIDER' && record.transport === 'REST' && record.operations.includes(accountOperation) &&
+    requireThat(record?.source === 'PROVIDER' && ['REST', 'MCP'].includes(record.transport) && record.operations.includes(accountOperation) &&
       record.operations.includes(request.operation) && record.qualification.status === 'QUALIFIED', 'SCOPE_DENIED');
     const selected = providers.bind(record);
+    if (record.transport === 'MCP') {
+      for (const op of new Set([accountOperation, request.operation])) {
+        verifySimulatorMcpSpec(op, selected.mapping.operations?.[op], selected.transport.origin);
+      }
+    }
     requireThat(selected.definition.qualification.status === 'QUALIFIED', 'SCOPE_DENIED');
     requireThat(scopeKey(request.scope) === scopeKey(scope), 'ACCOUNT_BINDING');
     const grant = verifyEnvelope(request.inputs?.grant, { keys, role: 'operator', kind: 'read', scope, candidate, now });
@@ -260,7 +323,7 @@ export function withSimulatorAdmission(gateway, { store, scope, candidate, keys,
     const signer = credential?.attestation, key = signer && keys[signer.key_id];
     requireThat(key?.role === 'integration' && key.revoked !== true && key.principal === signer.principal &&
       key.runtime === signer.runtime, 'SCOPE_DENIED');
-    validateSimulatorRead(request.operation, request.inputs, grant, { provider: record.provider, scope,
+    validateSimulatorRead(request.operation, request.inputs, grant, { provider: record.provider, transport: record.transport, scope,
       candidate, account: credential.simulator_account, secret: credential.alias_secret });
     return { record, definitionDigest: selected.definition_digest, expires };
   }
