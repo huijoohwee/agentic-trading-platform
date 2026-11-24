@@ -90,8 +90,7 @@ async function surface(page) {
   });
 }
 async function openRuntime(page, mobile) {
-  const summary = page.locator('#runtime-readback > summary');
-  if (mobile) await summary.tap(); else await summary.press('Enter');
+  await page.locator('#runtime-readback > h2').scrollIntoViewIfNeeded();
   await page.locator('#runtime-refresh').waitFor();
   await page.waitForFunction(() => !document.querySelector('#runtime-refresh').disabled);
 }
@@ -283,7 +282,7 @@ try {
       await waitText(page, 'offline-status', 'Offline ready'); await waitText(page, 'state', 'PASS');
       await page.waitForFunction(() => !document.querySelector('#fields').disabled);
       assert.equal(await page.locator('#runtime-output').count(), 0);
-      assert.equal(await page.locator('#runtime-readback').evaluate(element => element.open), false);
+      assert.equal(await page.locator('#runtime-readback > h2').isVisible(), true);
       assert.equal(await page.locator('#runtime-token').count(), 0);
       assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => entry.name.endsWith('/src/runtime-view.mjs'))), false);
       assert.equal(runtimeRequests(), 0, 'No automatic runtime read before disclosure');
@@ -346,7 +345,7 @@ try {
       await page.getByRole('button', { name: 'Advance 1 s' }).click(); await waitText(page, 'state', 'FAIL');
       await page.getByLabel('Quantity', { exact: true }).fill('4');
       await page.getByRole('button', { name: 'Save draft', exact: true }).click(); await waitText(page, 'revision', 'Revision 1');
-      await page.locator('#evidence > summary').click(); await waitText(page, 'notional', '$100.00');
+      await page.locator('#evidence > h2').scrollIntoViewIfNeeded(); await waitText(page, 'notional', '$100.00');
       assert.deepEqual(storedProjections(await storageState(context, page)), [projection]);
     });
   }

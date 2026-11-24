@@ -177,7 +177,7 @@ export async function mountRehearsal(host) {
   else status.textContent = 'Choose a synthetic run to replay on this device.';
   return { async showDashboard() {
     if (!current && saved === null) await update(() => archive(fixture, 'B'), false);
-    if (location.hash !== '#replay-dashboard' || !host.closest('details')?.open) return;
+    if (location.hash !== '#replay-dashboard') return;
     (result.querySelector('#replay-dashboard') ?? status).scrollIntoView({ block: 'start' });
   } };
 }

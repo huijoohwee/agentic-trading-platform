@@ -18,7 +18,7 @@ export async function verifyReceiptBrowser({ base, audience, current, history, s
       await page.goto(base);
       await page.waitForFunction(() => document.querySelector('#offline-status')?.textContent === 'Offline ready');
       const runtime = page.locator('#runtime-readback');
-      await runtime.locator(':scope > summary').click();
+      await runtime.locator(':scope > h2').scrollIntoViewIfNeeded();
       const panel = runtime.locator('details').filter({ has: page.getByText('Inspect a completed simulator read', { exact: true }) }).first();
       await panel.locator('summary').first().click();
       async function lookup(request) {
@@ -42,7 +42,7 @@ export async function verifyReceiptBrowser({ base, audience, current, history, s
       await panel.getByRole('heading', { name: 'Buying power' }).waitFor();
       await panel.getByRole('region', { name: 'Simulator receipt' }).locator('summary').filter({ hasText: 'US.AAPL' }).click();
       await panel.getByText('9007199254740993', { exact: true }).waitFor();
-      await runtime.locator(':scope > summary').click();
+      await panel.locator(':scope > summary').click();
       await page.waitForFunction(() => document.querySelector('[aria-label="Simulator receipt"]').childElementCount === 0);
       const durable = JSON.stringify(await context.storageState({ indexedDB: true }));
       for (const value of [audience, current.inputs.grant.signature, ...privateStrings]) assert(!durable.includes(value));

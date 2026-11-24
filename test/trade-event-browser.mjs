@@ -15,7 +15,7 @@ const json = (name, frame) => ({ name, mimeType: 'application/json', buffer: Buf
 // Run from the service-worker-backed reopened page after the server stops.
 export async function verifyTradeEvents(page) {
   const parent = page.locator('#runtime-readback');
-  if (!(await parent.evaluate(el => el.open))) await parent.locator(':scope > summary').click();
+  await parent.locator(':scope > h2').scrollIntoViewIfNeeded();
   const panel = parent.locator('#private-trade-events'), summary = panel.locator(':scope > summary');
   await summary.click();
   const format = panel.getByLabel('Frame format'), account = panel.getByLabel('Expected securities account ID');
@@ -64,7 +64,7 @@ export async function verifyTradeEvents(page) {
     await summary.click(); await page.waitForFunction(() => !document.querySelector('#private-trade-events section')?.childElementCount);
     await summary.click(); await format.selectOption('securities'); await select([first]);
     await output.getByRole('heading', { name: 'Fill corrected' }).waitFor();
-    await parent.locator(':scope > summary').click(); await page.waitForFunction(() => !document.querySelector('#private-trade-events section')?.childElementCount);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide'))); await page.waitForFunction(() => !document.querySelector('#private-trade-events section')?.childElementCount);
     const persisted = JSON.stringify(await page.context().storageState({ indexedDB: true })) +
       await page.evaluate(() => JSON.stringify(sessionStorage));
     assert.deepEqual(await cacheUrls(), cacheBefore);
