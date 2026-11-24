@@ -171,3 +171,34 @@ test('paper state survives restart; unresolved releases fence the gateway until 
   const refused = await f.admit(fenced.gateway, 'release', await f.request('intent-3'), 'req-fenced');
   assert.equal(refused.status, 'REFUSED'); assert.equal(refused.error.code, 'RELEASE_UNKNOWN');
 });
+test('local account and fill observations require MOCK provenance, including retained observations', async t => {
+  const f = fixture(t);
+  const config = { store: f.store, scope: f.scope, candidate: f.candidate, keys: f.keys, market: f.market,
+    attestation: f.attestation, provider: 'local-paper', now: () => f.time };
+  assert.throws(() => createPaperBroker({ ...config, source: 'PROVIDER' }), /INVALID_TRANSPORT/);
+  const broker = createPaperBroker(config);
+  const binding = { scope: f.scope, candidate: f.candidate };
+  const initial = await broker.readAccount(binding);
+  assert.equal(initial.payload.data.source, 'MOCK');
+  assert.deepEqual(await broker.readAccount(binding), initial);
+  const next = { ...config, candidate: sha('successor') };
+  const reopened = await createPaperBroker(next).readAccount({ ...binding, candidate: next.candidate });
+  assert.equal(reopened.payload.candidate, next.candidate);
+  const replacement = generateKeyPairSync('ed25519');
+  const rotated = { ...next, attestation: { ...next.attestation, privateKey: replacement.privateKey.export({ type: 'pkcs8', format: 'pem' }) },
+    keys: { ...next.keys, integration: { ...next.keys.integration, publicKey: replacement.publicKey.export({ type: 'spki', format: 'pem' }) } } };
+  const rebound = await createPaperBroker(rotated).readAccount({ ...binding, candidate: next.candidate });
+  assert.notEqual(rebound.signature, reopened.signature);
+  f.time += 121000;
+  const refreshed = await broker.readAccount(binding);
+  assert.notEqual(refreshed.payload.issued_utc, initial.payload.issued_utc);
+  f.store.transaction(f.simScope, state => { state.configs.paperSim.account_envelope.payload.data.source = 'PROVIDER'; });
+  await assert.rejects(broker.readAccount(binding), /PROVIDER_BINDING/);
+  f.store.transaction(f.simScope, state => {
+    state.configs.paperSim.account_envelope = null;
+    state.configs.paperSim.orders.old = { order_id: 'old', source: 'PROVIDER', provider: 'local-paper' };
+  });
+  await assert.rejects(broker.readOrder({ ...binding, order_id: 'old' }), /PROVIDER_BINDING/);
+  await assert.rejects(broker.readAccount(binding), /PROVIDER_BINDING/);
+  assert.equal(f.store.read(f.simScope).configs.paperSim.orders.old.source, 'PROVIDER');
+});
