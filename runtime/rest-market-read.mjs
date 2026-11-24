@@ -30,6 +30,20 @@ const readPath = (object, path, optional) => {
   return value;
 };
 
+// Enforce the wire limit before parsing, including when no Content-Length is sent.
+async function readResponse(response) {
+  const chunks = [];
+  let size = 0;
+  requireThat(response.body, 'INVALID_RESPONSE');
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    requireThat(size <= 480_000, 'INPUT_TOO_LARGE');
+    chunks.push(chunk);
+  }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, size))); }
+  catch { fail('INVALID_RESPONSE'); }
+}
+
 export function createRestMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, fetchImpl = fetch, now = Date.now }) {
   const { definition } = validateProviderDefinition(provider);
   requireThat(definition.transport.kind === 'REST', 'INVALID_TRANSPORT_PIN');
@@ -67,9 +81,10 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         row[target] = null; continue;
       }
       if (spec.numeric?.includes(target)) {
-        requireThat(!Object.hasOwn(projection, 'constant') && typeof value === 'string' && value.length <= 64 && decimalPattern.test(value), 'PRECISION_UNKNOWN');
-        precise[target] = value;
-        const number = Number(value);
+        const text = spec.provider_doubles && typeof value === 'number' && Number.isFinite(value) ? String(value) : value;
+        requireThat(!Object.hasOwn(projection, 'constant') && typeof text === 'string' && text.length <= 64 && decimalPattern.test(text), 'PRECISION_UNKNOWN');
+        precise[target] = text;
+        const number = Number(text);
         requireThat(Number.isFinite(number), 'PRECISION_UNKNOWN');
         row[target] = number;
       } else if (spec.integer?.includes(target)) {
@@ -133,7 +148,14 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       requireThat(current(grant, now()) && calls < grant.limits.max_calls, 'BUDGET_HALT');
       calls++;
       const search = query(spec, boundedJson(inputs));
-      const target = new URL(spec.path, origin);
+      let path = spec.path;
+      if (spec.symbol_path) {
+        requireThat(path.includes('{symbol}'), 'INVALID_MAPPING');
+        requireThat(typeof inputs.symbol === 'string' && inputs.symbol.length <= 32 &&
+          /^[A-Z0-9_]+\.[A-Za-z0-9_.-]+$/.test(inputs.symbol), 'INVALID_PARAMETER');
+        path = path.replace('{symbol}', encodeURIComponent(inputs.symbol));
+      }
+      const target = new URL(path, origin);
       requireThat(target.protocol === 'https:' && target.origin === new URL(origin).origin, 'INVALID_MAPPING');
       if (search) target.search = search;
       const url = target.href;
@@ -143,8 +165,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if ([401, 403].includes(response.status)) { await response.body?.cancel(); fail('SCOPE_DENIED'); }
       requireThat(response.ok && !response.redirected, 'PROVIDER_UNAVAILABLE');
       requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'INVALID_RESPONSE');
-      let body;
-      try { body = boundedJson(await response.json()); } catch { fail('INVALID_RESPONSE'); }
+      const body = await readResponse(response);
       requireThat(body && typeof body === 'object' && !Array.isArray(body) && Number.isSafeInteger(body.ret_code), 'INVALID_RESPONSE');
       const decimals = [];
       let rows;
@@ -155,9 +176,23 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         requireThat(Array.isArray(raw) && raw.length <= 600, 'INVALID_PAGE');
         rows = raw.map(item => { const { row, precise } = project(item, spec); decimals.push(precise); return row; });
       }
+      const metadata = {};
+      if (spec.last_valid_ms) {
+        const last = body.ret_code === 0 ? readPath(body, spec.last_valid_ms, false) : null;
+        requireThat(last === null || Number.isSafeInteger(last) && last >= 0, 'INVALID_PAGE');
+        metadata.last_valid_time_ms = last;
+      }
+      if (spec.pagination) {
+        const page = body.ret_code === 0 ? readPath(body, spec.pagination, false) : { completed: true, page_flag: '', total: 0 };
+        requireThat(typeof page?.completed === 'boolean' && typeof page.page_flag === 'string' &&
+          page.page_flag.length <= 64 && (page.completed ? page.page_flag === '' : page.page_flag.length > 0 &&
+            page.page_flag !== inputs.page_flag) && rows.length <= (inputs.page_size ?? spec.default_page_size) &&
+          Number.isSafeInteger(page.total) && page.total >= rows.length, 'INVALID_PAGE');
+        metadata.pagination = { completed: page.completed, next_cursor: page.completed ? null : page.page_flag, total: page.total };
+      }
       const response_digest = sha(body);
       const observed_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
-      return issue('provider-market-page', { operation, rows, decimals, observed_utc,
+      return issue('provider-market-page', { operation, rows, decimals, ...metadata, observed_utc,
         source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest: allowed.schema_digest });
     },
   };

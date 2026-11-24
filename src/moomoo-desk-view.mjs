@@ -1,7 +1,6 @@
 import { createNativeDashboard } from '../owners/design/site/dashboard.mjs';
 import { mountDataView, mountDashboardChart } from '../owners/base/packages/views-react/dist/browser-data-view.js';
-import { captureSummary } from './provider-capture.mjs';
-import { deskProvenance, deskDepth, deskTape, deskCandles } from './provider-desk.mjs';
+import { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from './provider-desk.mjs';
 import { mountDeskDiagrams } from './desk-diagrams.mjs';
 
 // Moomoo-inspired read-only market desk: quote board, order-book ladder, time & sales and daily
@@ -17,32 +16,44 @@ export async function mountMoomooDeskView(host) {
     region.append(heading, frame); parent.append(region);
     return mount;
   };
-  const table = (parent, title, columns, rows) => mountDataView(viewport(parent, title), {
-    ariaLabel: title, columns: columns.map(name => ({ id: name, name })),
-    rows: rows.map((cells, index) => ({ id: title + '-' + index, cells: cells.map(value => value === null || value === undefined ? 'UNKNOWN' : String(value)) }))
-  });
-  const clock = epoch => new Date(epoch).toISOString().slice(11, 23);
+  const table = (parent, title, columns, rows) => {
+    const details = node('details');
+    details.append(node('summary', title));
+    parent.append(details);
+    details.addEventListener('toggle', function reveal() {
+      if (!details.open) return;
+      details.removeEventListener('toggle', reveal);
+      mountDataView(viewport(details, 'Exact values'), {
+        ariaLabel: title, columns: columns.map(name => ({ id: name, name })),
+        rows: rows.map((cells, index) => ({ id: title + '-' + index,
+          cells: cells.map(value => value == null ? 'UNKNOWN' : String(value)) }))
+      });
+    });
+  };
+  const clock = epoch => epoch == null ? null : new Date(epoch).toISOString().slice(11, 23);
   const diagrams = mountDeskDiagrams(document);
   const diagram = (parent, title, svg) => { const region = node('section'); region.append(node('h4', title), svg); parent.append(region); };
 
-  const s = captureSummary, p = deskProvenance;
+  const s = deskQuote, p = deskProvenance;
   const status = node('p', `${s.symbol} ${s.name} · last ${s.last} · ${p.binding} replay · $${p.cost_usd} · read-only desk`);
   status.id = 'desk-status'; status.setAttribute('role', 'status');
   const intro = node('p', p.note);
   const before = node('div'); before.append(status, intro);
 
-  const change = s.last - s.prev_close;
-  const changePct = s.prev_close ? (change / s.prev_close) * 100 : 0;
+  const change = s.prev_close == null ? null : Number(s.last) - Number(s.prev_close);
+  const changePct = Number(s.prev_close) > 0 ? (change / Number(s.prev_close)) * 100 : null;
   const signed = value => (value >= 0 ? '+' : '') + value;
+  const display = value => value == null ? 'UNKNOWN' : String(value);
+  const changeText = change === null ? 'UNKNOWN' : signed(change) + (changePct === null ? '' : ' (' + signed(changePct.toFixed(2)) + '%)');
   const { DashboardCanvasLayout, DashboardCardGrid, DashboardPrimitive } = createNativeDashboard(document);
   const overview = DashboardCardGrid({
     ariaLabel: 'Market quote board',
     cards: [
       { id: 'desk-last', eyebrow: 'Last', title: String(s.last), accent: 'primary' },
-      { id: 'desk-change', eyebrow: 'Change vs prev close', title: `${signed(change)} (${signed(changePct.toFixed(2))}%)`, accent: change >= 0 ? 'success' : 'secondary' },
-      { id: 'desk-range', eyebrow: 'Day range', title: `${s.low} – ${s.high}`, accent: 'neutral' },
-      { id: 'desk-volume', eyebrow: 'Volume', title: String(s.volume), accent: 'neutral' },
-      { id: 'desk-turnover', eyebrow: 'Turnover', title: String(s.turnover), accent: 'neutral' }
+      { id: 'desk-change', eyebrow: 'Change vs prev close', title: changeText, accent: change === null ? 'neutral' : change >= 0 ? 'success' : 'secondary' },
+      { id: 'desk-range', eyebrow: 'Day range', title: `${display(s.low)} – ${display(s.high)}`, accent: 'neutral' },
+      { id: 'desk-volume', eyebrow: 'Volume', title: display(s.volume), accent: 'neutral' },
+      { id: 'desk-turnover', eyebrow: 'Turnover', title: display(s.turnover), accent: 'neutral' }
     ]
   });
 
@@ -50,8 +61,8 @@ export async function mountMoomooDeskView(host) {
   const facts = node('dl'); facts.className = 'facts';
   const add = (term, detail) => { facts.append(node('dt', term), node('dd', detail)); };
   add('Symbol', `${s.symbol} (${s.market})`); add('Name', s.name); add('Market date', s.market_date);
-  add('Open', String(s.open)); add('Previous close', String(s.prev_close));
-  add('Exchange', deskDepth.exchange); add('Captured UTC', p.captured_utc); add('Binding', p.binding);
+  add('Open', display(s.open)); add('Previous close', display(s.prev_close));
+  add('Exchange', deskDepth.exchange); add('Quote time (UTC)', display(s.marketTimeUtc)); add('Captured UTC', p.captured_utc); add('Binding', p.binding);
   sections.append(facts);
 
   diagram(sections, 'Order book depth · bar length is volume', diagrams.depth(deskDepth));
@@ -74,9 +85,9 @@ export async function mountMoomooDeskView(host) {
   table(sections, `Daily candles (${deskCandles.length})`, ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Change %'],
     deskCandles.map(candle => [candle.date, candle.open, candle.high, candle.low, candle.close, candle.volume, candle.change_rate]));
 
-  const unknownsHeading = node('p', 'Unknowns preserved (not inferred):');
+  const unknownsHeading = node('p', 'Unknown for this capture');
   const unknowns = node('ul'); unknowns.className = 'capture-unknowns';
-  for (const item of s.unknowns.filter(item => item !== 'hosted OAuth qualification (N3)')) unknowns.append(node('li', item));
+  for (const item of ['currency', 'delay class', 'per-quote feed attribution']) unknowns.append(node('li', item));
   sections.append(unknownsHeading, unknowns);
 
   host.replaceChildren(DashboardCanvasLayout({

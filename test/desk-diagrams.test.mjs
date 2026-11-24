@@ -42,7 +42,22 @@ test('tape geometry scales tick volume and colors by direction', () => {
   const ratio = g.bars[0].height / g.bars[0].volume;
   for (const [i, bar] of g.bars.entries()) {
     assert.ok(Math.abs(bar.height / bar.volume - ratio) < 1e-9 || bar.height === 1);
-    assert.equal(bar.up, deskTape[i].direction === 'BUY');
+    assert.equal(bar.direction, deskTape[i].direction);
     assert.ok(bar.width > 0);
   }
+});
+
+test('asymmetric books, zero volume and a flat candle keep finite geometry', () => {
+  const level = { price: '12', volume: 0 };
+  for (const book of [{ ask: [level], bid: [] }, { ask: [], bid: [level] }]) {
+    const g = depthGeometry(book);
+    assert.equal([...g.bids, ...g.asks][0].width, 0);
+  }
+  assert.deepEqual(candleGeometry([]).yTicks, []);
+  const flat = candleGeometry([{ open: '12', close: '12', high: '12', low: '12' }]);
+  assert.equal(flat.yTicks.length, 1);
+  assert.ok(Number.isFinite(flat.candles[0].bodyTop));
+  const [tick] = tapeGeometry([{ volume: 0, direction: 'NEUTRAL' }]).bars;
+  assert.equal(tick.height, 0);
+  assert.equal(tick.direction, 'NEUTRAL');
 });

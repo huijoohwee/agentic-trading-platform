@@ -1,14 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { deskProvenance, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
+import { projectDesktopDesk, deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
 
 const fixture = JSON.parse(await readFile(new URL('../qualification/moomoo/desktop-mcp-capture.json', import.meta.url), 'utf8'));
 const book = fixture.calls.quote_order_book.structuredContent.data[0].books[0];
 const side = list => list.map(row => ({ price: String(row.price), volume: row.volume, orders: row.order_count }));
 const iso = date => String(date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
 
-test('the curated desk depth ladder is pinned to the captured order book', () => {
+test('the quote board uses the same captured symbol and preserves absent prior close', () => {
+  const row = fixture.calls.quote_stock_quote.structuredContent.data.quote_list[0];
+  assert.equal(deskQuote.last, String(row.last_price));
+  assert.equal(deskQuote.name, row.name);
+  assert.equal(deskQuote.marketTimeUtc, new Date(row.data_time).toISOString());
+  const changed = structuredClone(fixture);
+  delete changed.calls.quote_stock_quote.structuredContent.data.quote_list[0].prev_close_price;
+  assert.equal(projectDesktopDesk(changed).deskQuote.prev_close, null);
+  changed.calls.quote_stock_quote.arguments.code_list.push('US.AAPL');
+  assert.throws(() => projectDesktopDesk(changed), /DESK_SYMBOL_MISMATCH/);
+});
+
+test('the Gateway-projected desk depth ladder is pinned to the captured order book', () => {
   assert.equal(deskDepth.exchange, book.exchange);
   assert.deepEqual(deskDepth.ask, side(book.ask_list));
   assert.deepEqual(deskDepth.bid, side(book.bid_list));
@@ -19,7 +31,7 @@ test('the curated desk depth ladder is pinned to the captured order book', () =>
   }
 });
 
-test('the curated desk tape is pinned to the captured ticks and leaves sequence opaque', () => {
+test('the Gateway-projected desk tape is pinned to the captured ticks and leaves sequence opaque', () => {
   const ticks = fixture.calls.quote_rt_ticker.structuredContent.data.ticker_list;
   assert.deepEqual(deskTape, ticks.map(tick => ({
     time: tick.time, price: String(tick.price), volume: tick.volume,
@@ -30,7 +42,7 @@ test('the curated desk tape is pinned to the captured ticks and leaves sequence 
   assert.ok(ticks.every(tick => tick.sequence > Number.MAX_SAFE_INTEGER));
 });
 
-test('the curated desk candles are pinned to the captured kline with round-trip decimals', () => {
+test('the Gateway-projected desk candles are pinned to the captured kline with round-trip decimals', () => {
   const kline = fixture.calls.quote_cur_kline.structuredContent.data.kline_list;
   assert.deepEqual(deskCandles, kline.map(row => ({
     date: iso(row.date), time: row.time_key, open: String(row.open_price), high: String(row.high_price),
@@ -49,6 +61,19 @@ test('the desk provenance stays read-only, $0 and Desktop-bound', () => {
   assert.equal(deskProvenance.cost_usd, 0);
   assert.equal(deskProvenance.symbol, fixture.provenance.symbol);
   assert.equal(deskProvenance.captured_utc, fixture.provenance.captured_utc);
-  assert.deepEqual(deskProvenance.operations, ['read.depth', 'read.tape', 'read.candles']);
+  assert.deepEqual(deskProvenance.operations, ['read.ticker', 'read.depth', 'read.tape', 'read.candles']);
   assert.equal(fixture.provenance.hosted_n3, false);
+});
+
+test('the desk refuses foreign symbols, failed capture calls and incompatible candle dimensions', () => {
+  const reject = (edit, code) => {
+    const changed = structuredClone(fixture);
+    edit(changed.calls);
+    assert.throws(() => projectDesktopDesk(changed), code);
+  };
+  reject(calls => { calls.quote_order_book.arguments.code = 'US.AAPL'; }, /DESK_SYMBOL_MISMATCH/);
+  reject(calls => { calls.quote_rt_ticker.structuredContent.ret_code = -1; }, /DESK_PROVIDER_REFUSED/);
+  reject(calls => { calls.quote_cur_kline.structuredContent.data.kline_list[0].code = 'US.AAPL'; }, /DESK_CAPTURE_MISMATCH/);
+  reject(calls => { calls.quote_cur_kline.arguments.ktype = 1; }, /DESK_KLINE_DIMENSION/);
+  reject(calls => { calls.quote_order_book.structuredContent.data[0].books[0].ask_list[0].price = -1; }, /INVALID_SNAPSHOT/);
 });
