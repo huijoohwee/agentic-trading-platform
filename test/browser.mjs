@@ -112,8 +112,15 @@ try {
     await page.locator('#provider-capture summary').click();
     await page.waitForFunction(() => document.querySelector('#capture-status')?.textContent.includes('HK.00700'));
     assert.ok((await page.locator('#capture-status').innerText()).includes('desktop-mcp'));
-    assert.ok((await page.locator('#capture-status').innerText()).includes('hosted N3 open'));
+    assert.ok((await page.locator('#capture-status').innerText()).includes('hosted N3 qualified'));
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/capture-view.mjs'))), true);
+    await page.locator('#provider-hosted summary').click();
+    await page.waitForFunction(() => document.querySelector('#hosted-status')?.textContent.includes('HK.00700'));
+    assert.ok((await page.locator('#hosted-status').innerText()).includes('hosted-mcp'));
+    assert.ok((await page.locator('#hosted-status').innerText()).includes('hosted N3 qualified'));
+    assert.ok((await page.locator('#hosted-body').innerText()).includes('quote:read'));
+    assert.ok((await page.locator('#hosted-body').innerText()).includes('https://mcp.moomoo.com/mcp'));
+    assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/hosted-view.mjs'))), true);
     console.log(name + ': online lazy Skills & Commands reference, controls, source digest and focus passed.');
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource')
       .some(e => e.name.endsWith('/src/rehearsal-view.mjs'))),false);
@@ -183,7 +190,12 @@ try {
     await reopened.waitForFunction(() => document.querySelector('#notional').textContent.includes('$100.00'));
     await reopened.locator('#provider-capture summary').click();
     await reopened.waitForFunction(() => document.querySelector('#capture-status')?.textContent.includes('HK.00700'));
-    assert.ok((await reopened.locator('#capture-status').innerText()).includes('hosted N3 open'));
+    assert.ok((await reopened.locator('#capture-status').innerText()).includes('hosted N3 qualified'));
+    await reopened.locator('#provider-hosted summary').click();
+    await reopened.waitForFunction(() => document.querySelector('#hosted-status')?.textContent.includes('HK.00700'));
+    assert.ok((await reopened.locator('#hosted-status').innerText()).includes('hosted N3 qualified'));
+    assert.ok((await reopened.locator('#hosted-body').innerText()).includes('quote:read'));
+    assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/hosted-view.mjs'))), true);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     await reopened.locator('#rehearsal summary').first().click();
     await reopened.getByRole('button',{name:'Replay run'}).click();
