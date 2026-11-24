@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {verifyLaboratory} from './laboratory-browser.mjs';
 import { verifyDesk } from './desk-browser.mjs';
+import { verifyTradeEvents } from './trade-event-browser.mjs';
 import { verifyWorksheets } from './worksheets-browser.mjs';
 import { verifyTradingSkills } from './skills-browser.mjs';
 import { once } from 'node:events';
@@ -365,6 +366,7 @@ try {
     assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     await verifySavedQuotePush(reopened);
+    await verifyTradeEvents(reopened);
     await verifySavedResearch(reopened, await captureCalendarFixture());
     await dashboard.getByRole('button', {name:'Inspect 23 source events'}).click();
     const logTable = reopened.getByRole('table', { name: 'Replay events' });

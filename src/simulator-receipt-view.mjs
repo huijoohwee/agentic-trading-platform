@@ -86,7 +86,7 @@ export function mountSimulatorReceipts(panel, node) {
         node('p', 'Observed ' + new Date(data.at).toISOString() + ' · Ledger revision ' + receipt.ledger_revision));
       rowsView(output, data.rows, node);
       if (data.pagination) output.append(node('p', data.pagination.completed ? 'Last provider page.' : 'More orders are available with a separately signed continuation.'));
-      status.textContent = 'Completed read · ' + data.cost.tool_calls + ' original provider GETs · 0 lookup calls to the provider';
+      status.textContent = 'Completed read · ' + data.cost.tool_calls + ' original provider calls · 0 lookup calls to the provider';
       const expire = () => {
         if (until > Date.now()) expiration = setTimeout(expire, Math.min(until - Date.now(), 2147483647));
         else { reset(); status.textContent = 'Receipt display expired.'; }

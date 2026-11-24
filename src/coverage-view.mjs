@@ -66,7 +66,7 @@ export async function mountCoverageView(host) {
     const facts = node('dl'); facts.className = 'facts';
     const add = (term, detail) => { facts.append(node('dt', term), node('dd', detail)); };
     add('Semantic reads', entry.operations.length ? entry.operations.join(', ') : 'none (excluded)');
-    add('Verified MCP tools', entry.mcp.length ? entry.mcp.join(', ') : 'none observed');
+    add('Listed MCP tools', entry.mcp.length ? entry.mcp.join(', ') : 'See individual routes');
     section.append(heading, note, facts);
     const sources = node('ul'); sources.className = 'coverage-sources';
     for (const item of entry.sources) {

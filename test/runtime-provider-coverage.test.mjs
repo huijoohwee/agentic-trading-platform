@@ -1,3 +1,4 @@
+import { securitiesTradeTopics, cryptoReportTopics } from 'agentic-gateway/connectors/moomoo-trade-event';
 import { simulatorSpecs } from '../runtime/moomoo-simulator-read.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,8 +68,8 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   assert.ok(futures.filter(row => row.status === 'mapped').every(row => row.sources.some(source => source.url.endsWith('.md'))));
   assert.deepEqual(on('MCP').map(row => row.label).sort(), catalog.tools.map(tool => tool.name).sort());
   assert.deepEqual(on('Push').filter(row => row.status === 'offline replay').map(row => row.label.split('/').at(-1)).sort(),
-    ['BROKER_QUEUE', 'KLINE', 'MARKET_STATE', 'ORDER_BOOK', 'QUOTE', 'TICKER']);
-  assert.equal(on('Push').filter(row => row.status === 'candidate').length, 18);
+    ['BROKER_QUEUE', 'KLINE', 'MARKET_STATE', 'ORDER_BOOK', 'QUOTE', 'TICKER', ...securitiesTradeTopics, ...cryptoReportTopics.map(String)].sort());
+  assert.equal(on('Push').filter(row => row.status === 'candidate').length, 0);
   for (const [transport, label] of [['REST', 'POST /api/v1.0/quote/stock-screen'], ['MCP', 'quote_stock_screen']]) {
     const screen = on(transport).find(row => row.label === label);
     assert.deepEqual([screen.status, screen.scope, screen.evidence], ['mapped', 'quote:read', 'Signed local stock-screen fixture']);
