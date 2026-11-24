@@ -1,0 +1,256 @@
+{
+  "schema": "trading-moomoo-desktop-capture/v1",
+  "provenance": {
+    "binding": "desktop-mcp",
+    "host": "mcp://moomoo (Qoder Desktop binding, OpenD-backed)",
+    "captured_utc": "2026-11-23T23:17:44Z",
+    "symbol": "HK.00700",
+    "market": "HK",
+    "market_date": "2026-11-23",
+    "cost_usd": 0,
+    "entitlement": "Subscription quote reads. Order book returned 10 bid/ask levels (LV2-derived depth for HK stock).",
+    "hosted_n3": false,
+    "note": "Real entitled $0 reads captured through the available Desktop moomoo binding. This is distinct evidence from the hosted https://mcp.moomoo.com/mcp OAuth milestone (N3), which remains open. Tool descriptor metadata was captured from the Desktop binding's tool catalogue; the hosted host may advertise additional descriptor fields and requires separate qualification. Prices are JSON numbers; the reviewed projection records their exact round-trip decimal string."
+  },
+  "tools": [
+    {
+      "name": "quote_stock_quote",
+      "description": "Batch get realtime stock quotes for the symbols (realtime quote, subscription required). Returns: stock symbol/name, data_time (ms exchange time), data_date (market timezone), last/open/high/low/previous-close prices, volume/turnover, turnover rate, amplitude, security status/suspension/dark-pool status, listing date; option_ex_data (strike/contract size/open interest/IV/premium/Delta/Gamma/Vega/Theta/Rho/net open interest/contract nominal value/owner lot multiplier/contract multiplier/index option type/expiry-date distance/American-European); future_ex_data (last settlement/position/position change); pre_market/after_market/overnight sub-objects. Leaner field set than quote.market_snapshot, better for multi-symbol polling.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code_list": {
+            "description": "Stock symbol list, format {market}.{code}, e.g. [\"HK.00700\", \"US.AAPL\"]; recommended ≤400 symbols per call; subscription required for each symbol",
+            "items": { "type": "string" },
+            "type": "array"
+          }
+        },
+        "required": ["code_list"]
+      }
+    },
+    {
+      "name": "quote_order_book",
+      "description": "Get the realtime order book (bid/ask depth) for a stock symbol; subscription required.\nThe number of levels and the book shape depend on the user's quote permission (LV1/LV2/LV3) and the\nsecurity category; the gateway picks the fetch method and depth accordingly: HK (stock/warrant/CBBC/inline): LV2 -> 10 levels, otherwise 1; HK option/future likewise (10/1). US (incl. ETF): LV1 1 level; LV2 60 levels (consolidated); LV3 per-exchange NASDAQ/ARCA 60 each. US option 1; US future (LV2) 40; A-share 5; Singapore (LV2) 40; Malaysia LV1/LV2/LV3 = 3/5/10; Japan LV2/LV3 = 10/40; other markets default to 1 level.books is an array of books (US LV3 has multiple exchanges; other categories single element);\neach book has exchange, bid/ask flags, order_volume_precision, and bid_list/ask_list (per-level price/volume/order_count).\nnum is an upper bound that further truncates the permission-derived depth; omit it to get the max allowed depth.\nRealtime quote requiring an active subscription; does not return tick-by-tick trades.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Stock symbol, format {market}.{code}, e.g. HK.00700 / US.AAPL（最大值: 32）",
+            "maxLength": 32,
+            "type": "string"
+          },
+          "num": {
+            "description": "Upper bound on order-book levels (further truncates the permission-derived depth); omit for the max allowed, range 1~60（最大值: 60）（最小值: 1）",
+            "type": "integer"
+          }
+        },
+        "required": ["code"]
+      }
+    },
+    {
+      "name": "quote_rt_ticker",
+      "description": "Get tick-by-tick trades for a stock (realtime quote, subscription required).\nRealtime quote requiring an active subscription; num defaults to 500 (max 750); returns the latest N ticks, no time range filter.\nOptional period array filters tick session (NORMAL/BEFORE/AFTER/OVERNIGHT), repeat the query key, e.g. ?period=BEFORE&period=AFTER; omit to use",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "num": {
+            "default": 500,
+            "description": "Return the latest N tick trades, default 500, range 1~750（默认值: 500）（最大值: 750）（最小值: 1）",
+            "type": "integer"
+          },
+          "period": {
+            "description": "Optional; filter ticks by session; repeat the key. NORMAL=regular / BEFORE=pre-market / AFTER=after-hours / OVERNIGHT=overnight",
+            "enum": ["NORMAL", "BEFORE", "AFTER", "OVERNIGHT"],
+            "type": "string"
+          },
+          "symbol": {
+            "description": "Stock symbol (path parameter), format {market}.{code}.00700 / US.AAPL（最大值: 32）",
+            "maxLength": 32,
+            "type": "string"
+          }
+        },
+        "required": ["symbol"]
+      }
+    },
+    {
+      "name": "quote_cur_kline",
+      "description": "Get the latest N K-line entries for a symbol.\nSupports 1/5/15/30/60-minute and day/week/month/year K-lines, adjustment type (none / forward / backward), and US pre/post-market and overnight toggles; num 1~370 returns the latest N relative to now and cannot specify a historical time window.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "autype": {
+            "default": 1,
+            "description": "Adjustment type. 0=none / 1=forward (default, ex-dividend) / 2=backward (ex-dividend) / 3=forward (cum-dividend) / 4=backward (cum-dividend)（默认值: 1）",
+            "enum": [0, 1, 2, 3, 4],
+            "type": "integer"
+          },
+          "extended_time": {
+            "default": 0,
+            "description": "Pre/post-market toggle. 0 = default (excluded) / 1 = include pre/post-market (US minute K-line, only effective for 1-minute K) / 2 = include overnight session (US)（默认值: 0）",
+            "enum": [0, 1, 2],
+            "type": "integer"
+          },
+          "ktype": {
+            "default": 2,
+            "description": "K-line type. 1=1-min / 2=day (default) / 3=week / 4=month / 5=year / 6=5-min / 7=15-min / 8=30-min / 9=60-min / 10=3-min / 11=quarter / 14=120-min / 15=240-min / 26=10-min / 29=180-min（默认值: 2）",
+            "enum": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 26, 29],
+            "type": "integer"
+          },
+          "num": {
+            "description": "Number of K-line entries to return, 1~370（最大值: 370）（最小值: 1）",
+            "type": "integer"
+          },
+          "symbol": {
+            "description": "Stock symbol (path parameter), e.g. HK.00700 / US.AAPL（最大值: 32）",
+            "maxLength": 32,
+            "type": "string"
+          }
+        },
+        "required": ["symbol", "num"]
+      }
+    }
+  ],
+  "calls": {
+    "quote_stock_quote": {
+      "arguments": { "code_list": ["HK.00700"] },
+      "structuredContent": {
+        "ret_code": 0,
+        "ret_msg": "success",
+        "data": {
+          "quote_list": [
+            {
+              "after_market": { "amplitude": 0, "change_rate": 0, "change_val": 0, "high_price": 0, "low_price": 0, "price": 0, "turnover": 0, "volume": 0 },
+              "amplitude": 3.372,
+              "code": "HK.00700",
+              "dark_status": "N/A",
+              "data_date": "2026-11-23",
+              "data_time": 1795421270000,
+              "event_contract_ex_data": { "liquidity": "", "open_interest": "", "settle_result": 0, "settle_time": 0, "settle_value": 0 },
+              "future_ex_data": { "last_settle_price": 0, "position": 0, "position_change": 0 },
+              "high_price": 344.6,
+              "last_price": 344,
+              "listing_date": "2004-06-16",
+              "low_price": 333,
+              "name": "TENCENT",
+              "open_price": 335,
+              "option_ex_data": { "contract_multiplier": 0, "contract_nominal_value": 0, "contract_size": 0, "delta": 0, "expiry_date_distance": 0, "gamma": 0, "implied_volatility": 0, "index_option_type": 0, "net_open_interest": 0, "open_interest": 0, "option_area_type": "", "option_type": "", "owner_lot_multiplier": 0, "premium": 0, "rho": 0, "strike_price": 0, "theta": 0, "vega": 0 },
+              "overnight": { "amplitude": 0, "change_rate": 0, "change_val": 0, "high_price": 0, "low_price": 0, "price": 0, "turnover": 0, "volume": 0 },
+              "pre_market": { "amplitude": 0, "change_rate": 0, "change_val": 0, "high_price": 0, "low_price": 0, "price": 0, "turnover": 0, "volume": 0 },
+              "prev_close_price": 344,
+              "sc_name": "腾讯控股",
+              "sec_status": "NORMAL",
+              "suspension": false,
+              "tc_name": "騰訊控股",
+              "turnover": 11960782218,
+              "turnover_rate": 0.388,
+              "volume": 35289665
+            }
+          ]
+        }
+      }
+    },
+    "quote_order_book": {
+      "arguments": { "code": "HK.00700", "num": 10 },
+      "structuredContent": {
+        "ret_code": 0,
+        "ret_msg": "success",
+        "data": [
+          {
+            "books": [
+              {
+                "ask_flag": 1,
+                "ask_list": [
+                  { "order_count": 62, "price": 344, "volume": 272400 },
+                  { "order_count": 27, "price": 344.2, "volume": 96900 },
+                  { "order_count": 15, "price": 344.4, "volume": 123300 },
+                  { "order_count": 31, "price": 344.6, "volume": 132800 },
+                  { "order_count": 41, "price": 344.8, "volume": 75600 },
+                  { "order_count": 133, "price": 345, "volume": 112300 },
+                  { "order_count": 26, "price": 345.2, "volume": 83700 },
+                  { "order_count": 7, "price": 345.4, "volume": 7500 },
+                  { "order_count": 25, "price": 345.6, "volume": 83900 },
+                  { "order_count": 32, "price": 345.8, "volume": 70300 }
+                ],
+                "bid_flag": 1,
+                "bid_list": [
+                  { "order_count": 13, "price": 343.8, "volume": 41700 },
+                  { "order_count": 37, "price": 343.6, "volume": 30000 },
+                  { "order_count": 25, "price": 343.4, "volume": 78900 },
+                  { "order_count": 16, "price": 343.2, "volume": 59900 },
+                  { "order_count": 98, "price": 343, "volume": 92200 },
+                  { "order_count": 23, "price": 342.8, "volume": 90100 },
+                  { "order_count": 12, "price": 342.6, "volume": 29400 },
+                  { "order_count": 8, "price": 342.4, "volume": 18100 },
+                  { "order_count": 18, "price": 342.2, "volume": 23800 },
+                  { "order_count": 60, "price": 342, "volume": 84100 }
+                ],
+                "difference": 0,
+                "exchange": "SEHK",
+                "exchange_data_time_ms": 1795421300000,
+                "order_volume_precision": 0,
+                "server_send_to_client_time_ms": 1795475510610
+              }
+            ],
+            "code": "HK.00700",
+            "name": "TENCENT",
+            "sc_name": "腾讯控股",
+            "tc_name": "騰訊控股"
+          }
+        ]
+      }
+    },
+    "quote_rt_ticker": {
+      "arguments": { "symbol": "HK.00700", "num": 20 },
+      "structuredContent": {
+        "ret_code": 0,
+        "ret_msg": "success",
+        "data": {
+          "code": "HK.00700",
+          "last_close": 344,
+          "name": "TENCENT",
+          "sc_name": "腾讯控股",
+          "tc_name": "騰訊控股",
+          "ticker_list": [
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887143, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887142, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887141, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 516000, "volume": 1500 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887140, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 1135200, "volume": 3300 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887139, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 172000, "volume": 500 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887138, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 378400, "volume": 1100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887137, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 481600, "volume": 1400 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887136, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 103200, "volume": 300 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887135, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887134, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887133, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 68800, "volume": 200 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887132, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887131, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 516000, "volume": 1500 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887130, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 68800, "volume": 200 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887129, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887128, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 172000, "volume": 500 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887127, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887126, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887125, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 412800, "volume": 1200 },
+            { "period_type": "NORMAL", "pred_side": "NONE", "price": 344, "sequence": 7711275766041887124, "tick_type": "AUTO_MATCH", "ticker_direction": "BUY", "time": 1795421300722, "trade_type": "U", "turnover": 34400, "volume": 100 }
+          ],
+          "volume_precision": 0
+        }
+      }
+    },
+    "quote_cur_kline": {
+      "arguments": { "symbol": "HK.00700", "num": 5, "ktype": 2 },
+      "structuredContent": {
+        "ret_code": 0,
+        "ret_msg": "success",
+        "data": {
+          "kline_list": [
+            { "change_rate": -3.6885245901639343, "close_price": 376, "code": "HK.00700", "date": 20261117, "high_price": 386.6, "last_close_price": 390.4, "low_price": 376, "name": "TENCENT", "open_price": 386.6, "pe": 13.734, "sc_name": "腾讯控股", "tc_name": "騰訊控股", "time_key": 1794844800000, "turnover": 11892584512, "turnover_rate": 0.00345, "volume": 31401095 },
+            { "change_rate": -0.851063829787234, "close_price": 372.8, "code": "HK.00700", "date": 20261118, "high_price": 378, "last_close_price": 376, "low_price": 370, "name": "TENCENT", "open_price": 374, "pe": 13.617, "sc_name": "腾讯控股", "tc_name": "騰訊控股", "time_key": 1794931200000, "turnover": 7956175438, "turnover_rate": 0.00235, "volume": 21333340 },
+            { "change_rate": -6.545064377682404, "close_price": 348.4, "code": "HK.00700", "date": 20261119, "high_price": 365, "last_close_price": 372.8, "low_price": 345, "name": "TENCENT", "open_price": 361.8, "pe": 12.726, "sc_name": "腾讯控股", "tc_name": "騰訊控股", "time_key": 1795017600000, "turnover": 26816605631, "turnover_rate": 0.00841, "volume": 76426269 },
+            { "change_rate": -1.2629161882893225, "close_price": 344, "code": "HK.00700", "date": 20261120, "high_price": 349.6, "last_close_price": 348.4, "low_price": 339.6, "name": "TENCENT", "open_price": 341, "pe": 12.565, "sc_name": "腾讯控股", "tc_name": "騰訊控股", "time_key": 1795104000000, "turnover": 14089992865, "turnover_rate": 0.00452, "volume": 41094469 },
+            { "change_rate": 0, "close_price": 344, "code": "HK.00700", "date": 20261123, "high_price": 344.6, "last_close_price": 344, "low_price": 333, "name": "TENCENT", "open_price": 335, "pe": 12.565, "sc_name": "腾讯控股", "tc_name": "騰訊控股", "time_key": 1795363200000, "turnover": 11960782218, "turnover_rate": 0.00388, "volume": 35289665 }
+          ]
+        }
+      }
+    }
+  }
+}

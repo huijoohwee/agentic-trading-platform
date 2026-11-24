@@ -61,10 +61,14 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
       requireThat(id(target) && !['__proto__', 'prototype', 'constructor'].includes(target), 'INVALID_MAPPING');
       const value = Object.hasOwn(projection, 'constant') ? projection.constant : ownPath(raw, projection.path);
       if (spec.numeric?.includes(target)) {
-        requireThat(!Object.hasOwn(projection, 'constant') && typeof value === 'string' && value.length <= 64 && decimalPattern.test(value), 'PRECISION_UNKNOWN');
-        precise[target] = value;
-        const number = Number(value);
+        requireThat(!Object.hasOwn(projection, 'constant'), 'PRECISION_UNKNOWN');
+        let text;
+        if (typeof value === 'string') { requireThat(value.length <= 64 && decimalPattern.test(value), 'PRECISION_UNKNOWN'); text = value; }
+        else if (typeof value === 'number' && Number.isFinite(value)) { text = String(value); requireThat(decimalPattern.test(text), 'PRECISION_UNKNOWN'); }
+        else fail('PRECISION_UNKNOWN');
+        const number = Number(text);
         requireThat(Number.isFinite(number), 'PRECISION_UNKNOWN');
+        precise[target] = text;
         row[target] = number;
       } else row[target] = value;
     }
