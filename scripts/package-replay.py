@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
-from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
+from zipfile import ZIP_BZIP2, ZIP_DEFLATED, ZipFile, ZipInfo
 
 root = Path(__file__).resolve().parent.parent
 build = Path(subprocess.check_output(['node', 'scripts/build.mjs'], cwd=root, text=True).strip())
@@ -71,11 +71,15 @@ with tempfile.NamedTemporaryFile(dir=build.parent, suffix='.zip') as stage:
             entry = ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             entry.create_system = 3
             entry.external_attr = 0o100644 << 16
-            archive.writestr(entry, body, compress_type=ZIP_DEFLATED)
+            # Use standard ZIP method 12 for the two largest sealed assets.
+            # Python's zipfile and libarchive extract both methods without add-ons.
+            dense = name in ('owners/base/packages/views-react/dist/browser-data-view.js',
+                             'qualification/moomoo/route-inventory.json')
+            archive.writestr(entry, body, compress_type=ZIP_BZIP2 if dense else ZIP_DEFLATED, compresslevel=9)
     stage.flush()
     body = Path(stage.name).read_bytes()
     if len(body) >= 500_000:
-        raise ValueError('Replay package exceeds the chunk budget')
+        raise ValueError(f'Replay package exceeds the chunk budget ({len(body)} bytes)')
     destination = build.parent / ('trading-replay-' + sha(body) + '.zip')
     try:
         os.link(stage.name, destination)

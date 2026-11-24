@@ -2,28 +2,50 @@ import assert from 'node:assert/strict';
 
 export async function verifyRouteViews(page) {
   const routes = page.locator('#coverage-routes');
-  const tab = name => routes.getByRole('tab', { name, exact: true });
+  const layout = routes.getByRole('combobox', { name: 'View layout' });
+  for (const grid of [
+    { id: 'references', count: 109, cell: '/', record: /Card: \/api-reference$/, evidence: 'Selected reference evidence', link: '/api-reference' },
+    { id: 'families', count: 26, cell: 'Earnings calendar', record: /Card: Earnings calendar$/, evidence: 'Selected family evidence', link: 'api/quote/calendar/earnings-calendar.md' },
+  ]) {
+    const surface = page.locator('#coverage-' + grid.id);
+    await surface.getByText('1–12 of ' + grid.count, { exact: true }).waitFor();
+    await surface.getByRole('cell', { name: grid.cell, exact: true }).first().waitFor();
+    const choose = surface.getByLabel('View layout');
+    await choose.selectOption('multiDimensional');
+    await surface.getByRole('cell', { name: String(grid.count), exact: true }).first().waitFor();
+    await surface.getByRole('button', { name: /Current table orientation/ }).click();
+    await choose.selectOption('kanban');
+    await surface.getByRole('button', { name: grid.record }).click();
+    const details = surface.getByRole('region', { name: grid.evidence });
+    await details.getByRole('link', { name: grid.link, exact: true }).waitFor();
+    assert.match(await details.textContent(), /SHA-256 [a-f0-9]{64}/);
+    await choose.selectOption('table');
+  }
   await routes.getByText('1–12 of 389', { exact: true }).waitFor();
   await routes.getByRole('button', { name: 'Next', exact: true }).click();
   await routes.getByText('13–24 of 389', { exact: true }).waitFor();
-  await tab('Multi-dimensional table').click();
-  let matrix = routes.getByRole('tabpanel', { name: 'Multi-dimensional table' });
+  await layout.selectOption('multiDimensional');
+  const matrix = routes;
   for (const total of ['258', '107', '24', '389']) await matrix.getByRole('cell', { name: total, exact: true }).first().waitFor();
   await matrix.getByRole('button', { name: /Current table orientation/ }).click();
   await matrix.getByText('389', { exact: true }).first().waitFor();
-  await tab('Kanban').click();
-  const board = routes.getByRole('tabpanel', { name: 'Kanban' });
-  await board.getByRole('heading', { name: 'offline replay (24)' }).waitFor();
-  const more = board.getByRole('button', { name: 'Show more candidate routes' });
-  const before = await board.locator('[data-route]').count(); await more.click();
-  assert.equal(await board.locator('[data-route]').count(), before + 12);
+  await layout.selectOption('kanban');
+  const board = routes.getByRole('region', { name: 'Routes by disposition', exact: true });
+  await board.getByRole('heading', { name: /offline replay.*24/ }).waitFor();
+  const more = board.getByRole('button', { name: 'Show more candidate records' });
+  const before = await board.locator('[data-base-card]').count(); await more.click();
+  assert.equal(await board.locator('[data-base-card]').count(), before + 12);
+  await routes.getByRole('button', { name: 'Filter routes' }).click();
   await routes.getByLabel('Transport', { exact: true }).selectOption('Push');
   await routes.getByText('24 matching routes').waitFor();
-  assert.equal(await board.getByRole('heading').count(), 1);
-  await board.locator('[data-route]').first().click();
+  await board.getByRole('heading', { name: /offline replay.*24/ }).waitFor();
+  await board.getByRole('heading', { name: /Ungrouped.*0/ }).waitFor();
+  assert.equal(await board.getByRole('heading').count(), 2);
+  await board.locator('[data-base-card]').first().click();
   await routes.getByRole('region', { name: 'Selected route evidence' }).getByRole('link').first().waitFor();
   await routes.getByLabel('Transport', { exact: true }).selectOption('All');
-  await tab('Table').click();
+  await layout.selectOption('table');
+  await routes.getByRole('button', { name: 'Search routes' }).click();
   await routes.getByRole('searchbox', { name: 'Route or tool', exact: true }).fill('quote_stock_quote');
   await routes.getByRole('cell', { name: 'quote_stock_quote', exact: true }).click();
   await routes.getByText('quote:read · Desktop and hosted captures').waitFor();
