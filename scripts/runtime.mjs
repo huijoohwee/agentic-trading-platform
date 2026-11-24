@@ -72,12 +72,17 @@ export async function runtimeCommand(args) {
       const port = Number(rest[0] ?? 4182);
       requireThat(port >= 0 && port <= 65535, 'INVALID_PORT');
       const registry = createProviderRegistry(config.providers ?? []);
-      const marketBoundaries = new Map(), snapshotImporters = new Map();
+      const marketBoundaries = new Map(), snapshotImporters = new Map(), streamReaders = new Map();
       const definitions = config.providers ?? [];
       for (const definition of definitions) {
         const transport = definition.transport.kind;
         const credential = providerCredential(config, definition.provider, transport);
         if (!credential) continue;
+        if (transport === 'WEBSOCKET') {
+          const { createQuoteStreamReader } = await import('../runtime/moomoo-quote-stream.mjs');
+          streamReaders.set(definition.mapping_digest, createQuoteStreamReader({ ...common, definition, credential }));
+          continue;
+        }
         const shared = { provider: definition, token: credential.token, mapping: definition.mapping,
           attestation: credential.attestation, scope: config.scope, candidate: config.candidate };
         // Each admission owns its own MCP session, grant, call counter and cursor.
@@ -109,6 +114,14 @@ export async function runtimeCommand(args) {
           ...(result.account ? { account: result.account } : { market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null } }),
           cost: result.cost, digest: result.digest };
       }]));
+      function streamReader(capability) {
+        const read = streamReaders.get(capability.mapping_digest);
+        requireThat(read && capability.source === 'PROVIDER' && capability.transport === 'WEBSOCKET', 'UNQUALIFIED');
+        return read;
+      }
+      readers['read.quote-stream'] = Object.assign(request => streamReader(request.capability)(request), {
+        validateReplay: request => streamReader(request.capability).validateReplay(request),
+      });
       if (config.gateway.capabilities.some(cap => cap.source === 'MOCK' && cap.operations?.includes('read.fixture'))) {
         readers['read.fixture'] = async () => ({ source: 'MOCK', fixture: true,
           rows: [{ symbol_key: 'US.AAPL', last: '100.25', prev_close: '99.50', ccy: 'USD', delay_class: 'realtime' }],

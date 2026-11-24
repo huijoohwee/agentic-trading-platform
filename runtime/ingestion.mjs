@@ -1,3 +1,4 @@
+import { readBudgetScope, reserveReadCalls } from './read-budget.mjs';
 import { readLanding, portfolio } from '../src/landing.mjs';
 import { appendEvent } from './store.mjs';
 import { boundedCall, boundedJson, canonical, hash, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
@@ -42,7 +43,7 @@ export function recoverReadImport({ store, scope, candidate, keys, permit, now =
 export function createReadImporter({ store, scope, candidate, keys, adapter, now = Date.now }) {
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
-  const budgetScope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'runtime-budget/' + sha(scope.account_alias) };
+  const budgetScope = readBudgetScope(scope);
   return async function importSnapshot({ run_id, grant: envelope }) {
     const started = now();
     requireThat(id(run_id), 'INVALID_RUN');
@@ -92,14 +93,7 @@ export function createReadImporter({ store, scope, candidate, keys, adapter, now
       return payload;
     };
     try {
-      store.transaction(budgetScope, state => {
-        const proofDigest = grant.proofs.find(proof => proof.kind === 'cost').digest;
-        const counter = state.telemetry[proofDigest] ?? { limit: grant.cost.remaining_calls, calls: 0 };
-        requireThat(counter.limit === grant.cost.remaining_calls && Number.isSafeInteger(counter.calls) && counter.calls >= 0 &&
-          counter.calls <= counter.limit - grant.limits.max_calls, 'BUDGET_HALT');
-        counter.calls += grant.limits.max_calls;
-        state.telemetry[proofDigest] = counter;
-      });
+      store.transaction(budgetScope, state => reserveReadCalls(state, grant));
       reservedCalls = grant.limits.max_calls;
       const opened = observation(await invoke(signal => {
         setupStarted = true;

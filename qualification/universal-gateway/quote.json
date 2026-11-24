@@ -17,7 +17,7 @@
   "losses": [],
   "major": 1,
   "locality": "device",
-  "revision": "d4c6c5569d574897f6ae495a636c5acfba7dbf57",
+  "revision": "f0c920b580d1beec0ddab608df5fb27836cfe5ee",
   "schemaSource": "runtime/gateway.mjs",
-  "schemaDigest": "755dc307b28dce4061965b2cd83efbfa332573c7b8272555c188cebb0f4e5a5e"
+  "schemaDigest": "bf14f8b882b152c997216effcd462fc5df552bd85885be284c36d27892b6b693"
 }
