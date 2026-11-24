@@ -43,12 +43,21 @@ function projectRow(source, schema, precise = {}) {
   return row;
 }
 
-function pagination(page, required) {
+function pagination(page, required, operation, rows) {
   if (page === undefined && !required) return null;
   check(object(page) && typeof page.completed === 'boolean');
   check(page.completed ? page.next_cursor === null : typeof page.next_cursor === 'string' &&
     page.next_cursor.length > 0 && page.next_cursor.length <= 1000, 'Invalid continuation cursor.');
   if (Object.hasOwn(page, 'total')) check(Number.isSafeInteger(page.total) && page.total >= 0);
+  if (operation === 'read.candle-history') {
+    const { next_page_token: token, next_time: time } = page;
+    check(token === null || (typeof token === 'string' && /^[0-9a-f]{48}$/.test(token)));
+    check(time === null || (Number.isSafeInteger(time) && time !== 0 && Math.abs(time) <= 8.64e15));
+    check(page.next_cursor === (token ?? time?.toString() ?? null));
+    check(page.completed || rows.length > 0);
+    check(time === null || rows.every(row => time <= row.time_ms));
+    return { completed: page.completed, cursor: page.next_cursor, total: null, token, nextTime: time };
+  }
   return { completed: page.completed, cursor: page.next_cursor, total: page.total ?? null };
 }
 
@@ -93,9 +102,10 @@ export async function readResearchPage(file) {
   const observed = isoTime(data.at);
   const symbol = data.market?.symbol;
   check(symbol == null || typeof symbol === 'string' && symbol.length <= 128);
+  const rows = data.rows.map((row, i) => projectRow(row, schema, data.decimals?.[i]));
+  if (operation === 'read.candle-history') check(rows.every(row => Math.abs(row.time_ms) <= 8.64e15));
   return { operation, binding: provider + ' · ' + source, observed, symbol, revision, units: schema.units,
-    rows: data.rows.map((row, i) => projectRow(row, schema, data.decimals?.[i])),
-    pagination: pagination(data.pagination, schema.paged),
+    rows, pagination: pagination(data.pagination, schema.paged, operation, rows),
     ...(Object.hasOwn(data, 'last_valid_time_ms') && {
       lastValid: data.last_valid_time_ms === null ? null : isoTime(data.last_valid_time_ms) }) };
 }

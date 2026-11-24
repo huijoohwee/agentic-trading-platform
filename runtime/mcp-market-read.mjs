@@ -11,7 +11,7 @@ import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
 // transport owner (endpoint/protocols/ownPath/rpcResponse) and never exposes raw provider tools:
 // the reviewed private mapping binds each native operation to one read-only tool and projection.
-export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank', 'read.stock-screen',
+export const MARKET_READ_OPERATIONS = ['read.catalog', 'read.candles', 'read.candle-history', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.capital-flow', 'read.rank', 'read.stock-screen',
   'read.plate', 'read.ipo', 'read.news', 'read.research', 'read.financials', 'read.corporate-actions', 'read.holders',
   'read.financial-statements', 'read.influencer', 'read.macro', 'read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events',
   'read.futures-positions', 'read.futures-seasonality', 'read.futures-correlation', 'read.etf', 'read.event-contract', 'read.crypto-market',
@@ -45,6 +45,7 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
   requireThat(privateKey.asymmetricKeyType === 'ed25519', 'ATTESTATION_REQUIRED');
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
+    requireThat(operation !== 'read.candle-history' && spec.tool !== 'quote_history_kline', 'INVALID_MAPPING');
     if (simulatorOperation(operation) || spec.tool?.startsWith('sim_trade_') || spec.profile === 'moomoo-simulator-mcp-read/v1') {
       verifySimulatorMcpSpec(operation, spec, endpoint);
       continue;

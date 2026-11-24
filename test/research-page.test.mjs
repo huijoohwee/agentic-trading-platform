@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
+import { marketPage, marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
 import { captureCalendarFixture } from '../scripts/export-calendar-fixture.mjs';
 import { researchDisplaySchema } from '../src/research-display-schema.mjs';
@@ -16,15 +16,31 @@ function gateway(operation, rows, decimals, metadata = {}) {
 test('every reviewed research mapping has named columns, units and a readable empty result', async () => {
   const operations = ['read.calendar', ...Object.keys(researchMapping.operations), ...Object.keys(marketRestSpecs)].sort();
   assert.deepEqual(Object.keys(researchDisplaySchema).sort(), operations);
-  assert.equal(operations.length, 34);
+  assert.equal(operations.length, 35);
   for (const name of operations) {
     const schema = researchDisplaySchema[name];
     assert.ok(schema.columns.length && schema.units);
     const page = await readResearchPage(gateway(name, [], [], schema.paged
-      ? { pagination: { completed: true, next_cursor: null, total: 0 } } : {}));
+      ? { pagination: { completed: true, next_cursor: null, total: 0, ...(name === 'read.candle-history' && { next_page_token: null, next_time: null }) } } : {}));
     assert.deepEqual(page.rows, []);
     assert.equal(page.units, schema.units);
   }
+});
+
+test('saved candle history distinguishes backward timestamps from opaque tokens and rejects conflicting continuations', async () => {
+  const token = '01'.repeat(24);
+  const operation = 'read.candle-history';
+  const { rows, decimals } = marketPage(marketRestSpecs[operation], { symbol: 'US.QQQ', end: '2026-11-24' },
+    JSON.stringify({ ret_code: 0, data: { kline_list: [{ time_key: at, open: 1, high: 2, low: 1, close: 2, volume: 10, turnover: 20 }] },
+      pagination: { has_more: false } }));
+  const page = (cursor, extra) => readResearchPage(gateway(operation, rows, decimals,
+    { pagination: { completed: false, next_cursor: cursor, next_page_token: null, next_time: at, ...extra } }));
+  assert.equal((await page(String(at))).pagination.nextTime, at);
+  assert.equal((await page(token, { next_page_token: token })).pagination.token, token);
+  await assert.rejects(page(String(at), { next_page_token: token }));
+  await assert.rejects(page(token, { next_page_token: 'x'.repeat(48) }));
+  await assert.rejects(page(null, { completed: true }));
+  await assert.rejects(page(String(at + 1), { next_time: at + 1 }));
 });
 
 test('the exported Gateway calendar preserves null EPS, date, session and synthetic source', async () => {

@@ -117,6 +117,17 @@ async function verifySavedResearch(page, calendar) {
   await view.getByRole('img', { name: /Order book depth diagram/ }).waitFor();
   await view.getByLabel('Exchange book').selectOption('1');
   await view.getByRole('heading', { name: /Aggregated book · First 10 levels/ }).waitFor();
+  const bar = { symbol: 'US.QQQ', time_ms: 1780469195226, market_date: null, utc_offset_minutes: null, ktype: 110,
+    autype: 1, extended_time: 0, pred_side: 0, open: '12.0', high: '13', low: '11', close: '12.30001',
+    raw_volume: '9007199254740993', volume_precision: null, volume: null, turnover: '34000', prev_close: null,
+    turnover_rate_pct: null, change_pct: null, pe_ratio: null, open_interest: null, reported_settle_price: null,
+    implied_volatility_pct: null, name: null, sc_name: null, tc_name: null };
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'history-fixture', operation: 'read.candle-history' },
+    data: { at: bar.time_ms + 1, source: 'AUTHENTICATED_ADAPTER', rows: [bar], decimals: [{}],
+      pagination: { completed: false, next_cursor: String(bar.time_ms), next_page_token: null, next_time: bar.time_ms } } });
+  await view.getByRole('img', { name: /US.QQQ.*candles in file order/ }).waitFor();
+  await view.getByText('Volume scale unavailable. Raw quantities are shown in the rows.').waitFor();
+  await view.getByText('Backward cursor (Unix ms)', { exact: true }).waitFor();
   const rows = Array.from({ length: 11 }, (_, i) => ({ symbol: 'HK.' + i, name: 'Example ' + i,
     factors: [{ factor: 'market_cap', raw: '9007199254740993', value: '9007199254740.993' }] }));
   const result = { status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'screen-fixture', operation: 'read.stock-screen' },

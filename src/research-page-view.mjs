@@ -56,7 +56,7 @@ function rowList(parent, rows, node) {
 
 function marketChart(parent, page, node, { diagrams, diagram, volumeChart }) {
   const { operation, rows } = page;
-  if (!rows.length || !['read.depth', 'read.tape', 'read.candles'].includes(operation)) return;
+  if (!rows.length || !['read.depth', 'read.tape', 'read.candles', 'read.candle-history'].includes(operation)) return;
   const usable = value => value !== null && Number.isFinite(Number(value));
   const volumeKnown = row => usable(row.volume) && Number(row.volume) >= 0;
   const symbol = rows[0].symbol;
@@ -88,11 +88,12 @@ function marketChart(parent, page, node, { diagrams, diagram, volumeChart }) {
     row.ktype === bars[0].ktype && row.autype === bars[0].autype && row.extended_time === bars[0].extended_time && row.pred_side === bars[0].pred_side)) {
     parent.append(node('p', 'The selected bars have inconsistent prices or settings. Inspect the rows below.')); return;
   }
-  const intraday = [1, 6, 7, 8, 9, 10, 14, 15, 26, 29].includes(bars[0].ktype);
-  const chartRows = bars.map(row => ({ ...row, date: intraday ? new Date(row.time_ms).toISOString() : row.market_date }));
+  const intraday = ![2, 3, 4, 5, 11].includes(bars[0].ktype);
+  const chartRows = bars.map(row => ({ ...row, date: intraday || !row.market_date ? new Date(row.time_ms).toISOString() : row.market_date }));
   const title = symbol + ' · Last ' + bars.length + ' of ' + rows.length + ' candles in file order';
   diagram(parent, title, diagrams.candles(chartRows, title));
   if (chartRows.every(volumeKnown)) volumeChart(parent, 'Candle volume', chartRows);
+  else parent.append(node('p', 'Volume scale unavailable. Raw quantities are shown in the rows.'));
 }
 
 export function mountResearchPageView(parent, node, charts) {
@@ -130,7 +131,10 @@ export function mountResearchPageView(parent, node, charts) {
       if (page.pagination) {
         fact('Provider page', page.pagination.completed ? 'Final page' : 'More results available');
         if (page.pagination.total !== null) fact('Reported total', page.pagination.total);
-        if (page.pagination.cursor !== null) fact('Continuation cursor', page.pagination.cursor);
+        if (Object.hasOwn(page.pagination, 'token')) {
+          if (page.pagination.token !== null) fact('Next page token', page.pagination.token);
+          if (page.pagination.nextTime !== null) fact('Backward cursor (Unix ms)', page.pagination.nextTime);
+        } else if (page.pagination.cursor !== null) fact('Continuation cursor', page.pagination.cursor);
       }
       result.append(facts, node('p', page.units));
       marketChart(result, page, node, charts);

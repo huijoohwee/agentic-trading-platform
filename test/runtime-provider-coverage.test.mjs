@@ -121,7 +121,7 @@ test('all nine simulator bindings distinguish six research reads from three inde
 
 test('coverage separates operation IDs from distinct mapped reads and retains each published HTTP binding', () => {
   const market = providerCoverage.find(row => row.id === 'market-reads'), paper = providerCoverage.find(row => row.id === 'sim-trade');
-  assert.equal(mappedReads([market, market]).length, 5);
+  assert.equal(mappedReads([market, market]).length, 6);
   assert.deepEqual(paper.operations, ['practice.sim']); assert.deepEqual(mappedReads([paper]), []);
   assert(providerCoverage.every(row => row.sources.length));
   const rows = routeInventory(catalog);
