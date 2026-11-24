@@ -4,7 +4,13 @@ export async function verifyRouteViews(page) {
   const routes = page.locator('#coverage-routes');
   const layout = routes.getByRole('combobox', { name: 'View layout' });
   const family = page.locator('#coverage-families'), reference = page.locator('#coverage-references');
-  await family.getByRole('cell', { name: 'read.catalog, read.candles, read.ticker, read.depth, read.tape', exact: true }).waitFor();
+  const operations = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape'];
+  const firstCell = family.getByRole('row').filter({ hasText: 'Realtime quotes, history, book and tape' }).getByRole('cell').nth(3);
+  await firstCell.locator('code').first().waitFor();
+  assert.deepEqual(await firstCell.locator('code').allTextContents(), operations);
+  assert.equal(await firstCell.textContent(), operations.join(', '));
+  await firstCell.click();
+  assert.deepEqual(await family.getByRole('region', { name: 'Selected family evidence' }).locator('dd code').allTextContents(), operations);
   await family.getByRole('columnheader', { name: 'Mapped reads' }).waitFor();
   await reference.getByRole('cell', { name: '/', exact: true }).click();
   await reference.getByText('This catalog reference lists no routes.').waitFor();
@@ -28,7 +34,9 @@ export async function verifyRouteViews(page) {
     }
     await surface.getByRole('button', { name: /Current table orientation/ }).click();
     await choose.selectOption('kanban');
-    await surface.getByRole('button', { name: grid.record }).click();
+    const card = surface.getByRole('button', { name: grid.record });
+    if (grid.id === 'families') await card.locator('code').filter({ hasText: /^read\.calendar$/ }).waitFor();
+    await card.click();
     const details = surface.getByRole('region', { name: grid.evidence });
     await details.getByRole('link', { name: grid.link, exact: true }).waitFor();
     assert.match(await details.textContent(), /SHA-256 [a-f0-9]{64}/);
