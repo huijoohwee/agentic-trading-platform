@@ -121,13 +121,18 @@ export async function mountCoverageView(host) {
   families.append(node('h4', 'Feature families'), counts);
   const entries = providerCoverage.map(entry => ({ ...entry, operationNames: entry.operations.join(', '), readCount: mappedReads([entry]).length }));
   mountCoverageRecords(families, entries, node, { id: 'family', title: 'Feature families', plural: 'families', singular: 'family',
-    columns: [text('label', 'Feature family'), category('transport', 'Transport'), category('status', 'Disposition'), text('operationNames', 'Operation IDs'), number('readCount', 'Mapped reads')],
+    columns: [text('label', 'Feature family'), category('transport', 'Transport'), category('status', 'Disposition'), { id: 'operationNames', name: 'Operation IDs', format: 'code-list' }, number('readCount', 'Mapped reads')],
     measure: { label: 'Distinct mapped reads', count: group => mappedReads(group).length },
     rowDimension: 'transport', groupDimension: 'status' }, (entry, detail) => {
     detail.append(node('h5', entry.label), node('p', entry.note));
     const facts = node('dl'); facts.className = 'facts';
+    const operations = node('dd', entry.operations.length ? '' : 'None');
+    entry.operations.forEach((id, index) => {
+      if (index) operations.append(', ');
+      operations.append(node('code', id));
+    });
     facts.append(node('dt', 'Family ID'), node('dd', entry.id),
-      node('dt', 'Operation IDs'), node('dd', entry.operationNames || 'None'),
+      node('dt', 'Operation IDs'), operations,
       node('dt', 'Mapped reads'), node('dd', entry.readCount),
       node('dt', 'Listed MCP tools'), node('dd', entry.mcp.join(', ') || 'See individual routes'));
     detail.append(facts);
