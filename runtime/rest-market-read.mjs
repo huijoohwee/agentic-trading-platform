@@ -1,3 +1,4 @@
+import { accountOperation, simulatorOperation, verifySimulatorSpec, validateSimulatorRead, simulatorPath, selectedSimulatorAccount, simulatorPage } from './moomoo-simulator-read.mjs';
 import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } from 'agentic-gateway/connectors/moomoo-stock-screen';
 import { createPrivateKey, sign } from 'node:crypto';
 import { validateProviderDefinition } from './provider-mapping.mjs';
@@ -25,7 +26,7 @@ async function readResponse(response) {
   catch { fail('INVALID_RESPONSE'); }
 }
 
-export function createRestMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, fetchImpl = fetch, now = Date.now }) {
+export function createRestMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, simulatorAccount, aliasSecret, fetchImpl = fetch, now = Date.now }) {
   const { definition } = validateProviderDefinition(provider);
   requireThat(definition.transport.kind === 'REST', 'INVALID_TRANSPORT_PIN');
   const origin = definition.transport.origin;
@@ -38,7 +39,9 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
     const screen = operation === 'read.stock-screen';
-    if (isMarketRest(spec)) verifyMarketRest(operation, spec, origin);
+    if (simulatorOperation(operation) || spec.profile === 'moomoo-simulator-read/v1' ||
+      spec.path?.startsWith('/api/v1.0/sim-trade/') || spec.tool?.startsWith('sim_trade_')) verifySimulatorSpec(operation, spec, origin);
+    else if (isMarketRest(spec)) verifyMarketRest(operation, spec, origin);
     else if (screen) requireThat(spec.method === 'POST' && spec.path === STOCK_SCREEN_PATH && spec.tool === STOCK_SCREEN_TOOL &&
       spec.profile === 'moomoo-stock-screen/v1' && spec.pin_inputs === true, 'INVALID_MAPPING');
     else requireThat(spec.method === 'GET' && spec.tool !== STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
@@ -46,8 +49,9 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     requireThat(typeof spec.path === 'string' && spec.path.startsWith('/') && !/[\s?#]/.test(spec.path) && spec.path.length <= 256, 'INVALID_MAPPING');
     requireThat(!writeBan.test(spec.tool), 'SCOPE_DENIED');
   }
-  for (const operation of Object.keys(mapping.operations)) requireThat(MARKET_READ_OPERATIONS.includes(operation), 'INVALID_MAPPING');
-  let calls = 0, grant, beforeCall;
+  for (const operation of Object.keys(mapping.operations)) requireThat(MARKET_READ_OPERATIONS.includes(operation) || simulatorOperation(operation), 'INVALID_MAPPING');
+  let calls = 0, grant, beforeCall, selected;
+  const privateBinding = { provider: definition.provider, scope, account: simulatorAccount, secret: aliasSecret };
   const issue = (kind, data) => {
     const issued_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
     const payload = { schema: 'trading-runtime-envelope/v1', kind, scope, candidate, principal: attestation.principal,
@@ -60,12 +64,40 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     return issue('provider-market-page', { operation, ...page, observed_utc,
       source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest });
   };
+  async function send(url, method, requestBody, signal) {
+    beforeCall?.();
+    requireThat(!signal?.aborted, 'TIMEOUT');
+    requireThat(grant.revoked !== true, 'REVOKED');
+    requireProofs(grant, ['cost', 'rights', 'account'], now());
+    requireThat(current(grant, now()) && calls < grant.limits.max_calls, 'BUDGET_HALT');
+    calls++;
+    let response;
+    const options = { method, headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+      signal, redirect: 'error' };
+    if (requestBody) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(requestBody);
+    }
+    try { response = await fetchImpl(url, options); }
+    catch { fail(signal?.aborted ? 'TIMEOUT' : 'PROVIDER_UNAVAILABLE'); }
+    if ([401, 403].includes(response.status)) { await response.body?.cancel(); fail('SCOPE_DENIED'); }
+    requireThat(response.ok && !response.redirected, 'PROVIDER_UNAVAILABLE');
+    requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'INVALID_RESPONSE');
+    return readResponse(response);
+  }
+  function json(wire) {
+    try { return JSON.parse(wire); } catch { fail('INVALID_RESPONSE'); }
+  }
+  async function simulatorWire(operation, signal) {
+    return send(new URL(simulatorPath(operation, simulatorAccount), origin).href, 'GET', undefined, signal);
+  }
   return {
-    validateInputs(operation, inputs, allowed) {
+    validateInputs(operation, inputs, allowed, admitted) {
       const spec = mapping.operations[operation];
+      if (simulatorOperation(operation)) validateSimulatorRead(operation, inputs, admitted, privateBinding);
       if (isMarketRest(spec)) marketRequest(spec, inputs, allowed);
     },
-    async open({ grant: admitted, beforeCall: revalidate }) {
+    async open({ operation, grant: admitted, signal, beforeCall: revalidate }) {
       requireThat(admitted.mapping_digest === sha(mapping), 'MAPPING_DRIFT');
       grant = admitted; beforeCall = revalidate; calls = 0;
       // The REST response schema is reviewed offline; there is no tools/list handshake. The grant must
@@ -75,6 +107,11 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         requireThat(spec && allowed.effect === 'read' && allowed.name === spec.tool && allowed.schema_digest === spec.schema_digest, 'SCHEMA_DRIFT');
         if (allowed.operation === 'read.stock-screen') requireThat(new URL(origin).origin === 'https://webapi.moomoo.com', 'INVALID_MAPPING');
         requireThat(!writeBan.test(allowed.name), 'SCOPE_DENIED');
+      }
+      selected = null;
+      if (simulatorOperation(operation) && operation !== accountOperation) {
+        validateSimulatorRead(operation, {}, admitted, privateBinding);
+        selected = selectedSimulatorAccount(json(await simulatorWire(accountOperation, signal)), privateBinding);
       }
       return issue('read-capabilities', { tools: grant.tools, calls });
     },
@@ -86,12 +123,14 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (screen || spec.pin_inputs || allowed.inputs_digest !== undefined) {
         requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');
       }
-      beforeCall?.();
-      requireThat(!signal?.aborted, 'TIMEOUT');
-      requireThat(grant.revoked !== true, 'REVOKED');
-      requireProofs(grant, ['cost', 'rights', 'account'], now());
-      requireThat(current(grant, now()) && calls < grant.limits.max_calls, 'BUDGET_HALT');
-      calls++;
+      if (simulatorOperation(operation)) {
+        validateSimulatorRead(operation, parameters, grant, privateBinding);
+        requireThat(operation === accountOperation || selected, 'ACCOUNT_BINDING');
+        const wire = await simulatorWire(operation, signal);
+        const rows = simulatorPage(operation, json(wire), privateBinding);
+        const account = operation === accountOperation ? rows[0] : selected;
+        return issuePage(operation, { account, rows, decimals: rows.map(() => ({})) }, wire, allowed.schema_digest);
+      }
       const market = isMarketRest(spec);
       const native = market ? marketRequest(spec, parameters, allowed) : null;
       const requestBody = native?.body ?? (screen ? buildMoomooStockScreen(parameters) : undefined);
@@ -105,23 +144,10 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       requireThat(target.protocol === 'https:' && target.origin === new URL(origin).origin, 'INVALID_MAPPING');
       if (search) target.search = search;
       const url = target.href;
-      let response;
-      const options = { method: native?.method ?? (screen ? 'POST' : 'GET'), headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
-        signal, redirect: 'error' };
       if (screen) requireThat(url === 'https://webapi.moomoo.com' + STOCK_SCREEN_PATH && allowed.name === STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
-      if (requestBody) {
-        options.headers['Content-Type'] = 'application/json';
-        options.body = JSON.stringify(requestBody);
-      }
-      try { response = await fetchImpl(url, options); }
-      catch { fail(signal?.aborted ? 'TIMEOUT' : 'PROVIDER_UNAVAILABLE'); }
-      if ([401, 403].includes(response.status)) { await response.body?.cancel(); fail('SCOPE_DENIED'); }
-      requireThat(response.ok && !response.redirected, 'PROVIDER_UNAVAILABLE');
-      requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'INVALID_RESPONSE');
-      const wire = await readResponse(response);
+      const wire = await send(url, native?.method ?? (screen ? 'POST' : 'GET'), requestBody, signal);
       if (market) return issuePage(operation, marketPage(spec, parameters, wire), wire, allowed.schema_digest);
-      let body;
-      try { body = JSON.parse(wire); } catch { fail('INVALID_RESPONSE'); }
+      const body = json(wire);
       requireThat(body && typeof body === 'object' && !Array.isArray(body), 'INVALID_RESPONSE');
       if (screen) {
         const { rows, pagination } = projectMoomooStockScreen(parameters, body);

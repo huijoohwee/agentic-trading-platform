@@ -1,3 +1,4 @@
+import { simulatorOperation } from './moomoo-simulator-read.mjs';
 import { boundedCall, boundedJson, canonical, hash, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
 import { MARKET_READ_OPERATIONS } from './mcp-market-read.mjs';
 
@@ -8,19 +9,19 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
   scope = boundedJson(scope); scopeKey(scope);
   requireThat(!scope.account_alias.startsWith('runtime-budget/'), 'ACCOUNT_BINDING');
   const budgetScope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'runtime-budget/' + sha(scope.account_alias) };
-  return async function readMarket({ operation, inputs, grant: envelope }) {
+  return async function readMarket({ operation, inputs, grant: envelope, signal: dispatchSignal }) {
     const started = now();
-    requireThat(MARKET_READ_OPERATIONS.includes(operation), 'UNSUPPORTED');
+    requireThat((MARKET_READ_OPERATIONS.includes(operation) || simulatorOperation(operation)), 'UNSUPPORTED');
     const grant = verifyEnvelope(envelope, { keys, role: 'operator', kind: 'read', scope, candidate, now: started });
     requireProofs(grant, ['cost', 'rights', 'account'], started);
     requireThat(id(grant.nonce) && Number.isSafeInteger(grant.limits?.max_calls) && grant.limits.max_calls >= 3 && grant.limits.max_calls <= 12 &&
       grant.cost.remaining_calls >= grant.limits.max_calls && Number.isSafeInteger(grant.limits.timeout_ms) &&
       grant.limits.timeout_ms > 0 && grant.limits.timeout_ms <= 600_000, 'BUDGET_HALT');
     requireThat(Array.isArray(grant.tools) && grant.tools.length > 0 && grant.tools.every(tool =>
-      id(tool.name) && hash(tool.schema_digest) && tool.effect === 'read' && MARKET_READ_OPERATIONS.includes(tool.operation)), 'SCOPE_DENIED');
+      id(tool.name) && hash(tool.schema_digest) && tool.effect === 'read' && (MARKET_READ_OPERATIONS.includes(tool.operation) || simulatorOperation(tool.operation))), 'SCOPE_DENIED');
     const allowed = grant.tools.find(tool => tool.operation === operation);
     requireThat(allowed, 'SCOPE_DENIED');
-    adapter.validateInputs?.(operation, inputs, allowed);
+    adapter.validateInputs?.(operation, inputs, allowed, grant);
     if (operation === 'read.stock-screen' || allowed.inputs_digest !== undefined) {
       const { grant: envelopeInput, ...parameters } = boundedJson(inputs);
       requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');
@@ -36,9 +37,10 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
     const deadline = Math.min(started + 600_000, utcMillis(grant.expires_utc));
     const invoke = fn => boundedCall(signal => {
       requireThat(now() >= started && now() < deadline, 'WINDOW_CLOSED');
-      return fn(signal);
+      requireThat(!dispatchSignal?.aborted, 'WINDOW_CLOSED');
+      return fn(dispatchSignal ? AbortSignal.any([dispatchSignal, signal]) : signal);
     }, Math.min(grant.limits.timeout_ms, deadline - now()));
-    const opened = verifyEnvelope(await invoke(signal => adapter.open({ grant, signal })),
+    const opened = verifyEnvelope(await invoke(signal => adapter.open({ operation, grant, signal })),
       { keys, role: 'integration', kind: 'read-capabilities', scope, candidate, now: now() });
     requireThat(opened.tools && canonical(opened.tools) === canonical(grant.tools) &&
       Number.isSafeInteger(opened.calls) && opened.calls >= 0 && opened.calls < grant.limits.max_calls, 'SCHEMA_DRIFT');
@@ -55,10 +57,16 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       precision.price_source = page.price_source;
     }
     const metadata = {};
+    if (simulatorOperation(operation)) {
+      const { account_market_id, currency, ...identity } = page.account ?? {};
+      requireThat(scopeKey(identity) === scopeKey(scope) && Number.isSafeInteger(account_market_id) &&
+        account_market_id > 0 && currency === null, 'ACCOUNT_BINDING');
+      metadata.account = boundedJson(page.account);
+    }
     if (Object.hasOwn(page, 'last_valid_time_ms')) metadata.last_valid_time_ms = page.last_valid_time_ms;
     if (page.pagination) metadata.pagination = boundedJson(page.pagination);
     return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, ...metadata, ...precision, observed_utc: page.observed_utc,
-      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest, ...precision }),
+      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest, ...(metadata.account && { account: metadata.account }), ...precision }),
       cost: { tool_calls: opened.calls + 1, tokens_in: 'UNKNOWN', tokens_out: 'UNKNOWN', provider_fees: 'UNKNOWN' } };
   };
 }
