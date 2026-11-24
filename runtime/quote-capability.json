@@ -17,9 +17,9 @@
   "losses": [],
   "major": 1,
   "locality": "device",
-  "revision": "f0c920b580d1beec0ddab608df5fb27836cfe5ee",
+  "revision": "430c958081f5430678f5da0bb07085ce400bf1ce",
   "schemaSource": "runtime/gateway.mjs",
-  "schemaDigest": "bf14f8b882b152c997216effcd462fc5df552bd85885be284c36d27892b6b693",
+  "schemaDigest": "1daa2f91a379702565d72b262c88c653f063dd2555c65ab3b22a09110b2c1f41",
   "qualifiedBinding": {
     "adapterDigest": "1d1ac4794ea62b78141e3512a60a29d31fc435ed8a46a64b6960d144b944ceca",
     "schemaDigest": "b5fa00e85908543acfe8bb113e3168fc53e30bb3e11eecd8953def12d3f7b50e",
