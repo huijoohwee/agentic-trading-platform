@@ -2,6 +2,7 @@ import { createNativeDashboard } from '../owners/design/site/dashboard.mjs';
 import { mountDataView, mountDashboardChart } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 import { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from './provider-desk.mjs';
 import { mountDeskDiagrams } from './desk-diagrams.mjs';
+import { addQuoteProvenance, quoteChange } from './quote-display.mjs';
 
 // Moomoo-inspired read-only market desk: quote board, order-book ladder, time & sales and daily
 // candles, composed from pinned Agentic Design System / Base owner primitives (no token forks).
@@ -40,17 +41,14 @@ export async function mountMoomooDeskView(host) {
   const intro = node('p', p.note);
   const before = node('div'); before.append(status, intro);
 
-  const change = s.prev_close == null ? null : Number(s.last) - Number(s.prev_close);
-  const changePct = Number(s.prev_close) > 0 ? (change / Number(s.prev_close)) * 100 : null;
-  const signed = value => (value >= 0 ? '+' : '') + value;
+  const change = quoteChange(s.last, s.prev_close);
   const display = value => value == null ? 'UNKNOWN' : String(value);
-  const changeText = change === null ? 'UNKNOWN' : signed(change) + (changePct === null ? '' : ' (' + signed(changePct.toFixed(2)) + '%)');
   const { DashboardCanvasLayout, DashboardCardGrid, DashboardPrimitive } = createNativeDashboard(document);
   const overview = DashboardCardGrid({
     ariaLabel: 'Market quote board',
     cards: [
       { id: 'desk-last', eyebrow: 'Last', title: String(s.last), accent: 'primary' },
-      { id: 'desk-change', eyebrow: 'Change vs prev close', title: changeText, accent: change === null ? 'neutral' : change >= 0 ? 'success' : 'secondary' },
+      { id: 'desk-change', eyebrow: 'Change vs prev close', title: change.text, accent: change.accent },
       { id: 'desk-range', eyebrow: 'Day range', title: `${display(s.low)} – ${display(s.high)}`, accent: 'neutral' },
       { id: 'desk-volume', eyebrow: 'Volume', title: display(s.volume), accent: 'neutral' },
       { id: 'desk-turnover', eyebrow: 'Turnover', title: display(s.turnover), accent: 'neutral' }
@@ -62,7 +60,7 @@ export async function mountMoomooDeskView(host) {
   const add = (term, detail) => { facts.append(node('dt', term), node('dd', detail)); };
   add('Symbol', `${s.symbol} (${s.market})`); add('Name', s.name); add('Market date', s.market_date);
   add('Open', display(s.open)); add('Previous close', display(s.prev_close));
-  add('Exchange', deskDepth.exchange); add('Quote time (UTC)', display(s.marketTimeUtc)); add('Captured UTC', p.captured_utc); add('Binding', p.binding);
+  add('Exchange', deskDepth.exchange); addQuoteProvenance(add, s.marketTimeUtc, p.captured_utc); add('Binding', p.binding);
   sections.append(facts);
 
   diagram(sections, 'Order book depth · bar length is volume', diagrams.depth(deskDepth));

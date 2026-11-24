@@ -1,12 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { addQuoteProvenance, quoteChange } from '../src/quote-display.mjs';
 import { projectDesktopDesk, deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
 
 const fixture = JSON.parse(await readFile(new URL('../qualification/moomoo/desktop-mcp-capture.json', import.meta.url), 'utf8'));
 const book = fixture.calls.quote_order_book.structuredContent.data[0].books[0];
 const side = list => list.map(row => ({ price: String(row.price), volume: row.volume, orders: row.order_count }));
 const iso = date => String(date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+
+test('the desk computes decimal price changes and rounds percentages once', () => {
+  for (const [last, previous, text] of [
+    ['0.3', '0.2', '+0.1 (+50.00%)'], ['0.2', '0.3', '-0.1 (-33.33%)'],
+    ['2.0001', '2', '+0.0001 (+0.01%)'], ['1.9999', '2', '-0.0001 (-0.01%)'],
+    ['2e-7', '1e-7', '+0.0000001 (+100.00%)'], ['1e+20', '1', '+99999999999999999999 (+9999999999999999999900.00%)'],
+    ['20', '10', '+10 (+100.00%)'], ['1.20', '1.2', '+0 (+0.00%)'], ['2', '0', '+2'],
+    ['344', null, 'UNKNOWN'], [null, '10', 'UNKNOWN']
+  ]) assert.equal(quoteChange(last, previous).text, text);
+  assert.equal(quoteChange('1', '2').accent, 'secondary');
+  assert.equal(quoteChange('1', null).accent, 'neutral');
+});
+
+test('quote age uses the capture clock and preserves unavailable or inconsistent times', () => {
+  const evidence = (market, capture) => {
+    const rows = {};
+    addQuoteProvenance((label, value) => { rows[label] = value; }, market, capture);
+    return rows;
+  };
+  const market = deskQuote.marketTimeUtc, captured = deskProvenance.captured_utc;
+  assert.equal(evidence(market, captured)['Age at capture'], '15 h 9 min 54 s');
+  assert.equal(evidence(Date.parse(market), captured)['Quote time (UTC)'], market);
+  assert.equal(evidence(market, '2026-11-23T08:07:50.250Z')['Age at capture'], '0 h 0 min 0.25 s');
+  assert.match(evidence(captured, market)['Age at capture'], /source time follows capture/);
+  assert.equal(evidence(null, captured)['Quote time (UTC)'], 'Unknown');
+  assert.equal(evidence('2026-02-30T00:00:00Z', captured)['Age at capture'], 'Unknown');
+  assert.equal(evidence(market, null)['Age at capture'], 'Unknown');
+});
 
 test('the quote board uses the same captured symbol and preserves absent prior close', () => {
   const row = fixture.calls.quote_stock_quote.structuredContent.data.quote_list[0];

@@ -120,6 +120,8 @@ try {
     assert.ok((await page.locator('#hosted-status').innerText()).includes('hosted N3 qualified'));
     assert.ok((await page.locator('#hosted-body').innerText()).includes('quote:read'));
     assert.ok((await page.locator('#hosted-body').innerText()).includes('https://mcp.moomoo.com/mcp'));
+    await page.locator('#hosted-body').getByText('16 h 24 min 52 s', { exact: true }).waitFor();
+    await page.locator('#capture-body').getByText('15 h 9 min 54 s', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/hosted-view.mjs'))), true);
     await page.locator('#provider-desk summary').click();
     await page.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
@@ -227,6 +229,7 @@ try {
     await reopened.locator('#provider-desk summary').click();
     await reopened.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
     assert.ok((await reopened.locator('#desk-status').innerText()).includes('read-only desk'));
+    await reopened.locator('#desk-body').getByText('15 h 9 min 54 s', { exact: true }).waitFor();
     await reopened.locator('#provider-coverage > summary').click();
     const routes = reopened.locator('#coverage-routes');
     await routes.getByLabel('Route or tool').fill('quote_stock_quote');

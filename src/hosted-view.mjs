@@ -1,3 +1,4 @@
+import { addQuoteProvenance } from './quote-display.mjs';
 import { hostedSummary, hostedProvenance, hostedOperations } from './provider-hosted.mjs';
 
 // Lazy, read-only surface for the entitled $0 hosted moomoo OAuth capture (N3). It renders the curated
@@ -20,7 +21,7 @@ export async function mountHostedView(host) {
   add('Open / high / low', `${s.open} / ${s.high} / ${s.low}`);
   add('Volume', String(s.volume));
   add('Turnover', String(s.turnover));
-  add('Captured UTC', p.captured_utc);
+  addQuoteProvenance(add, s.data_time, p.captured_utc);
   add('Binding', p.binding);
   add('Host', p.host);
   add('OAuth scope', p.scope);
