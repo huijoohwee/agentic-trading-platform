@@ -1,5 +1,5 @@
 import {
-  replayMoomooOrderBook, replayMoomooTicker, replayMoomooKline
+  replayMoomooQuote, replayMoomooOrderBook, replayMoomooTicker, replayMoomooKline
 } from 'agentic-gateway/connectors/moomoo';
 import capture from '../qualification/moomoo/desktop-mcp-capture.json' with { type: 'json' };
 
@@ -12,14 +12,19 @@ export function projectDesktopDesk(fixture) {
       provenance.hosted_n3 !== false || cost_usd !== 0) throw Error('DESK_CAPTURE_REQUIRED');
   const read = (name, parameter) => {
     const call = calls[name];
-    if (call?.arguments?.[parameter] !== symbol) throw Error('DESK_SYMBOL_MISMATCH');
+    const arg = call?.arguments?.[parameter];
+    const matches = parameter === 'code_list'
+      ? Array.isArray(arg) && arg.length === 1 && arg[0] === symbol : arg === symbol;
+    if (!matches) throw Error('DESK_SYMBOL_MISMATCH');
     if (call.isError || call.structuredContent?.ret_code !== 0) throw Error('DESK_PROVIDER_REFUSED');
     return call.structuredContent.data;
   };
+  const quotes = read('quote_stock_quote', 'code_list').quote_list;
   const books = read('quote_order_book', 'code');
   const tape = read('quote_rt_ticker', 'symbol');
   const klines = read('quote_cur_kline', 'symbol').kline_list;
-  if (books?.length !== 1 || books[0].code !== symbol || books[0].books?.length !== 1 ||
+  if (quotes?.length !== 1 || quotes[0].code !== symbol || quotes[0].data_date !== market_date ||
+      books?.length !== 1 || books[0].code !== symbol || books[0].books?.length !== 1 ||
       tape.code !== symbol || !Array.isArray(klines) || klines.some(row => row.code !== symbol)) {
     throw Error('DESK_CAPTURE_MISMATCH');
   }
@@ -29,6 +34,8 @@ export function projectDesktopDesk(fixture) {
       (klineArgs.autype ?? schema?.autype?.default) !== 1) throw Error('DESK_KLINE_DIMENSION');
 
   const frame = (type, data) => ({ type, symbol, data });
+  const quote = quotes[0];
+  const price = replayMoomooQuote(symbol, frame('QUOTE', { ...quote, data_time_ms: quote.data_time }));
   const book = books[0].books[0];
   const depth = replayMoomooOrderBook(symbol, frame('ORDER_BOOK', {
     bid_list: book.bid_list, ask_list: book.ask_list, data_time_ms: book.exchange_data_time_ms
@@ -49,9 +56,12 @@ export function projectDesktopDesk(fixture) {
     deskProvenance: {
       binding, captured_utc, symbol, market, market_date, cost_usd,
       fixture: 'qualification/moomoo/desktop-mcp-capture.json',
-      operations: ['read.depth', 'read.tape', 'read.candles'],
-      note: 'Gateway replay of the saved Desktop order book, trades and daily candles. Currency, delay and feed attribution are unknown.'
+      operations: ['read.ticker', 'read.depth', 'read.tape', 'read.candles'],
+      note: 'Gateway replay of the saved Desktop quote, order book, trades and daily candles. Currency, delay and feed attribution are unknown.'
     },
+    deskQuote: { name: quote.name, symbol, market, market_date, last: price.last, prev_close: price.previousClose,
+      open: price.open, high: price.high, low: price.low, volume: price.volume, turnover: price.turnover,
+      marketTimeUtc: price.marketTimeUtc },
     deskDepth: { exchange: book.exchange, ask: levels(depth.asks), bid: levels(depth.bids) },
     deskTape: ticks.map((tick, index) => ({
       time: epoch(tick.marketTimeUtc), price: tick.price, volume: tick.volume,
@@ -70,4 +80,4 @@ export function projectDesktopDesk(fixture) {
   };
 }
 
-export const { deskProvenance, deskDepth, deskTape, deskCandles } = projectDesktopDesk(capture);
+export const { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } = projectDesktopDesk(capture);

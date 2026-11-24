@@ -1,12 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { projectDesktopDesk, deskProvenance, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
+import { projectDesktopDesk, deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
 
 const fixture = JSON.parse(await readFile(new URL('../qualification/moomoo/desktop-mcp-capture.json', import.meta.url), 'utf8'));
 const book = fixture.calls.quote_order_book.structuredContent.data[0].books[0];
 const side = list => list.map(row => ({ price: String(row.price), volume: row.volume, orders: row.order_count }));
 const iso = date => String(date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+
+test('the quote board uses the same captured symbol and preserves absent prior close', () => {
+  const row = fixture.calls.quote_stock_quote.structuredContent.data.quote_list[0];
+  assert.equal(deskQuote.last, String(row.last_price));
+  assert.equal(deskQuote.name, row.name);
+  assert.equal(deskQuote.marketTimeUtc, new Date(row.data_time).toISOString());
+  const changed = structuredClone(fixture);
+  delete changed.calls.quote_stock_quote.structuredContent.data.quote_list[0].prev_close_price;
+  assert.equal(projectDesktopDesk(changed).deskQuote.prev_close, null);
+  changed.calls.quote_stock_quote.arguments.code_list.push('US.AAPL');
+  assert.throws(() => projectDesktopDesk(changed), /DESK_SYMBOL_MISMATCH/);
+});
 
 test('the Gateway-projected desk depth ladder is pinned to the captured order book', () => {
   assert.equal(deskDepth.exchange, book.exchange);
@@ -49,7 +61,7 @@ test('the desk provenance stays read-only, $0 and Desktop-bound', () => {
   assert.equal(deskProvenance.cost_usd, 0);
   assert.equal(deskProvenance.symbol, fixture.provenance.symbol);
   assert.equal(deskProvenance.captured_utc, fixture.provenance.captured_utc);
-  assert.deepEqual(deskProvenance.operations, ['read.depth', 'read.tape', 'read.candles']);
+  assert.deepEqual(deskProvenance.operations, ['read.ticker', 'read.depth', 'read.tape', 'read.candles']);
   assert.equal(fixture.provenance.hosted_n3, false);
 });
 

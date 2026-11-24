@@ -26,15 +26,15 @@ export const providerCoverage = Object.freeze([
     ['read.calendar'], [],
     [source('api/quote/calendar/earnings-calendar.md', '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2')],
     'REST-only (no MCP tool). Market-local dates, Unix-microsecond publication time, session and null estimates preserved; ≤7-day inclusive window.'),
-  family('capital-flow', 'Capital flow and unusual activity', 'candidate', 'MCP+REST',
+  family('capital-flow', 'Capital flow', 'mapped', 'REST',
     ['read.capital-flow'], ['quote_capital_flow'],
     [source('api/quote/unusual/capital.md', '6822c10b8faf8c50ddac9440f2efdbf1446c7c76130c3268e349ec15a633e6f9')],
-    'MCP capital-flow tool observed; REST unusual-activity docs imported. Semantic read not yet mapped.'),
-  family('rank', 'Rankings and hot lists', 'candidate', 'MCP+REST',
+    'Local REST fixture preserves signed native-currency flows and millisecond timestamps. The Desktop directory separately advertised quote_capital_flow.'),
+  family('rank', 'Ranking hot list', 'mapped', 'REST',
     ['read.rank'], [],
     [source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
      source('api/quote/rank/rank-earnings-beat.md', '4689cb06a31b34f6a020aaa32b977b8a9ed8f0ba6d2a2d4521703f1680f7f934')],
-    'Screening/ranking docs imported; no verified MCP ranking tool in the observed catalog subset.'),
+    'Local REST fixture covers one bounded hot-list page, its heat scores and continuation. Other rankings await mapping.'),
   family('plate-industry', 'Sectors, plates and industrial chain', 'candidate', 'MCP+REST',
     ['read.plate'], ['quote_plate_list', 'quote_plate_stock', 'quote_owner_plate'],
     [source('api/quote/industry/heatmap.md', 'a636ade5e00f7018f4cb7461b1bd82e607119f3714483eff68476bb8665a0297'),
@@ -139,6 +139,11 @@ export function coverageSummary(entries = providerCoverage) {
   });
 }
 const deskTools = new Set(Object.values(captureMapping.operations).map(operation => operation.tool));
+const reviewedRest = new Map([
+  ['GET /api/v1.0/quote/earnings-calendar', { evidence: 'Local earnings calendar fixture', units: 'Market-local dates and Unix microseconds' }],
+  ['GET /api/v1.0/quote/{symbol}/capital-flow', { evidence: 'Local capital-flow fixture', units: 'Native currency and Unix milliseconds' }],
+  ['GET /api/v1.0/quote/rank/hot-list', { evidence: 'Local hot-list fixture', units: 'Provider heat scores and rank changes' }]
+]);
 const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE']);
 const routeKey = http => http.replace(/\{[A-Za-z_][\w]*\}/g, '{}');
 
@@ -163,8 +168,8 @@ function disposition(methodPath, topic, name) {
   if (name && deskTools.has(name)) {
     return ['mapped', 'quote:read', name === 'quote_stock_quote' ? 'Desktop and hosted captures' : 'Desktop capture'];
   }
-  if (!name && methodPath === 'GET /api/v1.0/quote/earnings-calendar') {
-    return ['mapped', 'quote:read', 'Local REST calendar fixture'];
+  if (!name && reviewedRest.has(methodPath)) {
+    return ['mapped', 'quote:read', reviewedRest.get(methodPath).evidence];
   }
   const scope = path.includes('/quote/') || name === 'news_search' ? 'quote:read'
     : path.includes('/accounts/') ? 'trade:read' : 'scope review';
@@ -180,7 +185,8 @@ export function routeInventory(catalog) {
     let route = routes.get(key);
     if (!route) {
       const [status, scope, evidence] = disposition(methodPath, topic, name);
-      route = { transport, label, status, scope, evidence, sources: [] };
+      const units = transport === 'REST' ? reviewedRest.get(methodPath)?.units : undefined;
+      route = { transport, label, status, scope, evidence, units: units ?? 'See source field definitions', sources: [] };
       routes.set(key, route);
     }
     route.sources.push(source);

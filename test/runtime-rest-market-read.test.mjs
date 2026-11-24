@@ -132,6 +132,9 @@ test('precision loss on microsecond time and oversize pages are refused', async 
   const unsafe = { ret_code: 0, data: { items: [{ ...calendarResponse.data.items[0], earnings_timestamp: 9007199254740993 }] } };
   const loss = createMarketReadBoundary({ store, scope, candidate, keys, adapter: adapterFor(fakeRest({ result: unsafe })), now });
   await assert.rejects(loss({ operation: 'read.calendar', inputs, grant: grant('p', 'p') }), /PRECISION_UNKNOWN/);
+  const largeResponse = adapterFor(fakeRest({ result: { padding: 'x'.repeat(480_000) } }));
+  const limited = createMarketReadBoundary({ store, scope, candidate, keys, adapter: largeResponse, now });
+  await assert.rejects(limited({ operation: 'read.calendar', inputs, grant: grant('wire', 'wire') }), /INPUT_TOO_LARGE/);
   const big = { ret_code: 0, data: { items: Array.from({ length: 601 }, () => calendarResponse.data.items[0]) } };
   const oversize = createMarketReadBoundary({ store, scope, candidate, keys, adapter: adapterFor(fakeRest({ result: big })), now });
   await assert.rejects(oversize({ operation: 'read.calendar', inputs, grant: grant('b', 'b') }), /INVALID_PAGE/);

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { providerCoverage, coverageSummary, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
+import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
+import { providerCoverage, coverageSummary, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
 
 const statuses = ['mapped', 'candidate', 'paper-candidate', 'excluded'];
 const transports = ['MCP', 'REST', 'MCP+REST', 'PUSH'];
@@ -30,11 +31,11 @@ test('the coverage inventory is evidence-led: pinned source hashes, honest statu
   }
 });
 
-test('mapped reads cover the MCP market family and the REST-only earnings calendar', () => {
+test('mapped reads cover the MCP market family and reviewed REST projections', () => {
   const summary = coverageSummary();
   assert.ok(summary.mapped_operations.includes('read.calendar'));
   assert.ok(summary.mapped_operations.includes('read.ticker'));
-  assert.deepEqual(summary.rest_only_mapped, ['calendar']);
+  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'capital-flow', 'rank']);
   assert.ok(summary.excluded.includes('trading') && summary.excluded.includes('crypto-trading'));
   const calendar = providerCoverage.find(entry => entry.id === 'calendar');
   assert.equal(calendar.transport, 'REST');
@@ -42,4 +43,20 @@ test('mapped reads cover the MCP market family and the REST-only earnings calend
   assert.equal(calendar.sources[0].sha256, '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2');
   assert.equal(summary.families, providerCoverage.length);
   assert.equal(Object.values(summary.by_status).reduce((a, b) => a + b, 0), providerCoverage.length);
+});
+
+test('pinned route inventory reconciles aliases, transport-specific evidence and known gaps', () => {
+  const rows = routeInventory(catalog);
+  const on = transport => rows.filter(row => row.transport === transport);
+  assert.deepEqual(['REST', 'MCP', 'Push'].map(key => on(key).length), [217, 107, 24]);
+  assert.equal(catalog.sources.length, 305);
+  assert.equal(catalog.sources.filter(source => hex(source.sha256)).length, 196);
+  assert.deepEqual(on('MCP').map(row => row.label).sort(), catalog.tools.map(tool => tool.name).sort());
+  assert.equal(on('Push').filter(row => row.status === 'offline replay').length, 4);
+  assert.equal(on('REST').filter(row => row.status === 'mapped').length, 3);
+  assert.equal(on('MCP').find(row => row.label === 'quote_capital_flow').status, 'candidate');
+  assert.equal(on('REST').find(row => row.label.endsWith('/modify-user-security')).status, 'blocked');
+  assert.equal(on('REST').find(row => row.label === 'POST /api/v1/crypto/accounts/{acc_id}/orders').status, 'excluded');
+  for (const row of rows) assert.ok(row.sources.length && row.sources.every(source => hex(source.digest)));
+  assert.throws(() => routeInventory({ ...catalog, index_sha256: 'changed' }), /COVERAGE_SOURCE_DRIFT/);
 });

@@ -25,7 +25,6 @@ export function openConfiguredRuntime(path) {
   return { config, store };
 }
 
-
 export function providerCredential(config, provider, transport) {
   const slot = config.provider_credentials?.[provider];
   if (!slot) return null;

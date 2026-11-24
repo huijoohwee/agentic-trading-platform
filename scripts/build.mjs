@@ -1,4 +1,4 @@
-import { deskProvenance, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
+import { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -102,7 +102,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   assets.set('qualification/moomoo/route-inventory.json',
     await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo-catalog.json'))));
-  const deskRows = { deskProvenance, deskDepth, deskTape, deskCandles };
+  const deskRows = { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles };
   assets.set('src/provider-desk.mjs', Buffer.from(Object.entries(deskRows)
     .map(([name, value]) => 'export const ' + name + ' = ' + JSON.stringify(value) + ';').join('\n')));
   const toolbar = await readFile(join(root, 'web/trading-toolbar.html'), 'utf8');

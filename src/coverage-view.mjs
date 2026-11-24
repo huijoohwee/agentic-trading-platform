@@ -8,7 +8,7 @@ export async function mountCoverageView(host) {
   const summary = coverageSummary();
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
-  const intro = node('p', `Evidence-led inventory of ${COVERAGE_INDEX.known_sources} known OpenAPI sources (${COVERAGE_INDEX.imported_sources} imported, ${COVERAGE_INDEX.incomplete_sources} incomplete). Statuses describe mapping readiness, not connected readiness. Live order dispatch is excluded from the read-only $0 scope.`);
+  const intro = node('p', `Evidence-led inventory of ${COVERAGE_INDEX.known_sources} known OpenAPI sources (${COVERAGE_INDEX.imported_sources} imported, ${COVERAGE_INDEX.incomplete_sources} incomplete). Connected qualification is specific to the host and read. Live order dispatch is excluded from the read-only $0 scope.`);
   const counts = node('p', Object.entries(summary.by_status).map(([key, value]) => `${key}: ${value}`).join(' · '));
   const list = node('div'); list.id = 'coverage-families';
   for (const entry of providerCoverage) {
@@ -36,7 +36,8 @@ export async function mountCoverageView(host) {
     rows.filter(row => row.transport === kind).length + ' ' + kind + ' routes').join(' · '));
   const finder = node('section');
   finder.id = 'coverage-routes';
-  finder.append(node('h4', 'Find a provider route'), summaryLine);
+  finder.append(node('h4', 'Find a provider route'), summaryLine,
+    node('p', 'Gateway owns provider route definitions. Trading owns mappings and admission. Each connected read requires host-specific rights, a provider-enforced $0 limit and remaining quota.'));
   const label = node('label', 'Route or tool ');
   const query = node('input');
   query.type = 'search';
@@ -59,7 +60,7 @@ export async function mountCoverageView(host) {
     results.replaceChildren(...page.map(row => {
       const item = node('li'), detail = node('details');
       detail.append(node('summary', row.transport + ' · ' + row.label + ' · ' + row.status),
-        node('p', row.scope + ' · ' + row.evidence));
+        node('p', row.scope + ' · ' + row.evidence), node('p', row.units));
       for (const source of row.sources) {
         const link = node('a', source.tool ?? new URL(source.url).pathname);
         link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer';

@@ -30,6 +30,20 @@ const readPath = (object, path, optional) => {
   return value;
 };
 
+// Enforce the wire limit before parsing, including when no Content-Length is sent.
+async function readResponse(response) {
+  const chunks = [];
+  let size = 0;
+  requireThat(response.body, 'INVALID_RESPONSE');
+  for await (const chunk of response.body) {
+    size += chunk.length;
+    requireThat(size <= 480_000, 'INPUT_TOO_LARGE');
+    chunks.push(chunk);
+  }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, size))); }
+  catch { fail('INVALID_RESPONSE'); }
+}
+
 export function createRestMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, fetchImpl = fetch, now = Date.now }) {
   const { definition } = validateProviderDefinition(provider);
   requireThat(definition.transport.kind === 'REST', 'INVALID_TRANSPORT_PIN');
@@ -151,8 +165,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if ([401, 403].includes(response.status)) { await response.body?.cancel(); fail('SCOPE_DENIED'); }
       requireThat(response.ok && !response.redirected, 'PROVIDER_UNAVAILABLE');
       requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'INVALID_RESPONSE');
-      let body;
-      try { body = boundedJson(await response.json()); } catch { fail('INVALID_RESPONSE'); }
+      const body = await readResponse(response);
       requireThat(body && typeof body === 'object' && !Array.isArray(body) && Number.isSafeInteger(body.ret_code), 'INVALID_RESPONSE');
       const decimals = [];
       let rows;
