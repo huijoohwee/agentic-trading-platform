@@ -73,8 +73,38 @@ const items = ['data', 'items'];
 const symbol = '{symbol}/';
 const boundedCount = (min, max) => ({ integer: [min, max] });
 const disclosureTime = { disclosure_time_ms: { source: 'response', path: ['data', 'update_time'] } };
+const optionMarkets = ['HK', 'US', 'JP'];
+const cycles = ['MONTH', 'WEEK', 'END_OF_MONTH', 'QUARTERLY', 'WEEKMON', 'WEEKTUE', 'WEEKWED', 'WEEKTHU', 'WEEKFRI'];
+const optionFilters = {
+  index_option_type: { enum: [1, 2, 3, 4, 5, 1000, 1001, 1003, 1005, 1006, 1007, 1008, 1009,
+    1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 2001, 2002, 2003] },
+  filter_standard: { enum: ['ALL', 'STANDARD', 'NON_STANDARD'] }
+};
+const greeks = ['delta', 'gamma', 'vega', 'theta', 'rho', 'iv'];
 const operations = {
   'read.capital-flow': capitalFlow, 'read.rank': hotList, 'read.plate': plate, 'read.ipo': ipo,
+  'read.option-chain': quote('option-chain', symbol + 'option-chain', ['data', 'option_chain'],
+    { text: ['code', 'stock_owner', 'option_type', 'expiration_cycle', 'option_standard_type'], date: ['strike_time'],
+      numeric: ['strike_price'], integer: ['lot_size'] },
+    { symbol_markets: optionMarkets, provider_doubles: true, params: { ...optionFilters,
+      start: { date: true, allow_empty: true }, end: { date: true, allow_empty: true } },
+      match_inputs: { stock_owner: 'symbol' }, match_filters: { option_standard_type: { input: 'filter_standard', all: 'ALL' } },
+      window: { begin: 'start', end: 'end', field: 'strike_time', max_distinct: 20 },
+      allowed_values: { option_type: ['CALL', 'PUT'], expiration_cycle: [...cycles, 'N/A'], option_standard_type: ['STANDARD', 'NON_STANDARD', 'N/A'] } }),
+  'read.option-expiries': quote('option-expiration', symbol + 'option-expiration', ['data', 'expiration_list'],
+    { date: ['strike_time'], integer: ['option_expiry_date_distance'], text: ['expiration_cycle'] },
+    { symbol_markets: optionMarkets, params: { ...optionFilters,
+      filter_expiration_cycles: { length: [0, 128], one_of_list: cycles, allow_empty: true } },
+      match_filters: { expiration_cycle: { input: 'filter_expiration_cycles' } },
+      allowed_values: { expiration_cycle: [...cycles, 'N/A'] } }),
+  'read.option-events': quote('option-event', 'option-event', ['data', 'events'],
+    { text: ['option', 'owner'], integer: ['fill_timestamp', 'strike_timestamp'],
+      numeric: ['price', 'strike_price', 'bid_price', 'ask_price', ...greeks] },
+    { provider_doubles: greeks, nullable: ['bid_price', 'ask_price', ...greeks], match_inputs: { owner: 'code' },
+      market_input: { field: 'owner', filter: 'code', input: 'option_market' },
+      params: { option_market: { required: true, enum: ['US_SECURITY', 'US_INDEX', 'HK_SECURITY', 'HK_INDEX'] },
+        code: { symbol: true, length: [0, 64], allow_empty: true }, page_size: boundedCount(1, 300),
+        page_flag: { length: [0, 256] } }, pagination: ['pagination'], default_page_size: 50, cursor_limit: 256 }),
   'read.news': news, 'read.research': ratings,
   'read.financials': quote('company-profile', symbol + 'company/profile', items,
     { text: ['name', 'value'], integer: ['field_type', 'attribute_type'] }, { nullable: ['value'] }),
