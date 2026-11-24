@@ -52,3 +52,7 @@ The route inventory now identifies 22 REST mappings. Nineteen additional GETs ha
 | Stock Connect, top brokers, chip distribution, CBBC | Daily flow in yuan and shares, both sides of HK broker rankings, chip prices and profit ratio, and outstanding bull/bear quantities with the supplied currency. |
 
 For these nineteen reads, the operator signs an `inputs_digest` on the grant’s tool entry. Compute it with `sha(parameters)` from `runtime/core.mjs`, using the exact request parameters including any cursor and excluding the grant envelope. Trading checks it before the provider GET. A fresh page or symbol requires its corresponding authorization. The existing calendar, capital-flow and ranking contracts continue to accept their reviewed grants. The signed fixtures use a local response transport. Connected research requires private REST credentials, current rights and call headroom for the named operation.
+
+## Simulator route coverage
+
+Search for `/sim-trade/` in the route inventory. Six GETs cover account discovery, cash, positions, buying power, current orders and order history. Three POSTs describe placing, modifying and cancelling a simulator ticket. Each route lists its required fields or units. Connected simulation requires the named account, a signed simulator grant and independent approval for each ticket effect. The local paper broker signs its observations as MOCK. It refuses a provider source label and refuses to reuse retained balances or fills with a conflicting origin. The original ledger remains available for reconciliation.

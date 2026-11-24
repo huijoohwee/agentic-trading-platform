@@ -1,7 +1,7 @@
-import { createPrivateKey, sign } from 'node:crypto';
+import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { settleFill } from '../src/practice-account.mjs';
 import { appendEvent } from './store.mjs';
-import { boundedJson, canonical, hash, id, requireThat, sameScope, scopeKey, sha, utcMillis } from './core.mjs';
+import { boundedJson, canonical, current, hash, id, requireThat, sameScope, scopeKey, sha, utcMillis } from './core.mjs';
 
 const instant = n => new Date(Math.floor(n / 1000) * 1000).toISOString().replace('.000Z', 'Z');
 const terminal = new Set(['FILLED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED']);
@@ -21,7 +21,8 @@ export function createPaperBroker({ store, scope, candidate, keys, attestation, 
     keys?.[attestation.key_id]?.role === 'integration', 'ATTESTATION_REQUIRED');
   const privateKey = createPrivateKey(attestation.privateKey);
   requireThat(privateKey.asymmetricKeyType === 'ed25519', 'ATTESTATION_REQUIRED');
-  requireThat(['MOCK', 'PROVIDER'].includes(source) && id(provider), 'INVALID_TRANSPORT');
+  const publicKey = createPublicKey(privateKey);
+  requireThat(source === 'MOCK' && id(provider), 'INVALID_TRANSPORT');
   requireThat(Number.isFinite(cash) && cash >= 0 && Number.isFinite(fee) && fee >= 0, 'INVALID_TRANSPORT');
   requireThat(Array.isArray(market?.quotes) && market.quotes.length > 0 && market.quotes.length <= 50 &&
     market.quotes.every(q => id(q.symbol_key) && q.ccy === 'USD' && Number.isFinite(q.last) && q.last > 0 &&
@@ -37,6 +38,13 @@ export function createPaperBroker({ store, scope, candidate, keys, attestation, 
     return { key_id: attestation.key_id, payload, signature: sign(null, Buffer.from(canonical(payload)), privateKey).toString('base64url') };
   };
   const initial = () => ({ cash, realized: 0, positions: {}, orders: {}, account_envelope: null, account_state: null });
+  function localSimulation(state) {
+    const sim = state.configs.paperSim ?? initial();
+    const matches = row => row?.source === 'MOCK' && row.provider === provider;
+    requireThat((!sim.account_envelope || matches(sim.account_envelope.payload?.data)) &&
+      Object.values(sim.orders).every(matches), 'PROVIDER_BINDING');
+    return sim;
+  }
   const stateDigest = sim => sha({ cash: sim.cash, realized: sim.realized, positions: sim.positions, orders: sim.orders });
   function accountData(sim, revision) {
     const at = instant(now());
@@ -55,9 +63,16 @@ export function createPaperBroker({ store, scope, candidate, keys, attestation, 
     async readAccount({ scope: target, candidate: bound, signal }) {
       requireThat(sameScope(target, scope) && bound === candidate && !signal?.aborted, 'ACCOUNT_BINDING');
       return store.transaction(simScope, state => {
-        const sim = state.configs.paperSim ?? initial();
+        const sim = localSimulation(state);
         const digest = stateDigest(sim);
-        if (sim.account_envelope && sim.account_state === digest) return clone(sim.account_envelope);
+        const cached = sim.account_envelope?.payload;
+        if (cached && sim.account_state === digest && cached.candidate === candidate &&
+          sameScope(cached.scope, scope) && current(cached, now()) &&
+          sim.account_envelope.key_id === attestation.key_id && cached.principal === attestation.principal &&
+          cached.runtime === attestation.runtime && typeof sim.account_envelope.signature === 'string' &&
+          verify(null, Buffer.from(canonical(cached)), publicKey, Buffer.from(sim.account_envelope.signature, 'base64url'))) {
+          return clone(sim.account_envelope);
+        }
         const envelope = observation('account', accountData(sim, state.revision));
         state.configs.paperSim = { ...sim, account_envelope: envelope, account_state: digest };
         return envelope;
@@ -67,7 +82,7 @@ export function createPaperBroker({ store, scope, candidate, keys, attestation, 
       requireThat(sameScope(target, scope) && bound === candidate && id(intent_id) && !signal?.aborted, 'ACCOUNT_BINDING');
       requireThat(utcMillis(not_after_utc) !== null && now() < utcMillis(not_after_utc), 'CUTOFF');
       return store.transaction(simScope, state => {
-        const sim = state.configs.paperSim ?? initial();
+        const sim = localSimulation(state);
         const existing = Object.values(sim.orders).find(o => o.intent_id === intent_id);
         if (existing) return observation('order', clone(existing));
         const at = instant(now()), order_id = 'paper-' + sha({ intent_id, ticket });
@@ -88,7 +103,7 @@ export function createPaperBroker({ store, scope, candidate, keys, attestation, 
     },
     async readOrder({ scope: target, candidate: bound, intent_id, order_id, signal }) {
       requireThat(sameScope(target, scope) && bound === candidate && !signal?.aborted, 'ACCOUNT_BINDING');
-      const sim = store.read(simScope).configs.paperSim ?? initial();
+      const sim = localSimulation(store.read(simScope));
       const order = (order_id && sim.orders[order_id]) || Object.values(sim.orders).find(o => o.intent_id === intent_id) || null;
       return observation('order', order && clone(order));
     },

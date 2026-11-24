@@ -115,7 +115,7 @@ export const providerCoverage = Object.freeze([
   family('sim-trade', 'Simulated paper trading', 'paper-candidate', 'REST',
     ['practice.sim'], [],
     [source('api/sim-trade/cash-info.md', '68a9a178c1b0c1d06b4dd6ecf066c907d808a03e1ecce5a1f565cd83bca62960')],
-    'Simulated account/order REST docs imported; paper rehearsal needs the domain guard, never live dispatch.'),
+    'Nine simulator routes cover six reads and three ticket effects. The running local broker signs MOCK fills. Connected rehearsal requires a separately admitted simulator alias.'),
   family('trading', 'Live order dispatch', 'excluded', 'REST',
     [], [],
     [source('api/trading/overview.md', '5cc47dc21f38edb6e01c5d7cf1425d5248ba2d94583f9326e645581557e6bd2c'),
@@ -163,6 +163,24 @@ const reviewedRest = new Map([
   ['GET /api/v1.0/quote/{symbol}/chip-distribution', { evidence: 'Local chip-distribution fixture', units: 'Source price strings, profit percentage and Unix seconds' }],
   ['GET /api/v1.0/quote/{symbol}/cbbc/basic-info', { evidence: 'Local basic-info fixture', units: 'Quoted currency and exact bull and bear outstanding quantities' }]
 ]);
+// These are documentation bindings for the simulator rehearsal. Admission
+// and order dispatch remain owned by the paper guard and its selected broker.
+const simRoot = '/api/v1.0/sim-trade/';
+const simAccount = simRoot + '{acc_id}/';
+const simOrder = simAccount + 'orders/{order_id}/';
+const simRead = (label, fields) => ({ scope: 'Simulator account read', evidence: label, units: fields });
+const simEffect = (label, fields) => ({ scope: 'Independent paper approval and simulator grant', evidence: label, units: fields });
+const simulationRoutes = new Map([
+  ['GET ' + simRoot + 'accounts', simRead('Resolve the simulator alias and profile', 'Opaque account ID, account market ID and practice or competition account type')],
+  ['GET ' + simAccount + 'cash-info', simRead('Read the selected account balance', 'Provider decimal strings for balance, held cash and buying power')],
+  ['GET ' + simAccount + 'positions', simRead('Read held and available positions', 'Per-instrument market, symbol, quantities and cost price')],
+  ['GET ' + simAccount + 'max-buy-sell', simRead('Check the ticket’s buying power', 'Round-lot quantities and nullable margin capacity')],
+  ['GET ' + simAccount + 'orders', simRead('Read current simulator orders', 'Opaque order ID, status, decimal quantity and fill quantity')],
+  ['GET ' + simAccount + 'history-orders', simRead('Reconcile prior simulator orders', 'Microsecond query window and opaque page cursor')],
+  ['POST ' + simAccount + 'orders', simEffect('Place an independently approved paper ticket', 'Account market ID, symbol, side, quantity and conditional limit price')],
+  ['POST ' + simOrder + 'modify', simEffect('Amend an independently approved paper ticket', 'Original order ID, new quantity and price')],
+  ['POST ' + simOrder + 'cancel', simEffect('Cancel an independently approved paper ticket', 'Account market ID and original order ID')]
+]);
 const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE']);
 const routeKey = http => http.replace(/\{[A-Za-z_][\w]*\}/g, '{}');
 
@@ -177,7 +195,8 @@ function disposition(methodPath, topic, name) {
   }
   const [method, path] = methodPath.split(' ');
   if (path.startsWith('/api/v1.0/sim-trade/')) {
-    return ['paper candidate', 'simulator grant', 'Verify simulator alias and operation'];
+    const binding = simulationRoutes.get(methodPath);
+    return ['paper candidate', binding?.scope ?? 'simulator grant', binding?.evidence ?? 'Verify simulator alias and operation'];
   }
   if (path.includes('/modify-user-security')) return ['blocked', 'quote:write', 'Separate watchlist grant'];
   if (path.includes('/accounts/') && (['PUT', 'DELETE', 'PATCH'].includes(method) ||
@@ -204,7 +223,7 @@ export function routeInventory(catalog) {
     let route = routes.get(key);
     if (!route) {
       const [status, scope, evidence] = disposition(methodPath, topic, name);
-      const units = transport === 'REST' ? reviewedRest.get(methodPath)?.units : undefined;
+      const units = transport === 'REST' ? (reviewedRest.get(methodPath) ?? simulationRoutes.get(methodPath))?.units : undefined;
       route = { transport, label, status, scope, evidence, units: units ?? 'See source field definitions', sources: [] };
       routes.set(key, route);
     }
