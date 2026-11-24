@@ -532,3 +532,49 @@ test('financial statements keep reported periods, nested amounts, percentages an
     await assert.rejects(researchRead(t, op, { ...parameters, ...patch }, {}, failBeforeCall), /INVALID_PARAMETER/);
   await assert.rejects(researchRead(t, op, { ...parameters, next_key: cursor }, {}, failBeforeCall, parameters), /SCOPE_DENIED/);
 });
+
+test('CFTC positioning preserves exact signed contracts and report totals across pages', async t => {
+  const op = 'read.futures-positions', inputs = { symbol: 'US.CLmain', report_type: 'TOTAL', page_size: 1 };
+  const row = { report_time: 1795478400, variety: 'Fixture crude', long: '9007199254740993', short: 87,
+    spread: '0', net: '-87', net_change_weekly: -2, open_interest_change_rate_weekly: '-0.050' };
+  const body = { ...response({ items: [row], total: 2 }), pagination: { completed: false, page_flag: '1' } };
+  const result = await researchRead(t, op, inputs, body, calls => assert.match(calls[0].url, /US.CLmain\/future\/position-analysis/));
+  assert.deepEqual(result.rows[0], { ...row, short: '87', net_change_weekly: '-2', open_interest: null, open_interest_change_weekly: null });
+  assert.deepEqual(result.pagination, { completed: false, next_cursor: '1', total: 2 });
+  await assert.rejects(researchRead(t, op, inputs, { ...body, data: { total: 'example', items: [row] } }), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, inputs, { ...body, data: { total: 1, items: [{ ...row, long: 2 ** 53 }] } }), /PRECISION_UNKNOWN/);
+  await assert.rejects(researchRead(t, op, { ...inputs, page_size: 101 }, {}, calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+});
+
+test('futures seasonality keeps the historical mean and timestamp-only observations', async t => {
+  const op = 'read.futures-seasonality', inputs = { symbol: 'US.CLmain', period: 'MONTH' };
+  const price = { timestamp: 1795478400, close: '-37.630', prev_close: '0.000' }, empty = { timestamp: 1795564800 };
+  const series = [{ year: 2020, points: [price] }, { points: [empty] }];
+  const result = await researchRead(t, op, inputs, response({ items: series }));
+  assert.deepEqual(result.rows, [series[0], { year: null, points: [{ ...empty, close: null, prev_close: null }] }]);
+  await assert.rejects(researchRead(t, op, inputs, response({ items: [series[0], series[0]] })), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, inputs, response({ items: [{ year: 0, points: 'example' }] })), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, { ...inputs, period: 'DAY' }, {}, calls => assert.equal(calls.length, 0), inputs), /SCOPE_DENIED/);
+});
+
+test('futures correlations bind the related series and apply page size and total to points per future', async t => {
+  const op = 'read.futures-correlation', inputs = { symbol: 'US.CLmain', related_codes: 'US.GCmain,US.ESmain', page_size: 1 };
+  const point = { timestamp: 1795478400, correlation: '-1.0000' };
+  const series = inputs.related_codes.split(',').map(related_code => ({ code: inputs.symbol, related_code, points: [point] }));
+  const body = items => ({ ...response({ items, total: 1 }), pagination: pageEnd });
+  const result = await researchRead(t, op, inputs, body(series));
+  assert.deepEqual(result.rows, series);
+  assert.deepEqual(result.pagination, { completed: true, next_cursor: null, total: 1 });
+  for (const value of ['1.000000000000000001', '-10.01e-1', '1e400']) {
+    await assert.rejects(researchRead(t, op, inputs, body([{ ...series[0], points: [{ ...point, correlation: value }] }])), /INVALID_PAGE/);
+  }
+  const tiny = { ...point, correlation: '1e-300' };
+  assert.deepEqual((await researchRead(t, op, inputs, body([{ ...series[0], points: [tiny] }]))).rows[0].points, [tiny]);
+  await assert.rejects(researchRead(t, op, inputs, body([{ ...series[0], points: [point, point] }])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, inputs, body([{ ...series[0], related_code: 'US.OTHER' }])), /SOURCE_MAPPING_REQUIRED/);
+  await assert.rejects(researchRead(t, op, inputs, body([series[0], series[0]])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, op, { ...inputs, related_codes: 'US.A,US.B,US.C,US.D,US.E' }, {},
+    calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+  await assert.rejects(researchRead(t, op, { ...inputs, page_flag: '1' }, {}, calls => assert.equal(calls.length, 0), inputs), /SCOPE_DENIED/);
+  assert.deepEqual((await researchRead(t, op, inputs, { ret_code: -10 })).rows, []);
+});

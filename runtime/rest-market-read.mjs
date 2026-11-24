@@ -13,6 +13,14 @@ const datePattern = /^\d{4}-\d\d-\d\d$/;
 const symbolPattern = /^[A-Z0-9_]+\.[A-Za-z0-9_.-]+$/;
 const currencyPattern = /^[A-Z]{1,10}$/;
 const dayMs = 86_400_000;
+// The coefficient is a source string. Compare its decimal magnitude before any binary rounding.
+function withinUnit(text) {
+  const [mantissa, exponent = '0'] = text.replace(/^-/, '').toLowerCase().split('e');
+  const [whole, fraction = ''] = mantissa.split('.');
+  const digits = (whole + fraction).replace(/^0+/, '');
+  const places = digits.length - fraction.length + Number(exponent);
+  return !digits || places < 1 || places === 1 && /^10*$/.test(digits);
+}
 const validDate = value => {
   if (typeof value !== 'string' || !datePattern.test(value)) return false;
   const ms = Date.parse(value + 'T00:00:00Z');
@@ -103,7 +111,13 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       }
       if (spec.nested?.[target]) {
         requireThat(Array.isArray(value), 'INVALID_PAGE');
+        const limit = spec.nested_limits?.[target];
+        if (limit) requireThat(value.length <= (inputs[limit.input] ?? limit.fallback), 'INVALID_PAGE');
         row[target] = value.map(item => project(item, spec.nested[target], body, inputs).row);
+      } else if (spec.decimal_text?.includes(target)) {
+        requireThat(typeof value === 'string' && value.length <= 64 && decimalPattern.test(value), 'PRECISION_UNKNOWN');
+        if (spec.unit_interval?.includes(target)) requireThat(withinUnit(value), 'INVALID_PAGE');
+        row[target] = value;
       } else if (spec.wire_decimal?.includes(target)) {
         const validString = typeof value === 'string' && value.length <= 64 && decimalPattern.test(value);
         const validNumber = Number.isFinite(value) && (!Number.isInteger(value) || Number.isSafeInteger(value));
@@ -190,6 +204,11 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       const value = inputs[inputKey];
       if (rule.allow_empty && value === '') continue;
       if (rule.enum) requireThat(rule.enum.includes(value), 'INVALID_PARAMETER');
+      else if (rule.symbols) {
+        requireThat(typeof value === 'string' && value.length <= rule.symbols * 33, 'INVALID_PARAMETER');
+        const codes = value.split(',');
+        requireThat(codes.length <= rule.symbols && codes.every(code => code.length <= 32 && symbolPattern.test(code)), 'INVALID_PARAMETER');
+      }
       else if (rule.currency) requireThat(typeof value === 'string' && currencyPattern.test(value), 'INVALID_PARAMETER');
       else if (rule.date) requireThat(validDate(value), 'INVALID_PARAMETER');
       else if (rule.length) requireThat(typeof value === 'string' && value.trim().length >= rule.length[0] &&
@@ -275,9 +294,10 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         requireThat(code === 0, 'PROVIDER_ERROR');
         const raw = responseRows(body, spec);
         const limit = spec.row_limit ? inputs[spec.row_limit.input] ?? spec.row_limit.fallback
-          : inputs.page_size ?? spec.default_page_size ?? 600;
+          : spec.series_limit ?? inputs.page_size ?? spec.default_page_size ?? 600;
         requireThat(Array.isArray(raw) && raw.length <= Math.min(600, limit), 'INVALID_PAGE');
         rows = raw.map(item => { const { row, precise } = project(item, spec, body, inputs); decimals.push(precise); return row; });
+        if (spec.unique_by) requireThat(new Set(rows.map(row => row[spec.unique_by])).size === rows.length, 'INVALID_PAGE');
         if (spec.window?.max_distinct)
           requireThat(new Set(rows.map(row => row[spec.window.field])).size <= spec.window.max_distinct, 'INVALID_PAGE');
       }
@@ -294,12 +314,14 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         metadata.pagination = { completed: !page.has_more, next_cursor: page.has_more ? page.next_key : null };
       } else if (spec.pagination) {
         const page = code === 0 ? readPath(body, spec.pagination, false) : { completed: true, page_flag: '', ...(spec.optional_total ? {} : { total: 0 }) };
+        const total = spec.total_path && code === 0 ? readPath(body, spec.total_path, false) : page?.total;
+        const size = spec.total_series ? Math.max(0, ...rows.map(row => row[spec.total_series].length)) : rows.length;
         requireThat(typeof page?.completed === 'boolean' && typeof page.page_flag === 'string' &&
           page.page_flag.length <= (spec.cursor_limit ?? 64) && (page.completed ? page.page_flag === '' : page.page_flag.length > 0 &&
             page.page_flag !== inputs.page_flag) && (spec.optional_total === true && !Object.hasOwn(page, 'total') ||
-          Number.isSafeInteger(page.total) && page.total >= rows.length), 'INVALID_PAGE');
+          Number.isSafeInteger(total) && total >= size), 'INVALID_PAGE');
         metadata.pagination = { completed: page.completed, next_cursor: page.completed ? null : page.page_flag,
-          ...(Object.hasOwn(page, 'total') && { total: page.total }) };
+          ...(total !== undefined && { total }) };
       }
       const response_digest = sha(body);
       const observed_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
