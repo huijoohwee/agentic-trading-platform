@@ -8,6 +8,7 @@ import { canonical, sha } from '../runtime/core.mjs';
 import { researchMapping, stockScreenMcpMapping } from '../runtime/moomoo-research.mjs';
 import { createRestMarketReadAdapter } from '../runtime/rest-market-read.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
+import { readResearchPage } from '../src/research-page.mjs';
 
 const operation = 'read.stock-screen', tool = 'quote_stock_screen';
 const scope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'fixture-screen' };
@@ -107,6 +108,10 @@ test('running gateway serves the same stock screen through both reviewed transpo
     assert.deepEqual(result.data.pagination, { total: 8, completed: false, next_cursor: '17' });
     const replay = await post('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: operation, arguments: request } });
     assert.deepEqual(replay.result.structuredContent, result);
+    const display = await readResearchPage(result);
+    assert.deepEqual(await readResearchPage(replay), display);
+    assert.deepEqual(display.rows, result.data.rows);
+    assert.equal(display.pagination.cursor, '17');
     const refusal = await post('/api/gateway', { ...request, request_id: request.request_id + '-changed',
       inputs: { ...request.inputs, next_key: '17' } });
     assert.equal(refusal.error.code, 'UNAUTHORIZED');

@@ -88,23 +88,30 @@ export async function mountMoomooDeskView(host) {
   for (const item of ['currency', 'delay class', 'per-quote feed attribution']) unknowns.append(node('li', item));
   sections.append(unknownsHeading, unknowns);
 
-  const inspector = node('details');
-  inspector.id = 'quote-push-inspector';
-  inspector.append(node('summary', 'Inspect a saved quote push'));
-  const body = node('div');
-  inspector.append(body);
-  sections.append(inspector);
-  inspector.addEventListener('toggle', async function openInspector() {
-    if (!inspector.open) return;
-    inspector.removeEventListener('toggle', openInspector);
-    try {
-      const { mountQuotePushView } = await import('./quote-push-view.mjs');
-      body.replaceChildren();
-      mountQuotePushView(body, s.symbol, { node, table, diagram, diagrams });
-    } catch {
-      body.textContent = 'Quote push reader unavailable. Reopen the desk after refreshing its offline files.';
-      inspector.addEventListener('toggle', openInspector);
-    }
+  function inspector(id, title, mount) {
+    const panel = node('details'), body = node('div');
+    panel.id = id;
+    panel.append(node('summary', title), body);
+    sections.append(panel);
+    panel.addEventListener('toggle', async function open() {
+      if (!panel.open) return;
+      panel.removeEventListener('toggle', open);
+      try {
+        body.replaceChildren();
+        await mount(body);
+      } catch {
+        body.textContent = 'Reader unavailable. Reopen after refreshing the offline files.';
+        panel.addEventListener('toggle', open);
+      }
+    });
+  }
+  inspector('quote-push-inspector', 'Inspect a saved quote push', async body => {
+    const { mountQuotePushView } = await import('./quote-push-view.mjs');
+    mountQuotePushView(body, s.symbol, { node, table, diagram, diagrams });
+  });
+  inspector('research-page-inspector', 'Inspect a saved research result', async body => {
+    const { mountResearchPageView } = await import('./research-page-view.mjs');
+    mountResearchPageView(body, node);
   });
 
   host.replaceChildren(DashboardCanvasLayout({

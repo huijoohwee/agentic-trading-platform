@@ -38,6 +38,10 @@ Open **Inspect a saved quote push** to preview one local JSON frame under 500 kB
 
 ## Route inventory and offline research reads
 
+In the market desk, open **Inspect a saved research result** and select the JSON returned by Trading’s `/api/gateway` or `/mcp`. The file stays in the tab. The inspector reads 30 research operations, including earnings calendars, capital flow, rankings, stock screens, financial statements and futures. Expand a row to see its exact values and units. Use **Next rows** to move within the saved file. A provider continuation cursor appears separately and requires an authorized new request.
+
+Choose **Open example calendar** to explore three synthetic earnings rows entirely on device. To try the export workflow, run `node scripts/export-calendar-fixture.mjs /tmp/calendar-example.json` with an unused destination and open the result. Its checksum detects a changed fixture. The inspector labels file origin as unverified and displays the source reported in the file.
+
 Open **Moomoo OpenAPI coverage** on a primed dashboard to search the pinned Gateway directory and mirror by tool name, HTTP path or push topic. The build includes digests for 107 publicly advertised tools and records separate source hashes for the 196 mirrored pages and 109 supplemental public references. The Desktop capture and hosted ticker each carry their own provenance.
 
 The reviewed definitions in `runtime/moomoo-research.mjs` map `read.capital-flow` to a single symbol and session, and `read.rank` to one hot-list page. Capital flow preserves signed amounts in native currency and Unix milliseconds. A ranking result includes the provider's completion flag, next cursor and total. Each subsequent page needs a new admitted request. Run `node --test test/runtime-rest-market-read.test.mjs test/provider-ticker-receipt.test.mjs` for signed local examples. A host that binds both transports for one provider supplies separate private `provider_credentials[provider].transports.MCP` and `.REST` entries. The dashboard renders saved evidence offline.

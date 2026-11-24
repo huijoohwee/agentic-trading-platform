@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { assemble, ownerRoot } from '../scripts/build.mjs';
 import { serve } from '../scripts/serve.mjs';
+import { captureCalendarFixture } from '../scripts/export-calendar-fixture.mjs';
 
 const journalCss = await readFile(new URL('../web/journal.css', import.meta.url), 'utf8');
 assert.doesNotMatch(journalCss, /(?:--agentic-font-[\w-]+|font-family|font)\s*:|\.agentic-(?:mono(?:-detail)?|text-detail)\b/u,
@@ -76,6 +77,49 @@ async function verifySavedQuotePush(page) {
   assert.equal(await status.innerText(), '');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await inspector.locator(':scope > summary').click();
+}
+
+async function verifySavedResearch(page, calendar) {
+  const view = page.locator('#research-page-inspector');
+  await view.locator(':scope > summary').click();
+  const file = view.getByLabel('Research result JSON file');
+  await view.getByRole('button', { name: 'Open example calendar' }).click();
+  await view.getByText('Synthetic example · read.calendar', { exact: true }).waitFor();
+  await view.getByText('Rows 1–3 of 3', { exact: true }).waitFor();
+  const select = data => file.setInputFiles({ name: 'research.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+  await select(calendar);
+  await view.getByText('Local file · read.calendar · origin unverified', { exact: true }).waitFor();
+  await view.getByText(calendar.code + ' · ' + calendar.earnings_date, { exact: true }).click();
+  await view.getByText('Unknown', { exact: true }).waitFor();
+  await view.getByText('AFTER', { exact: true }).waitFor();
+  const { code, name, earnings_date, earnings_timestamp, pub_type, period_text, price, published } = calendar;
+  const calendarRow = { code, name, earnings_date, earnings_timestamp, pub_type, period_text, price: Number(price),
+    published, eps_actual: 0, eps_predict: null };
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'calendar-fixture', operation: 'read.calendar' },
+    data: { source: 'AUTHENTICATED_ADAPTER', at: 1800000000000, rows: [calendarRow], decimals: [{ price, earnings_timestamp: String(earnings_timestamp) }] } });
+  await view.getByText('calendar-fixture · PROVIDER', { exact: true }).waitFor();
+  await view.getByText(code + ' · ' + earnings_date, { exact: true }).click();
+  assert.equal(await view.getByText('Estimated EPS', { exact: true }).evaluate(dt => dt.nextElementSibling.textContent), 'Unknown');
+  assert.equal(await view.getByText('Actual EPS', { exact: true }).evaluate(dt => dt.nextElementSibling.textContent), '0');
+  const rows = Array.from({ length: 11 }, (_, i) => ({ symbol: 'HK.' + i, name: 'Example ' + i,
+    factors: [{ factor: 'market_cap', raw: '9007199254740993', value: '9007199254740.993' }] }));
+  const result = { status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'screen-fixture', operation: 'read.stock-screen' },
+    data: { at: 1800000000000, source: 'AUTHENTICATED_ADAPTER', rows, decimals: rows.map(() => ({})),
+      pagination: { total: 32, completed: false, next_cursor: '17' } } };
+  await select({ jsonrpc: '2.0', result: { isError: false, structuredContent: result } });
+  await view.getByText('Rows 1–10 of 11', { exact: true }).waitFor();
+  await view.getByRole('button', { name: 'Next rows' }).click();
+  await view.getByText('HK.10', { exact: true }).click();
+  await view.getByText('market_cap · 9007199254740.993', { exact: true }).click();
+  await view.getByText('9007199254740993', { exact: true }).waitFor();
+  await view.getByText('17', { exact: true }).waitFor();
+  await select({ ...calendar, eps_actual: 0 });
+  await view.getByText(/calendar fixture checksum does not match/).waitFor();
+  assert.equal(await view.getByText('9007199254740993', { exact: true }).count(), 0);
+  await view.getByRole('button', { name: 'Clear preview' }).click();
+  assert.equal(await file.inputValue(), '');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await view.locator(':scope > summary').click();
 }
 
 async function checkDashboard(page, columns) {
@@ -302,6 +346,7 @@ try {
     assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     await verifySavedQuotePush(reopened);
+    await verifySavedResearch(reopened, await captureCalendarFixture());
     await dashboard.getByRole('button', {name:'Inspect 23 source events'}).click();
     const logTable = reopened.getByRole('table', { name: 'Replay events' });
     const evidence = reopened.getByRole('region', { name: 'Event evidence' });
