@@ -57,8 +57,13 @@ input, select { width: 100%; min-width: 0; }
 .coverage-record-views { min-inline-size: 0; overflow: hidden; border: 1px solid var(--agentic-base-border, color-mix(in srgb, CanvasText 25%, Canvas)); border-radius: .5rem; color-scheme: light dark; }
 :host(.coverage-record-views) .route-record-content { min-inline-size: 0; overflow: auto; }
 :host(.coverage-record-views) .route-record-content[data-layout="table"] { height: min(65dvh, 32rem); }
-:host(.coverage-record-views) .route-record-content[data-layout="table"] table { min-inline-size: max(100%, 38rem); }
-:host(.coverage-record-views) .route-record-content[data-layout="table"] thead th:first-child { width: 48%; }
+/* Give long identifiers and digests the larger share. The Base frame scrolls within the viewport on phones. */
+:host(.coverage-record-views) .route-record-content[data-layout="table"] table { inline-size: 100%; min-inline-size: 44rem; }
+:host(.coverage-record-views) .route-record-content[data-layout="table"] col { width: auto !important; }
+:host(#route-views) .route-record-content[data-layout="table"] col:first-child { width: 46% !important; }
+:host(#reference-views) .route-record-content[data-layout="table"] :is(col:first-child, col:nth-child(4)) { width: 31% !important; }
+:host(#family-views) .route-record-content[data-layout="table"] col:first-child { width: 27% !important; }
+:host(#family-views) .route-record-content[data-layout="table"] col:nth-child(4) { width: 30% !important; }
 :host(.coverage-record-views) .route-record-content[data-layout="multiDimensional"] { height: min(54dvh, 22rem); }
 :host(.coverage-record-views) .route-record-content:empty { height: 0; }
 :host(.coverage-record-views) .route-query-controls:not([hidden]) { display: flex; gap: .7rem; align-items: end; flex-wrap: wrap; padding: .6rem; color: var(--agentic-base-text-primary); background: var(--agentic-base-surface); border-bottom: 1px solid var(--agentic-base-border); }

@@ -14,7 +14,7 @@ export const COVERAGE_INDEX = Object.freeze({
 });
 const source = (path, sha256) => Object.freeze({ path, sha256, url: 'https://open.moomoo.com/' + path.replace(/\.md$/, '') });
 const family = (id, label, status, transport, operations, mcp, sources, note) =>
-  Object.freeze({ id, label, status, transport, operations: Object.freeze(operations), mcp: Object.freeze(mcp), sources: Object.freeze(sources), note });
+  Object.freeze({ id, label, status, transport, operations: Object.freeze(operations), mcp: Object.freeze([...new Set([...mcp, ...operations.map(op => researchTools[op]).filter(Boolean)])]), sources: Object.freeze(sources), note });
 
 const securitiesEvents = new Set(['EVENT_NEW', 'EVENT_REPLACED', 'EVENT_CANCELED', 'EVENT_EXPIRED', 'EVENT_FILL', 'EVENT_NEW_REJECTED',
   'EVENT_REPLACE_REJECTED', 'EVENT_CANCEL_REJECTED', 'EVENT_FILL_CORRECT', 'EVENT_FILL_CANCEL', 'EVENT_WAIT_OPEN',
@@ -34,10 +34,10 @@ export const providerCoverage = Object.freeze([
     'REST-only (no MCP tool). Market-local dates, Unix-microsecond publication time, session and null estimates preserved; ≤7-day inclusive window.'),
   family('capital-flow', 'Capital flow', 'mapped', 'MCP+REST',
     ['read.capital-flow'], ['quote_capital_flow'],
-    [],
+    [source('api/quote/capital-flow/capital-flow.md', 'a8c76263322142d6e38eb2e9618af70aec950ce6ebb66aa4bff62565405b0458')],
     'MCP and REST fixtures preserve signed native-currency flows and millisecond timestamps.'),
   family('rank', 'Stock screening and rankings', 'mapped', 'MCP+REST',
-    ['read.rank', 'read.stock-screen'], [],
+    ['read.rank', 'read.stock-screen'], ['quote_stock_screen'],
     [source('api/quote/screening/stock-screen.md', 'e19263aeea9615a0262950b57df146deffd945ec1fd5ba329057d316008b6f88'),
      source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
      source('api/quote/rank/rank-earnings-beat.md', '4689cb06a31b34f6a020aaa32b977b8a9ed8f0ba6d2a2d4521703f1680f7f934')],
@@ -53,7 +53,7 @@ export const providerCoverage = Object.freeze([
     'MCP and REST fixtures cover headline metadata. Analyst rating pages use the REST mapping.'),
   family('ipo', 'Hong Kong IPO listings', 'mapped', 'MCP+REST',
     ['read.ipo'], ['quote_ipo_list_us', 'quote_ipo_list_hk', 'quote_ipo_list_cn', 'quote_ipo_list_sg', 'quote_ipo_list_my'],
-    [],
+    [source('api/quote/ipo/ipo-list-hk.md', '41f89c3b7de8000cfd72892975c9835ae781824f87b2cbd513bc0278375528d7')],
     'The HK MCP and REST fixtures map public listing dates, lot sizes and HKD offer prices. Other IPO markets await qualification.'),
   family('financials', 'Company profile and financial statements', 'mapped', 'MCP+REST',
     ['read.financials', 'read.financial-statements'], ['quote_financials_statements'],
@@ -151,12 +151,17 @@ export const providerCoverage = Object.freeze([
     'Live crypto account/order/trade endpoints are out of the read-only $0 scope and never mapped.')
 ]);
 
+export function mappedReads(entries) {
+  return [...new Set(entries.filter(entry => entry.status === 'mapped').flatMap(entry =>
+    entry.operations.filter(operation => operation.startsWith('read.'))))];
+}
+
 export function coverageSummary(entries = providerCoverage) {
   const byStatus = {};
   for (const entry of entries) byStatus[entry.status] = (byStatus[entry.status] ?? 0) + 1;
   return Object.freeze({
     families: entries.length,
-    mapped_operations: entries.flatMap(entry => entry.status === 'mapped' ? entry.operations : []),
+    mapped_operations: mappedReads(entries),
     by_status: Object.freeze(byStatus),
     rest_only_mapped: entries.filter(entry => entry.status === 'mapped' && entry.transport === 'REST').map(entry => entry.id),
     excluded: entries.filter(entry => entry.status === 'excluded').map(entry => entry.id)
@@ -300,7 +305,7 @@ export function routeInventory(catalog) {
       const url = doc.reference ? catalog.origin + '/' + record.file : catalog.origin + doc.path;
       const source = { url, digest: record.sha256 };
       if (route.startsWith('PUSH ')) add('Push', route.slice(5), null, route.slice(5), null, source);
-      else add('REST', route, route, null, null, source);
+      else add('REST', route, route, null, null, { ...source, http: route });
     }
   }
   for (const tool of catalog.tools) {

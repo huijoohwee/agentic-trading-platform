@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
 import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
-import { providerCoverage, coverageSummary, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
+import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
 
 const statuses = ['mapped', 'candidate', 'paper-candidate', 'excluded'];
 const transports = ['MCP', 'REST', 'MCP+REST', 'PUSH'];
@@ -117,4 +117,23 @@ test('all nine simulator bindings distinguish six research reads from three inde
   }
   assert(reads.every(row => row.scope === 'Simulator account read'));
   assert(effects.every(row => row.scope === 'Independent paper approval and simulator grant'));
+});
+
+test('coverage separates operation IDs from distinct mapped reads and retains each published HTTP binding', () => {
+  const market = providerCoverage.find(row => row.id === 'market-reads'), paper = providerCoverage.find(row => row.id === 'sim-trade');
+  assert.equal(mappedReads([market, market]).length, 5);
+  assert.deepEqual(paper.operations, ['practice.sim']); assert.deepEqual(mappedReads([paper]), []);
+  assert(providerCoverage.every(row => row.sources.length));
+  const rows = routeInventory(catalog);
+  for (const tool of catalog.tools) assert(rows.find(r => r.transport === 'MCP' && r.label === tool.name).sources.some(s => s.http === tool.http));
+  for (const doc of catalog.sources) {
+    const source = doc.reference ?? doc;
+    for (const path of source.routes ?? []) if (!path.startsWith('PUSH ')) {
+      assert(rows.some(row => row.transport === 'REST' && row.sources.some(s => s.http === path && s.digest === source.sha256)), path);
+    }
+  }
+  for (const entry of providerCoverage) for (const evidence of entry.sources) {
+    const doc = catalog.sources.find(x => (x.reference ?? x).file === evidence.path);
+    assert.equal((doc?.reference ?? doc)?.sha256, evidence.sha256, evidence.path);
+  }
 });
