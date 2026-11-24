@@ -41,7 +41,7 @@ function grant(nonce = 'grant-one', budget = nonce, overrides = {}) {
     cost: { hard_cap_usd: 0, deny_at_exhaustion: true, remaining_calls: 12 }, ...overrides });
 }
 const klineResponse = { data: { kline_list: [{ timestamp: 1700000000, open: '100.25', close: '101.50' }, { timestamp: 1700000060, open: '101.50', close: '102.00' }] } };
-function fakeProvider({ tools: listed = [descriptor], result = klineResponse, protocol = '2025-11-25' } = {}) {
+function fakeProvider({ tools: listed = [descriptor], catalog = () => ({ tools: listed }), result = klineResponse, protocol = '2025-11-25' } = {}) {
   const calls = [];
   const fetchImpl = async (url, options) => {
     const body = JSON.parse(options.body);
@@ -50,7 +50,7 @@ function fakeProvider({ tools: listed = [descriptor], result = klineResponse, pr
     if (body.method === 'initialize') return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: { protocolVersion: protocol, capabilities: { tools: {} } } }),
       { headers: { 'content-type': 'application/json', 'mcp-session-id': 'session-fixture' } });
     if (body.method === 'notifications/initialized') return new Response(null, { status: 202 });
-    if (body.method === 'tools/list') return json({ jsonrpc: '2.0', id: body.id, result: { tools: listed } });
+    if (body.method === 'tools/list') return json({ jsonrpc: '2.0', id: body.id, result: catalog(body.params) });
     if (body.method === 'tools/call') return json({ jsonrpc: '2.0', id: body.id, result: { structuredContent: result } });
     throw Error('unexpected method ' + body.method);
   };
@@ -117,4 +117,35 @@ test('gateway admits a PROVIDER market read through the boundary and refuses una
   const denied = await gateway.admit({ ...request, request_id: 'req-two', inputs: { ...request.inputs, grant: grant('gw2', 'gw2', { tools: [{ ...tools[0], name: 'quote_other' }] }) } }, 'Bearer fixture-audience-token-0000000000');
   assert.equal(denied.status, 'REFUSED');
   assert.equal(denied.error.code, 'UNAUTHORIZED');
+});
+
+test('discovery follows opaque cursors within the grant before a single business read', async t => {
+  const { store } = await fixture(t);
+  const cursor = 'two/+==';
+  const provider = fakeProvider({ catalog: params => Object.hasOwn(params, 'cursor')
+    ? { tools: [descriptor] } : { tools: [], nextCursor: cursor } });
+  const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter: adapterFor(provider), now });
+  const result = await boundary({ operation: 'read.candles', inputs: { symbol: 'US.AAPL', count: 2 }, grant: grant() });
+  assert.deepEqual(provider.calls.filter(call => call.method === 'tools/list').map(call => call.params), [{}, { cursor }]);
+  assert.equal(result.cost.tool_calls, 5);
+  assert.equal(provider.calls.filter(call => call.method === 'tools/call').length, 1);
+});
+
+test('catalog cycles, ambiguous tool names, oversized catalogs and exhausted discovery grants refuse before read', async t => {
+  const cases = [
+    ['cycle', () => ({ tools: [], nextCursor: 'repeat' }), 12, /TOOL_CATALOG_INCOMPLETE/],
+    ['duplicate', params => params.cursor ? { tools: [descriptor] } : { tools: [descriptor], nextCursor: 'next' }, 12, /SCHEMA_DRIFT/],
+    ['size', () => ({ tools: Array(1025).fill(descriptor) }), 12, /TOOL_CATALOG_INCOMPLETE/],
+    ['budget', () => ({ tools: [], nextCursor: 'next' }), 4, /BUDGET_HALT/],
+    ['pages', params => ({ tools: [], nextCursor: (params.cursor ?? '') + 'a' }), 12, /TOOL_CATALOG_INCOMPLETE/],
+  ];
+  for (const [name, catalog, max_calls, error] of cases) {
+    const { store } = await fixture(t);
+    const provider = fakeProvider({ catalog });
+    const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter: adapterFor(provider), now });
+    await assert.rejects(boundary({ operation: 'read.candles', inputs: { symbol: 'US.AAPL', count: 2 },
+      grant: grant(name, name, { limits: { max_calls, timeout_ms: 1000 } }) }), error);
+    assert.ok(provider.calls.length < max_calls);
+    assert.equal(provider.calls.some(call => call.method === 'tools/call'), false);
+  }
 });

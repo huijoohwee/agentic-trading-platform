@@ -14,8 +14,18 @@ export async function moomooQuote(args) {
     return discoverProviderProfiles(['snapshot-replay', 'opend-reader']);
   }
   if (command === 'replay' && args.length === 3) {
-    const { replayMoomooSnapshot } = await import('agentic-gateway/connectors/moomoo');
-    return replayMoomooSnapshot(symbol, JSON.parse(await boundedText(input, 128000)));
+    const gateway = await import('agentic-gateway/connectors/moomoo');
+    const response = JSON.parse(await boundedText(input, 128000));
+    if (response && Object.hasOwn(response, 'type')) {
+      const projections = new Map([
+        ['QUOTE', gateway.replayMoomooQuote], ['ORDER_BOOK', gateway.replayMoomooOrderBook],
+        ['TICKER', gateway.replayMoomooTicker], ['KLINE', gateway.replayMoomooKline]
+      ]);
+      const project = projections.get(response.type);
+      if (!project) throw Error('UNSUPPORTED_PUSH_TYPE');
+      return project(symbol, response);
+    }
+    return gateway.replayMoomooSnapshot(symbol, response);
   }
   if (command !== 'snapshot' || args.length !== 4 || input !== '--entitled-zero-cost' ||
       !/^--port=[0-9]{1,5}$/.test(option)) throw Error(usage);

@@ -43,7 +43,10 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       utcMillis(page.observed_utc) !== null && utcMillis(page.observed_utc) <= now() && id(page.source_event) &&
       page.rows !== undefined && Array.isArray(page.decimals), 'INVALID_PAGE');
     const rows = boundedJson(page.rows), decimals = boundedJson(page.decimals);
-    return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, observed_utc: page.observed_utc,
+    const metadata = {};
+    if (Object.hasOwn(page, 'last_valid_time_ms')) metadata.last_valid_time_ms = page.last_valid_time_ms;
+    if (page.pagination) metadata.pagination = boundedJson(page.pagination);
+    return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, ...metadata, observed_utc: page.observed_utc,
       response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest }),
       cost: { tool_calls: opened.calls + 1, tokens_in: 'UNKNOWN', tokens_out: 'UNKNOWN', provider_fees: 'UNKNOWN' } };
   };

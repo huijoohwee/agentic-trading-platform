@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { researchMapping } from '../runtime/moomoo-research.mjs';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -131,6 +132,9 @@ test('precision loss on microsecond time and oversize pages are refused', async 
   const unsafe = { ret_code: 0, data: { items: [{ ...calendarResponse.data.items[0], earnings_timestamp: 9007199254740993 }] } };
   const loss = createMarketReadBoundary({ store, scope, candidate, keys, adapter: adapterFor(fakeRest({ result: unsafe })), now });
   await assert.rejects(loss({ operation: 'read.calendar', inputs, grant: grant('p', 'p') }), /PRECISION_UNKNOWN/);
+  const largeResponse = adapterFor(fakeRest({ result: { padding: 'x'.repeat(480_000) } }));
+  const limited = createMarketReadBoundary({ store, scope, candidate, keys, adapter: largeResponse, now });
+  await assert.rejects(limited({ operation: 'read.calendar', inputs, grant: grant('wire', 'wire') }), /INPUT_TOO_LARGE/);
   const big = { ret_code: 0, data: { items: Array.from({ length: 601 }, () => calendarResponse.data.items[0]) } };
   const oversize = createMarketReadBoundary({ store, scope, candidate, keys, adapter: adapterFor(fakeRest({ result: big })), now });
   await assert.rejects(oversize({ operation: 'read.calendar', inputs, grant: grant('b', 'b') }), /INVALID_PAGE/);
@@ -165,4 +169,53 @@ test('gateway admits a PROVIDER REST read with identical HTTP and MCP decisions 
   const denied = await gateway.admit({ ...request, request_id: 'req-rest-two', inputs: { ...inputs, grant: grant('gw2', 'gw2', { tools: [{ ...tools[0], name: 'quote_other' }] }) } }, 'Bearer fixture-audience-token-0000000000');
   assert.equal(denied.status, 'REFUSED');
   assert.equal(denied.error.code, 'UNAUTHORIZED');
+});
+
+async function researchRead(t, operation, inputs, response, inspect = () => {}) {
+  const { store } = await fixture(t);
+  const spec = researchMapping.operations[operation];
+  const provider = { ...definition, mapping: researchMapping, mapping_digest: sha(researchMapping),
+    operations: [operation], allowlist: [spec.tool], schema_digest: spec.schema_digest };
+  const fake = fakeRest({ result: response });
+  const adapter = createRestMarketReadAdapter({ provider, token: 'fixture-rest-token-000',
+    mapping: researchMapping, attestation, scope, candidate, fetchImpl: fake.fetchImpl, now });
+  const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter, now });
+  const permit = grant('research', 'research', { mapping_digest: sha(researchMapping),
+    tools: [{ operation, name: spec.tool, effect: 'read', schema_digest: spec.schema_digest }] });
+  try { return await boundary({ operation, inputs, grant: permit }); }
+  finally { inspect(fake.calls); }
+}
+
+test('intraday flow binds the symbol and session, preserving signed amounts and local currency units', async t => {
+  const point = { capital_flow_item_time: 1780536660000, in_flow: '-312.0500', super_in_flow: -312.05,
+    big_in_flow: 0, mid_in_flow: 0, sml_in_flow: 0 };
+  const result = await researchRead(t, 'read.capital-flow', { symbol: 'HK.00700', section: 'NORMAL' },
+    { ret_code: 0, data: { flow_list: [point], last_valid_time: point.capital_flow_item_time } },
+    calls => assert.deepEqual(calls.map(c => c.url), ['https://webapi.moomoo.com/api/v1.0/quote/HK.00700/capital-flow?section=NORMAL']));
+  assert.equal(result.decimals[0].in_flow, '-312.0500');
+  assert.equal(result.last_valid_time_ms, point.capital_flow_item_time);
+  const empty = await researchRead(t, 'read.capital-flow', { symbol: 'HK.00700' },
+    { ret_code: 0, data: { flow_list: [], last_valid_time: null } });
+  assert.deepEqual(empty.rows, []);
+  assert.equal(empty.last_valid_time_ms, null);
+  await assert.rejects(researchRead(t, 'read.capital-flow', { symbol: 'no symbol' }, {},
+    calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+});
+
+test('rank reads return the provider cursor, refuse a repeated cursor and preserve an empty final page', async t => {
+  const row = { code: 'HK.00700', name: 'Fixture' };
+  for (const field of researchMapping.operations['read.rank'].numeric) row[field] = '1.200';
+  const first = await researchRead(t, 'read.rank', { market: 'HK', page_size: 1 }, {
+    ret_code: 0, data: { items: [row] }, pagination: { total: 3, completed: false, page_flag: '2/+=' }
+  });
+  assert.equal(first.decimals[0].news_heat, '1.200');
+  assert.deepEqual(first.pagination, { total: 3, completed: false, next_cursor: '2/+=' });
+  const final = await researchRead(t, 'read.rank', { market: 'HK', page_flag: '2/+=' },
+    { ret_code: 0, data: { items: [] }, pagination: { completed: true, page_flag: '', total: 3 } },
+    calls => assert.equal(new URL(calls[0].url).searchParams.get('page_flag'), '2/+='));
+  assert.equal(final.pagination.next_cursor, null);
+  await assert.rejects(researchRead(t, 'read.rank', { market: 'HK', page_flag: 'a' },
+    { ret_code: 0, data: { items: [] }, pagination: { completed: false, page_flag: 'a', total: 3 } }), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, 'read.rank', { market: 'HK', page_size: 201 }, {},
+    calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
 });

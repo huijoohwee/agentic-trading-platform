@@ -24,3 +24,11 @@ export function openConfiguredRuntime(path) {
   const store = openStore(join(dirname(path), config.database));
   return { config, store };
 }
+
+export function providerCredential(config, provider, transport) {
+  const slot = config.provider_credentials?.[provider];
+  if (!slot) return null;
+  if (slot.transports) return slot.transports[transport] ?? null;
+  requireThat(config.providers.filter(row => row.provider === provider).length === 1, 'TRANSPORT_CREDENTIAL_REQUIRED');
+  return slot;
+}

@@ -1,3 +1,4 @@
+import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
 // source (path + on-disk SHA-256), the verified MCP tool names (only tools observed in the session
 // catalog), the proposed semantic read operations, the outbound transport and an honest status.
@@ -25,15 +26,15 @@ export const providerCoverage = Object.freeze([
     ['read.calendar'], [],
     [source('api/quote/calendar/earnings-calendar.md', '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2')],
     'REST-only (no MCP tool). Market-local dates, Unix-microsecond publication time, session and null estimates preserved; ≤7-day inclusive window.'),
-  family('capital-flow', 'Capital flow and unusual activity', 'candidate', 'MCP+REST',
+  family('capital-flow', 'Capital flow', 'mapped', 'REST',
     ['read.capital-flow'], ['quote_capital_flow'],
     [source('api/quote/unusual/capital.md', '6822c10b8faf8c50ddac9440f2efdbf1446c7c76130c3268e349ec15a633e6f9')],
-    'MCP capital-flow tool observed; REST unusual-activity docs imported. Semantic read not yet mapped.'),
-  family('rank', 'Rankings and hot lists', 'candidate', 'MCP+REST',
+    'Local REST fixture preserves signed native-currency flows and millisecond timestamps. The Desktop directory separately advertised quote_capital_flow.'),
+  family('rank', 'Ranking hot list', 'mapped', 'REST',
     ['read.rank'], [],
     [source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
      source('api/quote/rank/rank-earnings-beat.md', '4689cb06a31b34f6a020aaa32b977b8a9ed8f0ba6d2a2d4521703f1680f7f934')],
-    'Screening/ranking docs imported; no verified MCP ranking tool in the observed catalog subset.'),
+    'Local REST fixture covers one bounded hot-list page, its heat scores and continuation. Other rankings await mapping.'),
   family('plate-industry', 'Sectors, plates and industrial chain', 'candidate', 'MCP+REST',
     ['read.plate'], ['quote_plate_list', 'quote_plate_stock', 'quote_owner_plate'],
     [source('api/quote/industry/heatmap.md', 'a636ade5e00f7018f4cb7461b1bd82e607119f3714483eff68476bb8665a0297'),
@@ -110,7 +111,7 @@ export const providerCoverage = Object.freeze([
   family('push', 'Realtime push subscription', 'candidate', 'PUSH',
     ['subscribe.push'], [],
     [source('api/quote/push/overview.md', '485db83bdf0dd46e4e63f042ce21c9bd473bd68745eb64c1328ebfe59c789670')],
-    'Push auth/subscribe/heartbeat docs imported; streaming admission is a separate transport review.'),
+    'Offline QUOTE, ORDER_BOOK, TICKER and KLINE replay. An entitled stream needs its own subscription and recovery evidence.'),
   family('sim-trade', 'Simulated paper trading', 'paper-candidate', 'REST',
     ['practice.sim'], [],
     [source('api/sim-trade/cash-info.md', '68a9a178c1b0c1d06b4dd6ecf066c907d808a03e1ecce5a1f565cd83bca62960')],
@@ -136,4 +137,71 @@ export function coverageSummary(entries = providerCoverage) {
     rest_only_mapped: entries.filter(entry => entry.status === 'mapped' && entry.transport === 'REST').map(entry => entry.id),
     excluded: entries.filter(entry => entry.status === 'excluded').map(entry => entry.id)
   });
+}
+const deskTools = new Set(Object.values(captureMapping.operations).map(operation => operation.tool));
+const reviewedRest = new Map([
+  ['GET /api/v1.0/quote/earnings-calendar', { evidence: 'Local earnings calendar fixture', units: 'Market-local dates and Unix microseconds' }],
+  ['GET /api/v1.0/quote/{symbol}/capital-flow', { evidence: 'Local capital-flow fixture', units: 'Native currency and Unix milliseconds' }],
+  ['GET /api/v1.0/quote/rank/hot-list', { evidence: 'Local hot-list fixture', units: 'Provider heat scores and rank changes' }]
+]);
+const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE']);
+const routeKey = http => http.replace(/\{[A-Za-z_][\w]*\}/g, '{}');
+
+// Labels describe the evidence needed at Trading admission. This inventory has
+// no transport handler and supplies neither permission nor spendable headroom.
+function disposition(methodPath, topic, name) {
+  if (topic) {
+    const market = topic.startsWith('/api/quote/push/');
+    return market && replayTopics.has(topic.split('/').at(-1))
+      ? ['offline replay', 'quote:read', 'Gateway replay']
+      : ['candidate', market ? 'quote:read' : 'trade:read', 'Review stream rights and recovery'];
+  }
+  const [method, path] = methodPath.split(' ');
+  if (path.startsWith('/api/v1.0/sim-trade/')) {
+    return ['paper candidate', 'simulator grant', 'Verify simulator alias and operation'];
+  }
+  if (path.includes('/modify-user-security')) return ['blocked', 'quote:write', 'Separate watchlist grant'];
+  if (path.includes('/accounts/') && (['PUT', 'DELETE', 'PATCH'].includes(method) ||
+      method === 'POST' && /\/(orders|order_confirm|transfers?)$/.test(path))) {
+    return ['excluded', 'trade:write', 'Live effect excluded'];
+  }
+  if (name && deskTools.has(name)) {
+    return ['mapped', 'quote:read', name === 'quote_stock_quote' ? 'Desktop and hosted captures' : 'Desktop capture'];
+  }
+  if (!name && reviewedRest.has(methodPath)) {
+    return ['mapped', 'quote:read', reviewedRest.get(methodPath).evidence];
+  }
+  const scope = path.includes('/quote/') || name === 'news_search' ? 'quote:read'
+    : path.includes('/accounts/') ? 'trade:read' : 'scope review';
+  return ['candidate', scope, 'Review fields, rights and quota'];
+}
+
+export function routeInventory(catalog) {
+  if (catalog.schema !== 'moomoo-documentation-catalog/v1' || catalog.authority !== false ||
+      catalog.index_sha256 !== COVERAGE_INDEX.index_sha256) throw Error('COVERAGE_SOURCE_DRIFT');
+  const routes = new Map();
+  function add(transport, label, methodPath, topic, name, source) {
+    const key = transport + ' ' + (transport === 'REST' ? routeKey(label) : label);
+    let route = routes.get(key);
+    if (!route) {
+      const [status, scope, evidence] = disposition(methodPath, topic, name);
+      const units = transport === 'REST' ? reviewedRest.get(methodPath)?.units : undefined;
+      route = { transport, label, status, scope, evidence, units: units ?? 'See source field definitions', sources: [] };
+      routes.set(key, route);
+    }
+    route.sources.push(source);
+  }
+  for (const doc of catalog.sources) {
+    for (const route of doc.routes ?? []) {
+      const source = { url: catalog.origin + doc.path, digest: doc.sha256 };
+      if (route.startsWith('PUSH ')) add('Push', route.slice(5), null, route.slice(5), null, source);
+      else add('REST', route, route, null, null, source);
+    }
+  }
+  for (const tool of catalog.tools) {
+    const source = { url: catalog.directory, digest: tool.http_schema_sha256, tool: tool.name, http: tool.http };
+    add('MCP', tool.name, tool.http, null, tool.name, source);
+    add('REST', tool.http, tool.http, null, null, source);
+  }
+  return [...routes.values()];
 }
