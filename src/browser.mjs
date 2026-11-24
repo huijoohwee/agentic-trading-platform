@@ -6,47 +6,58 @@ import { mountTradingDashboard } from './dashboard.mjs';
 mountTradingDashboard(document);
 // Native toggle covers pointer, touch and keyboard, including rehearsal tables added after startup.
 document.addEventListener('toggle', ({ target }) => {
-  if (!target.matches('details#audit, details[data-agentic-section]')) return;
+  if (!target.matches('details[data-agentic-section]')) return;
   const summary = target.querySelector(':scope > summary');
   if (target.open) summary.dataset.agenticAnnotationTarget = 'true';
   else delete summary.dataset.agenticAnnotationTarget;
 }, true);
 const byId = id => document.getElementById(id);
-let runtimeOpened = false;
-byId('runtime-readback').addEventListener('toggle', async event => {
-  if (!event.target.open || runtimeOpened) return;
-  runtimeOpened = true;
-  try { const { mountRuntimeView } = await import('./runtime-view.mjs'); await mountRuntimeView(byId('runtime-body')); }
-  catch { byId('runtime-body').textContent = 'Runtime projection unavailable. The offline rehearsal is unchanged.'; }
-});
-let coverageOpened = false;
-byId('provider-coverage').addEventListener('toggle', async event => {
-  if (!event.target.open || coverageOpened) return;
-  coverageOpened = true;
-  try { const { mountCoverageView } = await import('./coverage-view.mjs'); await mountCoverageView(byId('coverage-body')); }
-  catch { byId('coverage-body').textContent = 'Coverage inventory unavailable. The offline rehearsal is unchanged.'; }
-});
-let captureOpened = false;
-byId('provider-capture').addEventListener('toggle', async event => {
-  if (!event.target.open || captureOpened) return;
-  captureOpened = true;
-  try { const { mountCaptureView } = await import('./capture-view.mjs'); await mountCaptureView(byId('capture-body')); }
-  catch { byId('capture-body').textContent = 'Provider capture unavailable. The offline rehearsal is unchanged.'; }
-});
-let hostedOpened = false;
-byId('provider-hosted').addEventListener('toggle', async event => {
-  if (!event.target.open || hostedOpened) return;
-  hostedOpened = true;
-  try { const { mountHostedView } = await import('./hosted-view.mjs'); await mountHostedView(byId('hosted-body')); }
-  catch { byId('hosted-body').textContent = 'Hosted capture unavailable. The offline rehearsal is unchanged.'; }
-});
-let deskOpened = false;
-byId('provider-desk').addEventListener('toggle', async event => {
-  if (!event.target.open || deskOpened) return;
-  deskOpened = true;
-  try { const { mountMoomooDeskView } = await import('./moomoo-desk-view.mjs'); await mountMoomooDeskView(byId('desk-body')); }
-  catch { byId('desk-body').textContent = 'Market desk unavailable. The offline rehearsal is unchanged.'; }
-});
+let calculationVisible = false, updateCalculation;
+const sections = new Map([
+  ['provider-desk', () => import('./moomoo-desk-view.mjs').then(m => m.mountMoomooDeskView(byId('desk-body')))],
+  ['provider-coverage', () => import('./coverage-view.mjs').then(m => m.mountCoverageView(byId('coverage-body')))],
+  ['provider-capture', () => import('./capture-view.mjs').then(m => m.mountCaptureView(byId('capture-body')))],
+  ['provider-hosted', () => import('./hosted-view.mjs').then(m => m.mountHostedView(byId('hosted-body')))],
+  ['runtime-readback', () => import('./runtime-view.mjs').then(m => m.mountRuntimeView(byId('runtime-body')))],
+  ['rehearsal', () => import('./rehearsal-view.mjs').then(m => m.mountRehearsal(byId('rehearsal-body')))],
+  ['audit', () => import('./audit-view.mjs').then(m => m.mountAudit(byId('audit')))],
+  ['evidence', () => { calculationVisible = true; return updateCalculation?.(); }],
+]);
+const mounted = new Map();
+function loadSection(id) {
+  if (!mounted.has(id)) {
+    const load = Promise.resolve().then(sections.get(id)).catch(() => {
+      mounted.delete(id);
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.textContent = 'Retry loading section';
+      retry.onclick = () => { retry.remove(); void loadSection(id); };
+      byId(id).append(retry);
+    });
+    mounted.set(id, load);
+  }
+  return mounted.get(id);
+}
+if ('IntersectionObserver' in window) {
+  const observer = new IntersectionObserver(entries => {
+    for (const item of entries) if (item.isIntersecting) {
+      observer.unobserve(item.target); void loadSection(item.target.id);
+    }
+  }, { rootMargin: '160px 0px' });
+  for (const id of sections.keys()) observer.observe(byId(id));
+} else {
+  for (const id of sections.keys()) void loadSection(id);
+}
+async function followSectionLink() {
+  const hash = location.hash.slice(1);
+  const id = hash === 'replay-dashboard' ? 'rehearsal' : hash;
+  if (!sections.has(id)) return;
+  byId(id).scrollIntoView({ block: 'start' });
+  const view = await loadSection(id);
+  if (location.hash.slice(1) !== hash) return;
+  if (hash === 'replay-dashboard') await view?.showDashboard();
+}
+window.addEventListener('hashchange', followSectionLink);
+void followSectionLink();
 const form = byId('ticket');
 const fields = byId('fields');
 const feedback = byId('feedback');
@@ -127,7 +138,7 @@ async function start() {
 
   async function renderCalculation() {
     const record = current.record;
-    if (!record || !byId('evidence').open) return;
+    if (!record || !calculationVisible) return;
     try {
       const sheets = await import('../owners/sheets/sheets/core.mjs');
       const { quantity, limitPrice } = record.values;
@@ -150,7 +161,8 @@ async function start() {
     const record = current.record;
     byId('empty').hidden = Boolean(record);
     byId('record').hidden = !record;
-    byId('evidence').hidden = !record;
+    byId('evidence-empty').hidden = Boolean(record);
+    byId('evidence-facts').hidden = !record;
     byId('reopen').hidden = !record && !blocked;
     byId('revision').textContent = record ? 'Revision ' + record.revision : 'Unsaved';
     if (!record) return;
@@ -212,7 +224,7 @@ async function start() {
       feedback.textContent = error.message;
     } finally { fields.disabled = false; }
   });
-  byId('evidence').addEventListener('toggle', renderCalculation);
+  updateCalculation = renderCalculation;
   fill(current.record?.values ?? initial);
   renderSaved();
   renderCheck();
@@ -224,31 +236,4 @@ start().catch(error => {
   fields.disabled = true;
   byId('fatal').hidden = false;
   byId('fatal').textContent = error.message;
-});
-
-const rehearsal = byId('rehearsal');
-let opening;
-function loadRehearsal() {
-  opening ??= import('./rehearsal-view.mjs')
-    .then(module => module.mountRehearsal(byId('rehearsal-body')))
-    .catch(error => { opening = null; byId('rehearsal-body').textContent = error.message; });
-  return opening;
-}
-rehearsal.addEventListener('toggle', () => { if (rehearsal.open) void loadRehearsal(); });
-async function openLinkedDashboard() {
-  if (location.hash !== '#replay-dashboard') return;
-  rehearsal.open = true;
-  const view = await loadRehearsal();
-  if (location.hash === '#replay-dashboard' && rehearsal.open) await view?.showDashboard();
-}
-window.addEventListener('hashchange', openLinkedDashboard);
-void openLinkedDashboard();
-
-byId('audit').addEventListener('toggle', async function openAudit() {
-  if (!this.open) return;
-  this.removeEventListener('toggle', openAudit);
-  try {
-    const { mountAudit } = await import('./audit-view.mjs');
-    await mountAudit(this);
-  } catch (error) { byId('audit-status').textContent = error.message; }
 });

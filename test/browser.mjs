@@ -143,6 +143,13 @@ async function checkDashboard(page, columns) {
   assert.equal(await dashboard.locator(':scope > header .agentic-base-dashboard-layout-heading h1').innerText(), 'Decision journal');
   assert.equal(await dashboard.getByRole('region', {name:'Dashboard highlight'}).locator('#window').count(), 1);
   assert.equal(await dashboard.locator(':scope > .agentic-base-dashboard-layout-sections #evidence').count(), 1);
+  const sections = dashboard.locator('.journal-section');
+  assert.equal(await sections.count(), 8);
+  for (const section of await sections.all()) {
+    assert.equal(await section.locator(':scope > h2').isVisible(), true);
+    assert.equal(await section.locator(':scope > summary').count(), 0);
+  }
+  assert.equal(await dashboard.getByRole('navigation', { name: 'Journal sections' }).getByRole('link').count(), 8);
   const cards = dashboard.getByRole('list', { name: 'Trading ticket workflow' });
   assert.deepEqual(await cards.locator('li h2').allTextContents(), [
     'Quote freshness', 'Draft ticket', 'Saved observation',
@@ -215,12 +222,12 @@ try {
     await page.waitForFunction(() => !document.querySelector('#fields').disabled);
     await checkDashboard(page, mobile ? 1 : 3);
     await verifyTradingSkills(page, mobile);
-    await page.locator('#provider-capture summary').click();
+    await page.locator('#provider-capture > h2').scrollIntoViewIfNeeded();
     await page.waitForFunction(() => document.querySelector('#capture-status')?.textContent.includes('HK.00700'));
     assert.ok((await page.locator('#capture-status').innerText()).includes('desktop-mcp'));
     assert.ok((await page.locator('#capture-status').innerText()).includes('hosted N3 qualified'));
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/capture-view.mjs'))), true);
-    await page.locator('#provider-hosted summary').click();
+    await page.locator('#provider-hosted > h2').scrollIntoViewIfNeeded();
     await page.waitForFunction(() => document.querySelector('#hosted-status')?.textContent.includes('HK.00700'));
     assert.ok((await page.locator('#hosted-status').innerText()).includes('hosted-mcp'));
     assert.ok((await page.locator('#hosted-status').innerText()).includes('hosted N3 qualified'));
@@ -229,7 +236,7 @@ try {
     await page.locator('#hosted-body').getByText('16 h 24 min 52 s', { exact: true }).waitFor();
     await page.locator('#capture-body').getByText('15 h 9 min 54 s', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/hosted-view.mjs'))), true);
-    await page.locator('#provider-desk summary').click();
+    await page.locator('#provider-desk > h2').scrollIntoViewIfNeeded();
     await page.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
     assert.ok((await page.locator('#desk-status').innerText()).includes('desktop-mcp'));
     assert.ok((await page.locator('#desk-status').innerText()).includes('read-only desk'));
@@ -242,8 +249,7 @@ try {
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/moomoo-desk-view.mjs'))), true);
     assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.includes('mcp.moomoo.com'))), false);
     console.log(name + ': online lazy Skills & Commands reference, controls, source digest and focus passed.');
-    assert.equal(await page.evaluate(() => performance.getEntriesByType('resource')
-      .some(e => e.name.endsWith('/src/rehearsal-view.mjs'))),false);
+    assert.equal(await page.locator('#rehearsal > h2').isVisible(), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
     if (mobile) {
       const advance = page.getByRole('button',{name:'Advance 1 s'});
@@ -306,18 +312,18 @@ try {
     assert.equal(await reopened.evaluate(() => navigator.onLine), false);
     await verifyTradingSkills(reopened, name === 'mobile');
     console.log(name + ': first offline Skills & Commands load after server shutdown, controls and verified instructions passed.');
-    await reopened.locator('#evidence summary').click();
+    await reopened.locator('#evidence > h2').scrollIntoViewIfNeeded();
     await reopened.waitForFunction(() => document.querySelector('#notional').textContent.includes('$100.00'));
-    await reopened.locator('#provider-capture summary').click();
+    await reopened.locator('#provider-capture > h2').scrollIntoViewIfNeeded();
     await reopened.waitForFunction(() => document.querySelector('#capture-status')?.textContent.includes('HK.00700'));
     assert.ok((await reopened.locator('#capture-status').innerText()).includes('hosted N3 qualified'));
-    await reopened.locator('#provider-hosted summary').click();
+    await reopened.locator('#provider-hosted > h2').scrollIntoViewIfNeeded();
     await reopened.waitForFunction(() => document.querySelector('#hosted-status')?.textContent.includes('HK.00700'));
     assert.ok((await reopened.locator('#hosted-status').innerText()).includes('hosted N3 qualified'));
     assert.ok((await reopened.locator('#hosted-body').innerText()).includes('quote:read'));
     assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource').some(e => e.name.endsWith('/src/hosted-view.mjs'))), true);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= innerWidth),true);
-    await reopened.locator('#rehearsal summary').first().click();
+    await reopened.locator('#rehearsal > h2').scrollIntoViewIfNeeded();
     await reopened.getByRole('button',{name:'Replay run'}).click();
     await expectText(reopened,'replay-status','Verified run A · 23 synthetic events');
     const grid = reopened.getByRole('list',{name:'Competition rehearsal snapshot'});
@@ -330,13 +336,12 @@ try {
     assert.equal(await intervals.count(), 1);
     assert.match(await indicators.innerText(),/99985|99,985/);
     assert.match(await grid.innerText(),/BUY 1 TEST remaining/);
-    assert.equal(await reopened.evaluate(() => performance.getEntriesByType('resource')
-      .some(entry => entry.name.endsWith('/browser-data-view.js'))), false);
-    await reopened.locator('#provider-desk summary').click();
+    assert.equal(await reopened.locator('#desk-body details[open]').count(), 0);
+    await reopened.locator('#provider-desk > h2').scrollIntoViewIfNeeded();
     await reopened.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
     assert.ok((await reopened.locator('#desk-status').innerText()).includes('read-only desk'));
     await reopened.locator('#desk-body').getByText('15 h 9 min 54 s', { exact: true }).waitFor();
-    await reopened.locator('#provider-coverage > summary').click();
+    await reopened.locator('#provider-coverage > h2').scrollIntoViewIfNeeded();
     await verifyRouteViews(reopened);
     const bookDetails = reopened.locator('#desk-body details').filter({ has: reopened.locator('summary', { hasText: 'Order book' }) });
     await bookDetails.locator('summary').click();
@@ -395,7 +400,7 @@ try {
     await reopened.getByText('14 of 26 events', {exact:true}).waitFor();
     assert.equal(await filter.inputValue(), '2026-11-13');
     await reopened.reload();
-    await reopened.locator('#rehearsal summary').first().click();
+    await reopened.locator('#rehearsal > h2').scrollIntoViewIfNeeded();
     await expectText(reopened,'replay-status','Verified run B · 26 synthetic events');
     await openAnnotationTarget(reopened, 'schedule', name === 'mobile');
     const scheduleTable = reopened.getByRole('table', {name:'Schedule receipts'});
@@ -511,7 +516,7 @@ try {
     await savedDashboard.close();
     assert.equal(await reopened.getByRole('heading',{name:'Run A · practice'}).count(),1);
     await expectText(reopened,'revision','Revision 1');
-    await openAnnotationTarget(reopened, 'audit', name === 'mobile');
+    await reopened.locator('#audit > h2').scrollIntoViewIfNeeded();
     await expectText(reopened,'audit-status','T-20261119-001 · PASS · PRICE_OUT_OF_LIMIT');
     assert.match(await reopened.locator('#audit-results').innerText(),/order-unbound/);
     assert.deepEqual(await reopened.locator('#audit-results').getByText('Equity in base currency', {exact:true}).evaluate(typography), labelType);
@@ -540,7 +545,7 @@ try {
     await paste.fill(JSON.stringify(runB)); await importRun.click();
     await expectText(reopened,'audit-feedback','Verified run manual-B');
     await reopened.reload();
-    await reopened.locator('#audit summary').click();
+    await reopened.locator('#audit > h2').scrollIntoViewIfNeeded();
     await expectText(reopened,'audit-status','T-20261119-001 · HALT · PRICE_OUT_OF_LIMIT');
     const upload = (name, file, bytes) => reopened.getByLabel(name, {exact:true}).setInputFiles({
       name:file,mimeType:'application/json',buffer:bytes });

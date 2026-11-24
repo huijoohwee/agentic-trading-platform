@@ -66,7 +66,35 @@
     </div>
   </template>
   <template id="evidence-slot">
-    <details id="audit" data-dashboard-primitive="disclosure"><summary>Private cash-policy audit · synthetic fixture</summary>
+    <nav class="journal-sections-nav agentic-dashboard-actions" aria-label="Journal sections">
+      <a href="#provider-desk">Market desk</a>
+      <a href="#provider-coverage">Provider routes</a>
+      <a href="#provider-capture">Desktop capture</a>
+      <a href="#provider-hosted">Hosted capture</a>
+      <a href="#rehearsal">Competition rehearsal</a>
+      <a href="#runtime-readback">Runtime readback</a>
+      <a href="#audit">Cash-policy audit</a>
+      <a href="#evidence">Source evidence</a>
+    </nav>
+    <section class="journal-section" id="provider-desk" aria-labelledby="provider-desk-heading"><h2 id="provider-desk-heading">Moomoo market desk · quote board, order book, tape, candles ($0 replay)</h2>
+      <div id="desk-body"><p role="status">Loading this section…</p></div>
+    </section>
+    <section class="journal-section" id="provider-coverage" aria-labelledby="provider-coverage-heading"><h2 id="provider-coverage-heading">Moomoo OpenAPI coverage · evidence-led feature families</h2>
+      <div id="coverage-body"><p role="status">Loading this section…</p></div>
+    </section>
+    <section class="journal-section" id="provider-capture" aria-labelledby="provider-capture-heading"><h2 id="provider-capture-heading">Moomoo Desktop capture · entitled $0 quote replay</h2>
+      <div id="capture-body"><p role="status">Loading this section…</p></div>
+    </section>
+    <section class="journal-section" id="provider-hosted" aria-labelledby="provider-hosted-heading"><h2 id="provider-hosted-heading">Moomoo hosted OAuth capture · entitled $0 read.ticker (N3 qualified)</h2>
+      <div id="hosted-body"><p role="status">Loading this section…</p></div>
+    </section>
+    <section class="journal-section" id="rehearsal" aria-labelledby="rehearsal-heading"><h2 id="rehearsal-heading">Moomoo × Qoder competition rehearsal</h2>
+      <div id="rehearsal-body"><p role="status">Opening the offline rehearsal…</p></div>
+    </section>
+    <section class="journal-section" id="runtime-readback" aria-labelledby="runtime-readback-heading"><h2 id="runtime-readback-heading">Runtime readback · private SIMULATE observations</h2>
+      <div id="runtime-body"><p role="status">Loading this section…</p></div>
+    </section>
+    <section class="journal-section" id="audit" aria-labelledby="audit-heading"><h2 id="audit-heading">Private cash-policy audit · synthetic fixture</h2>
       <p id="audit-status" role="status">Opening the fixture…</p>
       <dl class="facts" id="audit-results"></dl>
       <fieldset id="audit-files" disabled class="agentic-form-controls"><legend>Manual synthetic runs</legend>
@@ -81,30 +109,13 @@
         <button type="button" id="audit-restore">Verify and restore</button>
       </fieldset>
       <p id="audit-feedback" role="status"></p>
-    </details>
-    <details id="rehearsal" data-dashboard-primitive="disclosure"><summary>Moomoo × Qoder competition rehearsal</summary>
-      <div id="rehearsal-body"><p role="status">Opening the offline rehearsal…</p></div>
-    </details>
-    <details id="runtime-readback" data-agentic-section="runtime" data-dashboard-primitive="disclosure"><summary>Runtime readback · private SIMULATE observations</summary>
-      <div id="runtime-body"><p role="status">Open to read the isolated local runtime or its last saved redacted observation.</p></div>
-    </details>
-    <details id="provider-coverage" data-agentic-section="coverage" data-dashboard-primitive="disclosure"><summary>Moomoo OpenAPI coverage · evidence-led feature families</summary>
-      <div id="coverage-body"><p role="status">Open to read the reviewed feature-family coverage inventory. No provider call is made.</p></div>
-    </details>
-    <details id="provider-capture" data-agentic-section="capture" data-dashboard-primitive="disclosure"><summary>Moomoo Desktop capture · entitled $0 quote replay</summary>
-      <div id="capture-body"><p role="status">Open to read the captured Desktop quote and its provenance. No provider call is made.</p></div>
-    </details>
-    <details id="provider-hosted" data-agentic-section="hosted" data-dashboard-primitive="disclosure"><summary>Moomoo hosted OAuth capture · entitled $0 read.ticker (N3 qualified)</summary>
-      <div id="hosted-body"><p role="status">Open to read the captured hosted OAuth quote and its provenance. No provider call is made.</p></div>
-    </details>
-    <details id="provider-desk" data-agentic-section="desk" data-dashboard-primitive="disclosure"><summary>Moomoo market desk · quote board, order book, tape, candles ($0 replay)</summary>
-      <div id="desk-body"><p role="status">Open to read the moomoo-inspired read-only desk replayed from the captured $0 quote. No provider call is made.</p></div>
-    </details>
-    <details id="evidence" hidden data-dashboard-primitive="disclosure"><summary>Source evidence and calculation</summary>
-      <dl class="facts"><div><dt>Fixture ID</dt><dd id="fixture-id"></dd></div>
+    </section>
+    <section class="journal-section" id="evidence" aria-labelledby="evidence-heading"><h2 id="evidence-heading">Source evidence and calculation</h2>
+      <p id="evidence-empty">Save a draft to see its source and calculation.</p>
+      <dl class="facts" id="evidence-facts" hidden><div><dt>Fixture ID</dt><dd id="fixture-id"></dd></div>
       <div><dt>Policy</dt><dd id="saved-policy"></dd></div><div><dt>Fixture SHA-256</dt><dd id="digest"></dd></div></dl>
       <p id="notional" role="status"></p>
-    </details>
+    </section>
   </template>
   <div id="fatal" role="alert" hidden></div>
 </body>

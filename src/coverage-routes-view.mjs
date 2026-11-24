@@ -116,6 +116,9 @@ export function mountRouteViews(host, inventory, node, inspect) {
   const tabs = createTabList(root, { label: 'Provider route views', activeKey: view, onChange(key) {
     view = key; if (key === 'matrix') select(null); render();
   } });
+  const style = node('link'); style.rel = 'stylesheet';
+  style.href = new URL('../owners/design/site/floating-panel.css', import.meta.url);
+  root.prepend(style);
   root.prepend(tabs.rail);
   function applyFilters() {
     const term = search.value.trim().toLowerCase();

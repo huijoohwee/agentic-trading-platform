@@ -21,11 +21,6 @@ input, select { width: 100%; min-width: 0; }
 #feedback:not(:empty), #notional:not(:empty) { margin-block-start: var(--agentic-control-padding-inline); }
 .sr { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
 
-#audit > summary {
-  min-block-size: var(--agentic-control-height);
-  padding-block: calc((var(--agentic-control-height) - var(--agentic-line-height-body)) / 2);
-  cursor: pointer;
-}
 #rehearsal-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; }
 #rehearsal-body :is(li, summary, code) { overflow-wrap: anywhere; }
 #runtime-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; overflow-wrap: anywhere; }
@@ -65,4 +60,6 @@ input, select { width: 100%; min-width: 0; }
 #route-views .route-table { margin-block: var(--agentic-control-padding-inline); }
 .route-board { align-items: start; }
 .route-cards .route-card { display: grid; width: 100%; text-align: start; white-space: normal; overflow-wrap: anywhere; }
-.route-card small { color: var(--agentic-text-secondary, currentColor); }
+.journal-sections-nav { display: flex; flex-wrap: wrap; column-gap: 1rem; row-gap: var(--agentic-control-padding-block); }
+.journal-section { display: grid; min-inline-size: 0; align-content: start; gap: var(--agentic-control-padding-inline); padding: var(--agentic-control-padding-inline); border: var(--agentic-panel-border); border-radius: var(--agentic-panel-radius); scroll-margin-block-start: 4rem; }
+.journal-section > h2 { margin-block: var(--agentic-control-padding-block); }
