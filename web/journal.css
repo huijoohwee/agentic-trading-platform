@@ -52,3 +52,6 @@ input, select { width: 100%; min-width: 0; }
 .rehearsal-table-content > [role="alert"]:empty { display: none; }
 .rehearsal-table { min-inline-size: 0; block-size: min(40dvh, 19rem); border: var(--agentic-panel-border); border-radius: var(--agentic-control-radius); overflow: hidden; }
 .rehearsal-table::part(mount) { block-size: 100%; }
+#provider-desk { --desk-up: var(--agentic-dashboard-success); --desk-down: light-dark(#903c28, #ffa68d); }
+#desk-body { display: grid; gap: var(--agentic-control-padding-inline); margin-block: 1rem; min-width: 0; }
+#desk-body .desk-diagram { display: block; width: 100%; height: auto; max-height: 20rem; border: var(--agentic-panel-border); border-radius: var(--agentic-control-radius); }
