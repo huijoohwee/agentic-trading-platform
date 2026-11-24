@@ -7,7 +7,10 @@ const labels = {
   factor: 'Factor', raw: 'Source integer', value: 'Value', item_list: 'Statement items'
 };
 const label = key => labels[key] ?? (key[0].toUpperCase() + key.slice(1)).replaceAll('_', ' ');
-const show = value => value === null ? 'Unknown' : String(value);
+function show(value) {
+  if (value === null) return 'Unknown';
+  return value === '' ? 'Empty text' : String(value);
+}
 
 function rowList(parent, rows, node) {
   const list = node('div'), range = node('p');
@@ -21,7 +24,8 @@ function rowList(parent, rows, node) {
     list.replaceChildren();
     for (let index = offset; index < end; index++) {
       const row = rows[index], item = node('details');
-      const identity = row.symbol ?? row.code ?? row.factor ?? row.display_name ?? row.category_name ?? row.name ?? row.timestamp;
+      const identity = [row.symbol, row.code, row.factor, row.display_name, row.category_name, row.name, row.holding_name, row.timestamp]
+        .find(value => value != null && String(value).trim() !== '');
       const detail = row.earnings_date ?? row.capital_flow_item_time ?? row.period_text ?? (row.factor ? row.value : undefined);
       const summary = [identity ?? 'Row ' + (index + 1), detail].filter(value => value != null).join(' · ');
       item.append(node('summary', summary));
