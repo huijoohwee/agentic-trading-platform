@@ -15,6 +15,7 @@ const byId = id => document.getElementById(id);
 let calculationVisible = false, updateCalculation;
 const sections = new Map([
   ['provider-desk', () => import('./moomoo-desk-view.mjs').then(m => m.mountMoomooDeskView(byId('desk-body')))],
+  ['private-watchlists', () => import('./watchlist-view.mjs').then(m => m.mountWatchlists(byId('watchlist-body')))],
   ['provider-coverage', () => import('./coverage-view.mjs').then(m => m.mountCoverageView(byId('coverage-body')))],
   ['provider-capture', () => import('./capture-view.mjs').then(m => m.mountCaptureView(byId('capture-body')))],
   ['provider-hosted', () => import('./hosted-view.mjs').then(m => m.mountHostedView(byId('hosted-body')))],

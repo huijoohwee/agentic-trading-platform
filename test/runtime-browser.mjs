@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { ownerRoot } from '../scripts/build.mjs';
 import { serve } from '../scripts/serve.mjs';
 import { sha } from '../runtime/core.mjs';
+import { verifyOfflineWatchlists } from './watchlist-browser.mjs';
 import { createRuntimeApi } from '../runtime/http.mjs';
 import { appendEvent, openStore } from '../runtime/store.mjs';
 
@@ -362,6 +363,7 @@ try {
       assert.equal(response.fromServiceWorker(), true);
       await waitText(reopened, 'offline-status', 'Working offline');
       await waitText(reopened, 'revision', 'Revision 1'); await waitText(reopened, 'state', 'FAIL');
+      await verifyOfflineWatchlists(reopened);
       assert.equal(await reopened.getByLabel('Quantity', { exact: true }).inputValue(), '4');
       assert.equal(await reopened.getByLabel('Evaluation time (UTC)').inputValue(), '09:05:01');
       assert.equal(await reopened.locator('#runtime-token').count(), 0);

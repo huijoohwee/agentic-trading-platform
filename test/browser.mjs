@@ -156,12 +156,12 @@ async function checkDashboard(page, columns) {
   assert.equal(await dashboard.getByRole('region', {name:'Dashboard highlight'}).locator('#window').count(), 1);
   assert.equal(await dashboard.locator(':scope > .agentic-base-dashboard-layout-sections #evidence').count(), 1);
   const sections = dashboard.locator('.journal-section');
-  assert.equal(await sections.count(), 8);
+  assert.equal(await sections.count(), 9);
   for (const section of await sections.all()) {
     assert.equal(await section.locator(':scope > h2').isVisible(), true);
     assert.equal(await section.locator(':scope > summary').count(), 0);
   }
-  assert.equal(await dashboard.getByRole('navigation', { name: 'Journal sections' }).getByRole('link').count(), 8);
+  assert.equal(await dashboard.getByRole('navigation', { name: 'Journal sections' }).getByRole('link').count(), 9);
   const cards = dashboard.getByRole('list', { name: 'Trading ticket workflow' });
   assert.deepEqual(await cards.locator('li h2').allTextContents(), [
     'Quote freshness', 'Draft ticket', 'Saved observation',
