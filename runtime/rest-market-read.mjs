@@ -1,4 +1,4 @@
-import { accountOperation, simulatorOperation, verifySimulatorSpec, validateSimulatorRead, simulatorPath, selectedSimulatorAccount, simulatorPage } from './moomoo-simulator-read.mjs';
+import { accountOperation, simulatorOperation, verifySimulatorSpec, validateSimulatorRead, simulatorPath, selectedSimulatorAccount, simulatorPage, historyOperation, ordersOperation, powerOperation, historyPagination, resolveOriginalOrder } from './moomoo-simulator-read.mjs';
 import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } from 'agentic-gateway/connectors/moomoo-stock-screen';
 import { createPrivateKey, sign } from 'node:crypto';
 import { validateProviderDefinition } from './provider-mapping.mjs';
@@ -50,8 +50,8 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     requireThat(!writeBan.test(spec.tool), 'SCOPE_DENIED');
   }
   for (const operation of Object.keys(mapping.operations)) requireThat(MARKET_READ_OPERATIONS.includes(operation) || simulatorOperation(operation), 'INVALID_MAPPING');
-  let calls = 0, grant, beforeCall, selected;
-  const privateBinding = { provider: definition.provider, scope, account: simulatorAccount, secret: aliasSecret };
+  let calls = 0, grant, beforeCall, selected, originalOrderId;
+  const privateBinding = { provider: definition.provider, scope, candidate, account: simulatorAccount, secret: aliasSecret };
   const issue = (kind, data) => {
     const issued_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
     const payload = { schema: 'trading-runtime-envelope/v1', kind, scope, candidate, principal: attestation.principal,
@@ -88,8 +88,8 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
   function json(wire) {
     try { return JSON.parse(wire); } catch { fail('INVALID_RESPONSE'); }
   }
-  async function simulatorWire(operation, signal) {
-    return send(new URL(simulatorPath(operation, simulatorAccount), origin).href, 'GET', undefined, signal);
+  async function simulatorWire(operation, signal, parameters = {}) {
+    return send(new URL(simulatorPath(operation, simulatorAccount, parameters, privateBinding, originalOrderId), origin).href, 'GET', undefined, signal);
   }
   return {
     validateInputs(operation, inputs, allowed, admitted) {
@@ -97,7 +97,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (simulatorOperation(operation)) validateSimulatorRead(operation, inputs, admitted, privateBinding);
       if (isMarketRest(spec)) marketRequest(spec, inputs, allowed);
     },
-    async open({ operation, grant: admitted, signal, beforeCall: revalidate }) {
+    async open({ operation, inputs = {}, grant: admitted, signal, beforeCall: revalidate }) {
       requireThat(admitted.mapping_digest === sha(mapping), 'MAPPING_DRIFT');
       grant = admitted; beforeCall = revalidate; calls = 0;
       // The REST response schema is reviewed offline; there is no tools/list handshake. The grant must
@@ -108,10 +108,14 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
         if (allowed.operation === 'read.stock-screen') requireThat(new URL(origin).origin === 'https://webapi.moomoo.com', 'INVALID_MAPPING');
         requireThat(!writeBan.test(allowed.name), 'SCOPE_DENIED');
       }
-      selected = null;
+      selected = null; originalOrderId = undefined;
       if (simulatorOperation(operation) && operation !== accountOperation) {
-        validateSimulatorRead(operation, {}, admitted, privateBinding);
+        validateSimulatorRead(operation, inputs, admitted, privateBinding);
         selected = selectedSimulatorAccount(json(await simulatorWire(accountOperation, signal)), privateBinding);
+        if (operation === powerOperation && inputs.order_ref) {
+          const orders = json(await simulatorWire(ordersOperation, signal));
+          originalOrderId = resolveOriginalOrder(orders, privateBinding, inputs);
+        }
       }
       return issue('read-capabilities', { tools: grant.tools, calls });
     },
@@ -126,10 +130,11 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (simulatorOperation(operation)) {
         validateSimulatorRead(operation, parameters, grant, privateBinding);
         requireThat(operation === accountOperation || selected, 'ACCOUNT_BINDING');
-        const wire = await simulatorWire(operation, signal);
-        const rows = simulatorPage(operation, json(wire), privateBinding);
+        const wire = await simulatorWire(operation, signal, parameters), body = json(wire);
+        const rows = simulatorPage(operation, body, privateBinding, parameters);
+        const metadata = operation === historyOperation ? { pagination: historyPagination(body, parameters, privateBinding) } : {};
         const account = operation === accountOperation ? rows[0] : selected;
-        return issuePage(operation, { account, rows, decimals: rows.map(() => ({})) }, wire, allowed.schema_digest);
+        return issuePage(operation, { account, rows, ...metadata, decimals: rows.map(() => ({})) }, wire, allowed.schema_digest);
       }
       const market = isMarketRest(spec);
       const native = market ? marketRequest(spec, parameters, allowed) : null;
