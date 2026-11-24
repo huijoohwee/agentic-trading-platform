@@ -64,11 +64,11 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     const activeGroups = groups.filter(value => matches.some(row => row[groupDimension] === value));
     const kinds = dimensions.filter(kind => matches.some(row => row[rowDimension] === kind));
     const count = config.measure && measure.selectedIndex === 1 ? config.measure.count : group => group.length;
-    const records = [...kinds, 'Total'].map(kind => {
-      const group = kind === 'Total' ? matches : matches.filter(row => row[rowDimension] === kind);
-      return { id: kind, cells: [kind, ...activeGroups.map(value => String(count(group.filter(row => row[groupDimension] === value)))), String(count(group))] };
+    const records = [...kinds, 'Total'].map((kind, index) => {
+      const group = index === kinds.length ? matches : matches.filter(row => row[rowDimension] === kind);
+      return { id: 'row-' + index, cells: [kind, ...activeGroups.map(value => String(count(group.filter(row => row[groupDimension] === value)))), String(count(group))] };
     });
-    const columns = [labelFor(rowDimension), ...activeGroups, 'Total'].map((name, index) => ({ name, id: name, kind: index ? 'number' : 'text' }));
+    const columns = [labelFor(rowDimension), ...activeGroups, 'Total'].map((name, index) => ({ name, id: 'column-' + index, kind: index ? 'number' : 'text' }));
     return { layout, columns, rows: records, orientation, ariaLabel: title + ' counts',
       onOrientationChange(value) { orientation = value; render(); } };
   }
@@ -117,8 +117,8 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     const related = relatedOption && dimensionFilter.selectedOptions[0] === relatedOption;
     config.onDimension?.(related ? 'All' : dimensionFilter.value);
     const term = search.value.trim().toLowerCase();
-    matches = rows.filter(row => (related ? relatedDimensions.has(row[rowDimension]) : dimensionFilter.value === 'All' || row[rowDimension] === dimensionFilter.value) &&
-      (groupFilter.value === 'All' || row[groupDimension] === groupFilter.value) && fields.some(field => String(row[field.id] ?? '').toLowerCase().includes(term)));
+    matches = rows.filter(row => (related ? relatedDimensions.has(row[rowDimension]) : dimensionFilter.selectedIndex === 0 || row[rowDimension] === dimensionFilter.value) &&
+      (groupFilter.selectedIndex === 0 || row[groupDimension] === groupFilter.value) && fields.some(field => String(row[field.id] ?? '').toLowerCase().includes(term)));
     if (sorted) matches.sort((a, b) => a.label.localeCompare(b.label, 'en'));
   }
   function applyFilters() {
@@ -142,7 +142,10 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     search.value = ''; groupFilter.value = 'All'; layout = 'table';
     applyFilters();
   }
-  return { showRelated, open({ key, dimension }) {
+  return { showRelated, destroy() {
+    theme.removeEventListener('change', applyTheme);
+    table?.destroy(); toolbar?.destroy(); root.remove(); evidence.remove();
+  }, open({ key, dimension }) {
     const row = key === undefined ? null : rows.find(item => config.key(item) === key);
     if ((key !== undefined && !row) || (dimension !== undefined && !dimensions.includes(dimension)) ||
         (row && dimension !== undefined && row[rowDimension] !== dimension)) return false;

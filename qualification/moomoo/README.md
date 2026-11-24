@@ -36,6 +36,12 @@ The dashboard disclosure `#provider-desk` (`src/moomoo-desk-view.mjs`) composes 
 
 Open **Inspect a saved quote push** to preview one local JSON frame under 500 kB. Supply its expected symbol, or the expected market for MARKET_STATE. The independently labelled preview uses the pinned Gateway connector for six documented types. It shows up to 40 source rows per list, preserves broker IDs and tied ranks, and displays an unknown market state with its numeric code. Clearing the file removes the preview. The tab keeps no saved copy. The Desktop chart rows retain their original capture provenance. [Quote push format](https://open.moomoo.com/api/quote/push/data-format)
 
+## Saved watchlists
+
+Open [Private watchlists](http://127.0.0.1:4181/#private-watchlists) after the journal reports **Offline ready**. Choose the saved JSON response from `quote_user_security_group`, select its group, then choose the matching `quote_user_security` response. Each file can be up to 480,000 bytes. The membership response omits the user and group, so the selection records which request the file belongs to. An empty group is valid.
+
+The table shows security IDs and strike prices with their original digits, plus derivative fields and localized names. The multi-dimensional table counts securities by market and type. Kanban groups them by security type. Changing the group clears its members. **Clear watchlists** removes both files’ contents from the view. The viewer uses tab memory and makes zero provider calls.
+
 ## Route inventory and offline research reads
 
 In the market desk, open **Inspect a saved research result** and select the JSON returned by Trading’s `/api/gateway` or `/mcp`. The file stays in the tab. The inspector reads 34 operations, including earnings calendars, capital flow, rankings, stock screens, financial statements and futures. Expand a row to see its exact values and units. Use **Next rows** to move within the saved file. A provider continuation cursor appears separately and requires an authorized new request.
