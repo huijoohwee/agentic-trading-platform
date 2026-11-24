@@ -18,8 +18,10 @@ function readBody(request) {
 
 // Inward API frontend. It authenticates only to the gateway audience and delegates every decision to
 // the shared admission boundary; it holds no downstream credential and opens no direct provider route.
-export function createGatewayApi({ gateway, mcp = null }) {
+export function createGatewayApi({ gateway, mcp = null, inspectQuoteStreamReceipt }) {
   requireThat(gateway?.admit && gateway?.discover && gateway?.authenticate, 'GATEWAY_REQUIRED');
+  const lookups = new Map([['/api/gateway/simulator-receipt', gateway.inspectSimulatorReceipt],
+    ['/api/gateway/quote-stream-receipt', inspectQuoteStreamReceipt]]);
   return (request, response) => {
     const url = request.url ?? '';
     if (!url.startsWith('/api/gateway') && !url.startsWith('/mcp')) return false;
@@ -40,13 +42,14 @@ export function createGatewayApi({ gateway, mcp = null }) {
         const capabilities = gateway.discover();
         send(200, { capabilities, portableQuotes: discoverPortableQuotes(capabilities) }); return;
       }
-      if (path === '/api/gateway' || path === '/api/gateway/simulator-receipt') {
+      if (path === '/api/gateway' || lookups.has(path)) {
         if (request.method !== 'POST') { send(405, { error: 'METHOD_NOT_ALLOWED' }); return; }
         let body;
         try { body = JSON.parse(await readBody(request)); } catch { send(400, { error: 'UNQUALIFIED' }); return; }
-        if (path === '/api/gateway/simulator-receipt') {
-          if (!gateway.inspectSimulatorReceipt) { send(404, { error: 'NOT_CONFIGURED' }); return; }
-          send(200, gateway.inspectSimulatorReceipt(body, authorization)); return;
+        if (lookups.has(path)) {
+          const inspect = lookups.get(path);
+          if (!inspect) { send(404, { error: 'NOT_CONFIGURED' }); return; }
+          send(200, inspect(body, authorization)); return;
         }
         send(200, await gateway.admit(body, authorization)); return;
       }

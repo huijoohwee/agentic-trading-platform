@@ -124,10 +124,10 @@ export const providerCoverage = Object.freeze([
     [source('api/quote/chip/quote-chip-distribution.md', 'e135c006a96cedabb95df63efb0b1e2b9018a8b17ee667248e6c41012fb045f7'),
      source('api/quote/cbbc/quote-cbbc-basic-info.md', '07ecfcb503fed3311277495af5910c4c449c7c4bd25714238bdb156609aa4b68')],
     'Source price strings, profit percentage and Unix seconds. Quoted currency and exact bull and bear outstanding quantities. Signed local REST fixture.'),
-  family('push', 'Realtime push subscription', 'candidate', 'PUSH',
-    ['subscribe.push'], [],
+  family('push', 'Realtime push subscription', 'mapped', 'PUSH',
+    ['read.quote-stream'], [],
     [source('api/quote/push/overview.md', '485db83bdf0dd46e4e63f042ce21c9bd473bd68745eb64c1328ebfe59c789670')],
-    `Saved quote frames supported by the desk: ${[...replayTopics].join(', ')}. Private file replay covers fourteen securities events and four binary crypto reports. A connected stream needs entitlement and recovery evidence.`),
+    `Saved quote frames supported by the desk: ${[...replayTopics].join(', ')}. Signed local WebSocket captures cover QUOTE, ORDER_BOOK, TICKER and KLINE. Private file replay covers fourteen securities events and four binary crypto reports. A connected stream needs entitlement and recovery evidence.`),
   family('simulator-reads', 'Simulator account, positions, orders and buying power', 'mapped', 'MCP+REST',
     ['read.simulator-account', 'read.simulator-balances', 'read.simulator-positions', 'read.simulator-orders', 'read.simulator-order-history', 'read.simulator-buying-power'],
     ['sim_trade_account_list', 'sim_trade_cash_info', 'sim_trade_position_list', 'sim_trade_history_order_list', 'sim_trade_max_buy_sell'],
@@ -242,6 +242,8 @@ function disposition(methodPath, topic, name) {
     if (topic === '/api/crypto_trading/trade_event_push/' + name && cryptoReports.has(name))
       return ['offline replay', 'trade:read', 'Crypto Protobuf · account absent from frame'];
     const market = topic.startsWith('/api/quote/push/');
+    if (market && ['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE'].includes(name))
+      return ['offline replay', 'quote:read', 'Signed local WebSocket capture and Gateway replay'];
     return market && replayTopics.has(topic.split('/').at(-1))
       ? ['offline replay', 'quote:read', 'Gateway replay']
       : ['candidate', market ? 'quote:read' : 'trade:read', 'Review stream rights and recovery'];

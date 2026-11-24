@@ -1,3 +1,4 @@
+import { completedRead, refuseRead } from './completed-read.mjs';
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 import fieldRegister from 'agentic-gateway/connectors/moomoo-fields.json' with { type: 'json' };
 import { canonical, fail, hash, id, requireProofs, requireThat, scopeKey, sha, utcMillis, verifyEnvelope } from './core.mjs';
@@ -327,32 +328,23 @@ export function withSimulatorAdmission(gateway, { store, scope, candidate, keys,
       candidate, account: credential.simulator_account, secret: credential.alias_secret });
     return { record, definitionDigest: selected.definition_digest, expires };
   }
-  function refusal(request, error) {
-    const codes = { STALE_EVIDENCE: 'STALE', FINAL_READ_REQUIRED: 'FINAL_READ_REQUIRED', BUDGET_HALT: 'BUDGET_HALT' };
-    return { request_id: id(request?.request_id) ? request.request_id : null, status: 'REFUSED',
-      error: { code: codes[error.code] ?? 'UNAUTHORIZED' }, provenance: null, ledger_revision: null };
-  }
   return { ...gateway, async admit(request, authorization) {
     if (!simulatorOperation(request?.operation)) return gateway.admit(request, authorization);
     requireThat(gateway.authenticate(authorization), 'UNAUTHORIZED');
     try {
       authorized(request);
       requireThat(utcMillis(request.deadline_utc) > Date.now(), 'STALE_EVIDENCE');
-    } catch (error) { return refusal(request, error); }
+    } catch (error) { return refuseRead(request, error); }
     return gateway.admit(request, authorization);
   }, inspectSimulatorReceipt(request, authorization) {
     requireThat(gateway.authenticate(authorization), 'UNAUTHORIZED');
     try {
       const { record, definitionDigest, expires } = authorized(request);
-      const checkpoint = store.read(scope).checkpoints['gateway:' + request.request_id];
-      requireThat(checkpoint?.status === 'FINAL' && checkpoint.binding === sha(request) && checkpoint.result?.status === 'OK', 'FINAL_READ_REQUIRED');
-      const receipt = checkpoint.result, { provenance, data } = receipt;
-      requireThat(receipt.request_id === request.request_id && provenance?.operation === request.operation &&
-        provenance.source === 'PROVIDER' && provenance.capability_digest === request.capability_digest &&
-        provenance.definition_digest === definitionDigest && provenance.provider === record.provider &&
-        data?.source === 'AUTHENTICATED_ADAPTER' && data.account?.account_alias === scope.account_alias &&
-        data.account.profile === scope.profile && data.account.environment === scope.environment && hash(data.digest), 'SCOPE_DENIED');
+      const receipt = completedRead(store, scope, request, record, definitionDigest);
+      const { data } = receipt;
+      requireThat(data.account?.account_alias === scope.account_alias && data.account.profile === scope.profile &&
+        data.account.environment === scope.environment, 'SCOPE_DENIED');
       return { ...receipt, display_until_utc: new Date(expires).toISOString() };
-    } catch (error) { return refusal(request, error); }
+    } catch (error) { return refuseRead(request, error); }
   } };
 }

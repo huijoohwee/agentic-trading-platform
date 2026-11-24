@@ -1,3 +1,4 @@
+import { mountPrivateReceipt } from './private-receipt-view.mjs';
 import { replayMoomooPush } from '../owners/gateway/moomoo.mjs';
 
 const previewLimit = 40;
@@ -36,8 +37,9 @@ function present(parent, type, replay, { node, table, diagram, diagrams }) {
   } else if (type === 'TICKER') {
     const ticks = preview('Ticks', replay.ticks);
     diagram(parent, 'Trade volume', diagrams.tape(ticks));
-    table(parent, 'Trade details', ['Time (UTC)', 'Side', 'Price', 'Volume', 'Turnover'],
-      ticks.map(t => [t.marketTimeUtc, t.direction, t.price, t.volume, t.turnover]));
+    const signedTicks = ticks.some(t => Object.hasOwn(t, 'sequence'));
+    table(parent, 'Trade details', ['Time (UTC)', 'Side', 'Price', 'Volume', 'Turnover', ...(signedTicks ? ['Sequence', 'Trade type'] : [])],
+      ticks.map(t => [t.marketTimeUtc, t.direction, t.price, t.volume, t.turnover, ...(signedTicks ? [t.sequence, t.tradeType] : [])]));
   } else if (type === 'KLINE') {
     fact('Period', replay.period);
     fact('Adjustment', replay.adjust);
@@ -104,4 +106,34 @@ export function mountQuotePushView(parent, symbol, ui) {
   target.addEventListener('keydown', event => { if (event.key === 'Enter') target.blur(); });
   clear.addEventListener('click', () => { picker.value = ''; refresh(); });
   refresh();
+}
+
+export function mountQuoteStreamReceipt(host, panel, ui) {
+  const { node } = ui;
+  mountPrivateReceipt(host, panel, node, { endpoint: '/api/gateway/quote-stream-receipt', label: 'Quote stream receipt',
+    accepts: operation => operation === 'read.quote-stream', kind: 'quote stream', controls: 'socket control calls',
+    render(output, request, receipt) {
+      const capture = receipt.data.receipt?.payload, { type, symbol, period, adjust } = request.inputs;
+      const key = capture?.subscription?.[type]?.[0];
+      if (capture?.kind !== 'quote-stream-capture' || capture.definition_digest !== receipt.provenance.definition_digest ||
+        !['quote', 'ticker', 'order_book', 'kline'].includes(type) || !Array.isArray(capture.frames) || capture.frames.length > 64 ||
+        (type === 'kline' ? key?.symbol !== symbol || key.period !== period || key.adjust !== adjust : key !== symbol) ||
+        !capture.frames.every(frame => frame?.symbol === symbol)) throw Error('Receipt identity mismatch.');
+      output.append(node('h4', symbol + ' · ' + type.toUpperCase()),
+        node('p', 'Captured ' + capture.issued_utc + ' · Ledger revision ' + receipt.ledger_revision));
+      if (!capture.frames.length) { output.append(node('p', 'No quote frames arrived during this capture.')); return; }
+      const frameView = node('div');
+      function show(index) {
+        frameView.replaceChildren();
+        present(frameView, type.toUpperCase(), capture.frames[index], ui);
+      }
+      if (capture.frames.length > 1) {
+        const label = node('label', 'Captured frame '), select = node('select');
+        capture.frames.forEach((_, i) => select.append(node('option', (i + 1) + ' of ' + capture.frames.length)));
+        select.addEventListener('change', () => show(select.selectedIndex));
+        label.append(select); output.append(label);
+      }
+      output.append(frameView); show(0);
+    },
+  });
 }

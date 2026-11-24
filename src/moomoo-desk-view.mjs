@@ -99,7 +99,7 @@ export async function mountMoomooDeskView(host) {
       panel.removeEventListener('toggle', open);
       try {
         body.replaceChildren();
-        await mount(body);
+        await mount(body, panel);
       } catch {
         body.textContent = 'Reader unavailable. Reopen after refreshing the offline files.';
         panel.addEventListener('toggle', open);
@@ -109,6 +109,10 @@ export async function mountMoomooDeskView(host) {
   inspector('quote-push-inspector', 'Inspect a saved quote push', async body => {
     const { mountQuotePushView } = await import('./quote-push-view.mjs');
     mountQuotePushView(body, s.symbol, { node, table, diagram, diagrams });
+  });
+  inspector('quote-stream-receipt', 'Inspect a completed quote stream', async (body, panel) => {
+    const { mountQuoteStreamReceipt } = await import('./quote-push-view.mjs');
+    mountQuoteStreamReceipt(body, panel, { node, table, diagram, diagrams });
   });
   inspector('research-page-inspector', 'Inspect a saved research result', async body => {
     const { mountResearchPageView } = await import('./research-page-view.mjs');

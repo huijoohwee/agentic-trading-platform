@@ -55,7 +55,7 @@ async function fixture(t) {
           this.incoming({ id, code: 0 });
           const type = Object.keys(subscription)[0];
           this.subscription = subscription;
-          this.push = () => this.incoming({ type: type.toUpperCase(), symbol, data: frames[type] });
+          this.push = (data = frames[type]) => this.incoming({ type: type.toUpperCase(), symbol, data });
           if (!control.hold) this.push();
         } else {
           assert.equal(action, 'unsubscribe'); assert.deepEqual(subscription, this.subscription);
@@ -84,10 +84,18 @@ async function fixture(t) {
       provider_credentials: { [definition.provider]: { transports: { WEBSOCKET: credential } } },
       gateway: { audience_token: audience, capabilities: [capability] }, ...changes }), { mode: 0o600 });
     const server = await runtimeCommand(['gateway', path, '0']); servers.add(server);
+    const base = 'http://127.0.0.1:' + server.address().port;
     return {
+      base,
+      async inspect(request) {
+        const response = await fetch(base + '/api/gateway/quote-stream-receipt', { method: 'POST',
+          headers: { Authorization: 'Bearer ' + audience, 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
+        assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+        return response.json();
+      },
       async post(request, mcp = false) {
         const body = mcp ? { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: operation, arguments: request } } : request;
-        const response = await fetch('http://127.0.0.1:' + server.address().port + (mcp ? '/mcp' : '/api/gateway'),
+        const response = await fetch(base + (mcp ? '/mcp' : '/api/gateway'),
           { method: 'POST', headers: { Authorization: 'Bearer ' + audience, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         assert.equal(response.status, 200);
         const reply = await response.json();
@@ -125,6 +133,8 @@ async function fixture(t) {
 
 for (const type of Object.keys(frames)) test('signed ' + type + ' capture replays across transports and restart', async t => {
   const f = await fixture(t), host = await f.serve(), request = f.request('read-' + type, { type });
+  assert.equal((await host.inspect(request)).error.code, 'FINAL_READ_REQUIRED');
+  assert.equal(f.peers.length, 0);
   const result = await host.post(request);
   assert.equal(result.status, 'OK', JSON.stringify(result.error));
   const capture = verifyEnvelope(result.data.receipt, { keys, role: 'integration', kind: 'quote-stream-capture', scope, candidate, now: Date.now() });
@@ -138,12 +148,29 @@ for (const type of Object.keys(frames)) test('signed ' + type + ' capture replay
   assert.doesNotMatch(JSON.stringify(result), /private-session-id|local-quote-stream-fixture/);
   await host.close();
   const reopened = await f.serve();
+  const { display_until_utc, ...stored } = await reopened.inspect(request);
+  assert.deepEqual(stored, result);
+  assert.equal(Date.parse(display_until_utc), Date.parse(capture.expires_utc));
+  assert.equal((await reopened.inspect({ ...request, request_id: 'absent' })).error.code, 'FINAL_READ_REQUIRED');
+  assert.equal((await reopened.inspect({ ...request, scope: { ...scope, account_alias: 'other' } })).status, 'REFUSED');
+  assert.equal((await reopened.inspect({ ...request, deadline_utc: utc(Date.now() + 180000) })).status, 'REFUSED');
   assert.deepEqual(await reopened.post(request, true), result);
+  if (process.env.TRADING_STREAM_BROWSER === '1') {
+    const { verifyStreamBrowser } = await import('./quote-stream-receipt-browser.mjs');
+    await verifyStreamBrowser({ base: reopened.base, audience, request });
+  }
+  const clock = t.mock.method(Date, 'now', () => Date.parse(request.deadline_utc) + 5);
+  try {
+    assert.equal((await reopened.inspect(request)).status, 'OK');
+    clock.mock.mockImplementation(() => Date.parse(display_until_utc));
+    assert.equal((await reopened.inspect(request)).status, 'REFUSED');
+  } finally { clock.mock.restore(); }
   assert.equal(f.read(scope).revision, result.ledger_revision);
   assert.equal(f.read(readBudgetScope(scope)).telemetry[sha('costread-' + type)].calls, 3);
   assert.equal(f.peers.length, 1);
   await reopened.close();
   const revoked = await f.serve(scope, { keys: { ...keys, integration: { ...keys.integration, revoked: true } } });
+  assert.equal((await revoked.inspect(request)).status, 'REFUSED');
   assert.equal((await revoked.post(request)).status, 'REFUSED');
   assert.equal(f.peers.length, 1);
 });
@@ -209,4 +236,26 @@ test('a failed capture exhausts the same cost proof for a subsequent market read
     await assert.rejects(read({ operation: 'read.ticker', inputs: { symbol }, grant: sibling.inputs.grant }), /BUDGET_HALT/);
   } finally { store.close(); }
   assert.deepEqual(f.controls, ['auth', 'subscribe']);
+});
+
+for (const frameCount of [0, 2]) test('looks up a completed capture with ' + frameCount + ' frames without dialing', async t => {
+  const f = await fixture(t), host = await f.serve();
+  f.control.hold = true;
+  const request = f.request('frames-' + frameCount, { inputs: { frame_limit: 2, capture_ms: frameCount ? 2000 : 150 } });
+  const capture = host.post(request);
+  await f.connected;
+  assert.equal((await host.inspect(request)).error.code, 'FINAL_READ_REQUIRED');
+  if (frameCount) {
+    f.peers[0].push();
+    f.peers[0].push({ last_price: 308.125 });
+  }
+  const result = await capture;
+  assert.equal(result.status, 'OK', JSON.stringify(result.error));
+  assert.equal((await host.inspect(request)).data.receipt.payload.frames.length, frameCount);
+  if (process.env.TRADING_STREAM_BROWSER === '1') {
+    const { verifyStreamBrowser } = await import('./quote-stream-receipt-browser.mjs');
+    await verifyStreamBrowser({ base: host.base, audience, request, frameCount });
+  }
+  assert.deepEqual(f.controls, ['auth', 'subscribe', 'unsubscribe']);
+  assert.equal(f.read(scope).revision, result.ledger_revision);
 });
