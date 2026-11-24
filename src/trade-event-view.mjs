@@ -1,5 +1,5 @@
 import { replayMoomooSecuritiesEvent, replayMoomooCryptoReport } from '../owners/gateway/moomoo-trade-event.mjs';
-import { canonical } from './rules.mjs';
+import { digest } from './rules.mjs';
 
 const names = {
   EVENT_NEW: 'Order accepted', EVENT_REPLACED: 'Order amended', EVENT_CANCELED: 'Order cancelled',
@@ -111,11 +111,12 @@ export function mountTradeEvents(panel, node) {
         if (turn !== generation) return;
         const event = securities ? replayMoomooSecuritiesEvent(expected, new TextDecoder('utf-8', { fatal: true }).decode(wire)) : replayMoomooCryptoReport(wire);
         if (event.status === 'unsupported') { unsupported++; continue; }
-        const content = canonical(event);
+        const fingerprint = await digest(wire);
+        if (turn !== generation) return;
         if (seen.has(event.event_id)) {
-          if (seen.get(event.event_id) !== content) throw Error('CONFLICTING_EVENT');
+          if (seen.get(event.event_id) !== fingerprint) throw Error('CONFLICTING_EVENT');
           duplicates++;
-        } else { seen.set(event.event_id, content); events.push(event); }
+        } else { seen.set(event.event_id, fingerprint); events.push(event); }
       }
       if (turn !== generation || document.hidden || !panel.open || (outer && !outer.open)) return;
       if (securities) events.sort((a,b) => {
@@ -138,7 +139,7 @@ export function mountTradeEvents(panel, node) {
     } catch (error) {
       if (turn !== generation) return;
       output.replaceChildren();
-      status.textContent = error.message === 'CONFLICTING_EVENT' ? 'Conflicting copies of the same event. Preview stopped.' :
+      status.textContent = error.message === 'CONFLICTING_EVENT' ? 'Conflicting copies share an event ID but have different file bytes. Preview stopped.' :
         errorText[error.code] ?? 'The selected files could not be decoded.';
     } finally {
       if (turn === generation) { show.disabled = false; account.value = ''; files.value = ''; }
