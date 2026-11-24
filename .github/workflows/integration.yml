@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: huijoohwee/agentic-base
-          ref: 2f891a6193b2f937275bd04f6b28dd8e67a98454
+          ref: 6d90bd812169bde115e3c927c0919d6bacfd8872
           path: owners/agentic-base
           fetch-depth: 1
 

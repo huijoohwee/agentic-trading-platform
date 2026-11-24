@@ -34,8 +34,8 @@ export function readPinnedBytes(repoRoot, revision, path, maxBuffer = 500000) {
   }
 }
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: '2f891a6193b2f937275bd04f6b28dd8e67a98454',
-    digest: 'd34cad984f1eb00fdfd2730d5be836f92368aabea4ec87f6510d53edc75a7614',
+  { repo: 'agentic-base', prefix: 'base', revision: '6d90bd812169bde115e3c927c0919d6bacfd8872',
+    digest: '204070bc665f64cfc890203fde294ef84ec710d76c23326209663068e68fc738',
     paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
   { repo: 'agentic-sheets', prefix: 'sheets', revision: '349b43ccadbec4edf107cfef9f0c09fc1715f9f2',
