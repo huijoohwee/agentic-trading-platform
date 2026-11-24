@@ -1,3 +1,4 @@
+import { simulatorOperation, simulatorSpecs, withSimulatorAdmission } from '../runtime/moomoo-simulator-read.mjs';
 import { marketOperations, marketRead } from '../src/market-reads.mjs';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -83,25 +84,26 @@ export async function runtimeCommand(args) {
         // All admissions still reserve against the same durable cost proof.
         if (definition.mapping?.operations) {
           const makeAdapter = transport === 'REST' ? createRestMarketReadAdapter : createMcpMarketReadAdapter;
-          marketBoundaries.set(definition.mapping_digest, () => createMarketReadBoundary({ ...common, adapter: makeAdapter(shared) }));
+          marketBoundaries.set(definition.mapping_digest, () => createMarketReadBoundary({ ...common, adapter: makeAdapter(transport === 'REST' ?
+            { ...shared, simulatorAccount: credential.simulator_account, aliasSecret: credential.alias_secret } : shared) }));
         }
         if (definition.mapping?.sheets) {
           snapshotImporters.set(definition.mapping_digest, () => createReadImporter({ ...common,
             adapter: createMcpReadAdapter({ ...shared, aliasSecret: credential.alias_secret }) }));
         }
       }
-      const operations = new Set([...marketOperations, ...MARKET_READ_OPERATIONS]);
-      const readers = Object.fromEntries([...operations].map(operation=>[operation, async ({capability,inputs})=>{
+      const operations = new Set([...marketOperations, ...MARKET_READ_OPERATIONS, ...Object.keys(simulatorSpecs)]);
+      const readers = Object.fromEntries([...operations].map(operation=>[operation, async ({capability,inputs,signal})=>{
         if (capability.source==='MOCK') return marketRead(operation,inputs,Date.now());
         const boundary = marketBoundaries.get(capability.mapping_digest);
-        requireThat(capability.source==='PROVIDER' && boundary && MARKET_READ_OPERATIONS.includes(operation),'UNSUPPORTED');
+        requireThat(capability.source==='PROVIDER' && boundary && (MARKET_READ_OPERATIONS.includes(operation) || simulatorOperation(operation)),'UNSUPPORTED');
         const read = boundary();
-        const result = await read({ operation, inputs, grant: inputs.grant });
+        const result = await read({ operation, inputs, grant: inputs.grant, signal });
         return { source: result.source, at: Date.parse(result.observed_utc), rows: result.rows, decimals: result.decimals,
           ...(result.price_source && { price_source: result.price_source }),
           ...(result.pagination && { pagination: result.pagination }),
           ...(Object.hasOwn(result, 'last_valid_time_ms') && { last_valid_time_ms: result.last_valid_time_ms }),
-          market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null },
+          ...(result.account ? { account: result.account } : { market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null } }),
           cost: result.cost, digest: result.digest };
       }]));
       if (config.gateway.capabilities.some(cap => cap.source === 'MOCK' && cap.operations?.includes('read.fixture'))) {
@@ -129,8 +131,10 @@ export async function runtimeCommand(args) {
           source: config.paper.source, provider: config.paper.provider });
         guard = createPaperGuard({ store, scope: config.scope, candidate: config.candidate, keys: config.keys, broker });
       }
-      const gateway = createGateway({ store, scope: config.scope, candidate: config.candidate,
+      const nativeGateway = createGateway({ store, scope: config.scope, candidate: config.candidate,
         capabilities: config.gateway.capabilities, readers, guard, keys: config.keys, audienceToken: config.gateway.audience_token, providers: registry });
+      const gateway = withSimulatorAdmission(nativeGateway, { ...common,
+        credentialFor: record => providerCredential(config, record.provider, record.transport) });
       const gatewayApi = createGatewayApi({ gateway, mcp: createGatewayMcp({ gateway }) });
       const runtimeApi = createRuntimeApi({ ...common, viewerToken: config.viewer_token });
       const server = await serve(port, { runtimeApi: (request, response) => gatewayApi(request, response) || runtimeApi(request, response) });

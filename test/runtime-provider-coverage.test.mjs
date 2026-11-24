@@ -1,3 +1,4 @@
+import { simulatorSpecs } from '../runtime/moomoo-simulator-read.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
@@ -37,7 +38,7 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   const summary = coverageSummary();
   assert.ok(summary.mapped_operations.includes('read.calendar'));
   assert.ok(summary.mapped_operations.includes('read.ticker'));
-  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'influencer', 'macro', 'etf', 'event-contract', 'crypto-market', 'stock-connect', 'chip-cbbc']);
+  assert.deepEqual(summary.rest_only_mapped, ['calendar', 'influencer', 'macro', 'etf', 'event-contract', 'crypto-market', 'stock-connect', 'chip-cbbc', 'simulator-reads']);
   assert.ok(summary.excluded.includes('trading') && summary.excluded.includes('crypto-trading'));
   const calendar = providerCoverage.find(entry => entry.id === 'calendar');
   assert.equal(calendar.transport, 'REST');
@@ -74,7 +75,7 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
     assert.match(screen.units, /Exact raw integer/);
   }
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
-  const researchPaths = Object.values({ ...researchMapping.operations, ...marketRestSpecs }).map(spec => spec.method + ' ' + spec.path);
+  const researchPaths = Object.values({ ...researchMapping.operations, ...marketRestSpecs, ...simulatorSpecs }).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
   assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 19);
   const dual = on('MCP').filter(row => row.evidence === 'Signed local MCP research fixture');
@@ -100,7 +101,7 @@ test('all nine simulator bindings distinguish six research reads from three inde
   assert.equal(effects.length, 3);
   assert.equal(new Set(routes.map(row => row.evidence)).size, 9);
   for (const row of routes) {
-    assert.equal(row.status, 'paper candidate');
+    assert.equal(row.status, Object.values(simulatorSpecs).some(spec => row.label === spec.method + ' ' + spec.path) ? 'mapped' : 'paper candidate');
     assert.notEqual(row.units, 'See source field definitions');
     assert(row.sources.some(source => new URL(source.url).pathname.startsWith('/api/sim-trade/')));
   }

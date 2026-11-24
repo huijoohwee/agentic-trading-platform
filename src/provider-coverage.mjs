@@ -125,6 +125,10 @@ export const providerCoverage = Object.freeze([
     ['subscribe.push'], [],
     [source('api/quote/push/overview.md', '485db83bdf0dd46e4e63f042ce21c9bd473bd68745eb64c1328ebfe59c789670')],
     `Saved quote frames supported by the desk: ${[...replayTopics].join(', ')}. An entitled stream needs its own subscription and recovery evidence.`),
+  family('simulator-reads', 'Simulator account, balances and positions', 'mapped', 'REST',
+    ['read.simulator-account', 'read.simulator-balances', 'read.simulator-positions'], [],
+    [source('api/sim-trade/cash-info.md', '68a9a178c1b0c1d06b4dd6ecf066c907d808a03e1ecce5a1f565cd83bca62960')],
+    'Signed local fixtures verify the selected practice or competition account. Cash and positions retain exact provider decimals.'),
   family('sim-trade', 'Simulated paper trading', 'paper-candidate', 'REST',
     ['practice.sim'], [],
     [source('api/sim-trade/cash-info.md', '68a9a178c1b0c1d06b4dd6ecf066c907d808a03e1ecce5a1f565cd83bca62960')],
@@ -206,11 +210,12 @@ const simRoot = '/api/v1.0/sim-trade/';
 const simAccount = simRoot + '{acc_id}/';
 const simOrder = simAccount + 'orders/{order_id}/';
 const simRead = (label, fields) => ({ scope: 'Simulator account read', evidence: label, units: fields });
+const mappedSimRead = (label, fields) => ({ ...simRead(label, fields), mapped: true });
 const simEffect = (label, fields) => ({ scope: 'Independent paper approval and simulator grant', evidence: label, units: fields });
 const simulationRoutes = new Map([
-  ['GET ' + simRoot + 'accounts', simRead('Resolve the simulator alias and profile', 'Opaque account ID, account market ID and practice or competition account type')],
-  ['GET ' + simAccount + 'cash-info', simRead('Read the selected account balance', 'Provider decimal strings for balance, held cash and buying power')],
-  ['GET ' + simAccount + 'positions', simRead('Read held and available positions', 'Per-instrument market, symbol, quantities and cost price')],
+  ['GET ' + simRoot + 'accounts', mappedSimRead('Verify the selected simulator alias and profile', 'Opaque account ID, account market ID and practice or competition account type')],
+  ['GET ' + simAccount + 'cash-info', mappedSimRead('Read cash after verifying the simulator account', 'Provider decimal strings for balance, held cash and buying power')],
+  ['GET ' + simAccount + 'positions', mappedSimRead('Read positions after verifying the simulator account', 'Per-instrument market, symbol, quantities and cost price')],
   ['GET ' + simAccount + 'max-buy-sell', simRead('Check the ticket’s buying power', 'Round-lot quantities and nullable margin capacity')],
   ['GET ' + simAccount + 'orders', simRead('Read current simulator orders', 'Opaque order ID, status, decimal quantity and fill quantity')],
   ['GET ' + simAccount + 'history-orders', simRead('Reconcile prior simulator orders', 'Microsecond query window and opaque page cursor')],
@@ -232,7 +237,8 @@ function disposition(methodPath, topic, name) {
   const [method, path] = methodPath.split(' ');
   if (path.startsWith('/api/v1.0/sim-trade/')) {
     const binding = simulationRoutes.get(methodPath);
-    return ['paper candidate', binding?.scope ?? 'simulator grant', binding?.evidence ?? 'Verify simulator alias and operation'];
+    if (!name && binding?.mapped) return ['mapped', binding.scope, binding.evidence];
+    return ['paper candidate', binding?.scope ?? 'simulator grant', (name && binding?.mapped ? 'Review the simulator MCP binding' : binding?.evidence) ?? 'Verify simulator alias and operation'];
   }
   if (path.includes('/modify-user-security')) return ['blocked', 'quote:write', 'Separate watchlist grant'];
   if (path.includes('/accounts/') && (['PUT', 'DELETE', 'PATCH'].includes(method) ||
