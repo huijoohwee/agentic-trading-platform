@@ -125,13 +125,14 @@ export const providerCoverage = Object.freeze([
     ['subscribe.push'], [],
     [source('api/quote/push/overview.md', '485db83bdf0dd46e4e63f042ce21c9bd473bd68745eb64c1328ebfe59c789670')],
     `Saved quote frames supported by the desk: ${[...replayTopics].join(', ')}. An entitled stream needs its own subscription and recovery evidence.`),
-  family('simulator-reads', 'Simulator account, positions, orders and buying power', 'mapped', 'REST',
-    ['read.simulator-account', 'read.simulator-balances', 'read.simulator-positions', 'read.simulator-orders', 'read.simulator-order-history', 'read.simulator-buying-power'], [],
+  family('simulator-reads', 'Simulator account, positions, orders and buying power', 'mapped', 'MCP+REST',
+    ['read.simulator-account', 'read.simulator-balances', 'read.simulator-positions', 'read.simulator-orders', 'read.simulator-order-history', 'read.simulator-buying-power'],
+    ['sim_trade_account_list', 'sim_trade_cash_info', 'sim_trade_position_list', 'sim_trade_history_order_list', 'sim_trade_max_buy_sell'],
     [source('api/sim-trade/cash-info.md', '68a9a178c1b0c1d06b4dd6ecf066c907d808a03e1ecce5a1f565cd83bca62960'),
      source('api/sim-trade/order-list.md', '1ab1b6881d212636ebb843517cb56e64199f5c06776dde8074071bd19ff49cad'),
      source('api/sim-trade/history-order-list.md', '8666d2d1a50e746925808d22291dc50d327b6ac881de1ba54f2cde3e416807b1'),
      source('api/sim-trade/max-buy-sell.md', '9b1a02fc551f0aa8eeb9ef2fb9a70f2e8531fcde694679fdd3e4450f5823cb06')],
-    'Signed local fixtures verify the selected practice or competition account. The six private reads preserve decimal values, stable order references and account-bound history pagination.'),
+    'Signed local fixtures verify the selected practice or competition account. Six REST reads and five native MCP tools preserve decimal values and account-bound results. Current-order lookup uses REST.'),
   family('sim-trade', 'Simulated paper trading', 'paper-candidate', 'REST',
     ['practice.sim'], [],
     [source('api/sim-trade/cash-info.md', '68a9a178c1b0c1d06b4dd6ecf066c907d808a03e1ecce5a1f565cd83bca62960')],
@@ -240,7 +241,11 @@ function disposition(methodPath, topic, name) {
   const [method, path] = methodPath.split(' ');
   if (path.startsWith('/api/v1.0/sim-trade/')) {
     const binding = simulationRoutes.get(methodPath);
-    if (!name && binding?.mapped) return ['mapped', binding.scope, binding.evidence];
+    if (binding?.mapped) {
+      if (!name) return ['mapped', binding.scope, binding.evidence];
+      const family = providerCoverage.find(entry => entry.id === 'simulator-reads');
+      if (family.mcp.includes(name)) return ['mapped', binding.scope, 'Signed local simulator MCP fixture'];
+    }
     return ['paper candidate', binding?.scope ?? 'simulator grant', (name && binding?.mapped ? 'Review the simulator MCP binding' : binding?.evidence) ?? 'Verify simulator alias and operation'];
   }
   if (path.includes('/modify-user-security')) return ['blocked', 'quote:write', 'Separate watchlist grant'];

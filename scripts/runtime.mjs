@@ -1,4 +1,4 @@
-import { simulatorOperation, simulatorSpecs, withSimulatorAdmission } from '../runtime/moomoo-simulator-read.mjs';
+import { simulatorOperation, simulatorSpecs, qualifySimulatorAdapter, withSimulatorAdmission } from '../runtime/moomoo-simulator-read.mjs';
 import { marketOperations, marketRead } from '../src/market-reads.mjs';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -84,8 +84,11 @@ export async function runtimeCommand(args) {
         // All admissions still reserve against the same durable cost proof.
         if (definition.mapping?.operations) {
           const makeAdapter = transport === 'REST' ? createRestMarketReadAdapter : createMcpMarketReadAdapter;
-          marketBoundaries.set(definition.mapping_digest, () => createMarketReadBoundary({ ...common, adapter: makeAdapter(transport === 'REST' ?
-            { ...shared, simulatorAccount: credential.simulator_account, aliasSecret: credential.alias_secret } : shared) }));
+          marketBoundaries.set(definition.mapping_digest, (capability, operation) => {
+            const adapter = makeAdapter({ ...shared, simulatorAccount: credential.simulator_account, aliasSecret: credential.alias_secret });
+            return createMarketReadBoundary({ ...common, adapter: simulatorOperation(operation)
+              ? qualifySimulatorAdapter(adapter, capability, definition) : adapter });
+          });
         }
         if (definition.mapping?.sheets) {
           snapshotImporters.set(definition.mapping_digest, () => createReadImporter({ ...common,
@@ -97,7 +100,7 @@ export async function runtimeCommand(args) {
         if (capability.source==='MOCK') return marketRead(operation,inputs,Date.now());
         const boundary = marketBoundaries.get(capability.mapping_digest);
         requireThat(capability.source==='PROVIDER' && boundary && (MARKET_READ_OPERATIONS.includes(operation) || simulatorOperation(operation)),'UNSUPPORTED');
-        const read = boundary();
+        const read = boundary(capability, operation);
         const result = await read({ operation, inputs, grant: inputs.grant, signal });
         return { source: result.source, at: Date.parse(result.observed_utc), rows: result.rows, decimals: result.decimals,
           ...(result.price_source && { price_source: result.price_source }),

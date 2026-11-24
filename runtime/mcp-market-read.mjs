@@ -1,5 +1,7 @@
 import { STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } from 'agentic-gateway/connectors/moomoo-stock-screen';
 import { createPrivateKey, sign } from 'node:crypto';
+import { accountOperation, historyOperation, simulatorOperation, verifySimulatorMcpSpec, verifySimulatorDescriptor,
+  validateSimulatorRead, simulatorMcpArguments, selectedSimulatorAccount, simulatorPage, historyPagination } from './moomoo-simulator-read.mjs';
 import { listReviewedTools, ownPath, rpcResponse } from './mcp-read.mjs';
 import { validateProviderDefinition } from './provider-mapping.mjs';
 import { researchGetProfile, researchMapping, researchMcpMapping, researchToolArguments } from './moomoo-research.mjs';
@@ -18,20 +20,20 @@ const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|d
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 
 // The public directory names some fields in camelCase. Preserve scalar bytes and reject ambiguous aliases.
-function researchFields(source, depth = 0) {
+function providerFields(source, depth = 0) {
   if (source === null || typeof source !== 'object') return source;
   requireThat(depth < 40, 'INVALID_PAGE');
-  if (Array.isArray(source)) return source.map(value => researchFields(value, depth + 1));
+  if (Array.isArray(source)) return source.map(value => providerFields(value, depth + 1));
   const result = Object.create(null);
   for (const [key, value] of Object.entries(source)) {
     const name = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
     requireThat(!Object.hasOwn(result, name), 'INVALID_PAGE');
-    result[name] = researchFields(value, depth + 1);
+    result[name] = providerFields(value, depth + 1);
   }
   return result;
 }
 
-export function createMcpMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, fetchImpl = fetch, now = Date.now }) {
+export function createMcpMarketReadAdapter({ provider, token, mapping, attestation, scope, candidate, simulatorAccount, aliasSecret, fetchImpl = fetch, now = Date.now }) {
   const { definition } = validateProviderDefinition(provider);
   requireThat(definition.transport.kind === 'MCP', 'INVALID_TRANSPORT_PIN');
   const endpoint = definition.transport.origin;
@@ -43,7 +45,11 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
   requireThat(privateKey.asymmetricKeyType === 'ed25519', 'ATTESTATION_REQUIRED');
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
-    requireThat(MARKET_READ_OPERATIONS.includes(operation) && id(spec.tool) && !spec.tool.startsWith('sim_trade_') && Array.isArray(spec.rows_path), 'INVALID_MAPPING');
+    if (simulatorOperation(operation) || spec.tool?.startsWith('sim_trade_') || spec.profile === 'moomoo-simulator-mcp-read/v1') {
+      verifySimulatorMcpSpec(operation, spec, endpoint);
+      continue;
+    }
+    requireThat(MARKET_READ_OPERATIONS.includes(operation) && id(spec.tool) && Array.isArray(spec.rows_path), 'INVALID_MAPPING');
     requireThat((operation === 'read.stock-screen') === (spec.tool === STOCK_SCREEN_TOOL), 'INVALID_MAPPING');
     if (spec.profile === researchGetProfile) {
       const reviewed = researchMcpMapping.operations[operation];
@@ -51,7 +57,8 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
     }
     requireThat(!writeBan.test(spec.tool), 'SCOPE_DENIED');
   }
-  let session, version, sequence = 0, calls = 0, grant, beforeCall;
+  const binding = { provider: definition.provider, scope, candidate, transport: 'MCP', account: simulatorAccount, secret: aliasSecret };
+  let session, version, sequence = 0, calls = 0, grant, beforeCall, selected;
   const issue = (kind, data) => {
     const issued_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
     const payload = { schema: 'trading-runtime-envelope/v1', kind, scope, candidate, principal: attestation.principal,
@@ -81,6 +88,16 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
     if (notification) { requireThat(response.status === 202, 'INVALID_RESPONSE'); await response.body?.cancel(); return; }
     return rpcResponse(response, requestId);
   }
+  async function callTool(name, args, signal) {
+    const response = await rpc('tools/call', { name, arguments: args }, signal);
+    requireThat(!response.isError, 'PROVIDER_ERROR');
+    let source = response.structuredContent;
+    if (source === undefined) {
+      requireThat(response.content?.length === 1 && response.content[0].type === 'text', 'SOURCE_MAPPING_REQUIRED');
+      try { source = JSON.parse(response.content[0].text); } catch { fail('SOURCE_MAPPING_REQUIRED'); }
+    }
+    return { source, response };
+  }
   const project = (raw, spec) => {
     if (!spec.fields) return boundedJson(raw);
     const row = {}, precise = {};
@@ -108,23 +125,39 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
     return researchToolArguments(operation, parameters);
   }
   return {
-    validateInputs(operation, inputs, allowed) {
+    validateInputs(operation, inputs, allowed, admitted) {
+      if (simulatorOperation(operation)) {
+        validateSimulatorRead(operation, inputs, admitted, binding);
+        requireThat(admitted.limits.max_calls >= (operation === accountOperation ? 4 : 5), 'BUDGET_HALT');
+      }
       if (mapping.operations[operation]?.profile === researchGetProfile) researchArguments(operation, inputs, allowed);
     },
-    async open({ grant: admitted, signal, beforeCall: revalidate }) {
+    async open({ grant: admitted, operation, inputs = {}, signal, beforeCall: revalidate }) {
       requireThat(admitted.mapping_digest === sha(mapping), 'MAPPING_DRIFT');
       grant = admitted; beforeCall = revalidate; session = undefined; version = undefined; calls = 0;
+      selected = null;
+      const privateRead = simulatorOperation(operation);
+      const needsAccount = privateRead && operation !== accountOperation;
+      if (privateRead) {
+        validateSimulatorRead(operation, inputs, admitted, binding);
+        requireThat(admitted.limits.max_calls >= (needsAccount ? 5 : 4), 'BUDGET_HALT');
+      }
       const initialized = await rpc('initialize', { protocolVersion: mapping.protocol, capabilities: {},
         clientInfo: { name: 'trading-market-read-boundary', version: '1.0.0' } }, signal);
       requireThat(initialized?.protocolVersion === mapping.protocol && initialized.capabilities?.tools, 'PROTOCOL_UNQUALIFIED');
       version = initialized.protocolVersion;
       await rpc('notifications/initialized', null, signal, true);
-      const listed = await listReviewedTools(rpc, grant.tools, grant.limits.max_calls - calls - 1, signal);
+      const listed = await listReviewedTools(rpc, grant.tools, grant.limits.max_calls - calls - (needsAccount ? 2 : 1), signal);
       for (const allowed of grant.tools) {
         const spec = mapping.operations[allowed.operation];
         const descriptor = listed.get(allowed.name);
         requireThat(spec && descriptor && sha(descriptor) === allowed.schema_digest && spec.tool === allowed.name && allowed.effect === 'read', 'SCHEMA_DRIFT');
+        if (simulatorOperation(allowed.operation)) verifySimulatorDescriptor(descriptor);
         requireThat(!writeBan.test(allowed.name), 'SCOPE_DENIED');
+      }
+      if (needsAccount) {
+        const { source } = await callTool(mapping.operations[accountOperation].tool, {}, signal);
+        selected = selectedSimulatorAccount(providerFields(source), binding);
       }
       return issue('read-capabilities', { tools: grant.tools, calls });
     },
@@ -133,10 +166,15 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
       requireThat(grant && spec && allowed, 'SCOPE_DENIED');
       const { grant: envelopeInput, ...request } = boundedJson(inputs);
       const screen = operation === 'read.stock-screen';
+      const privateRead = simulatorOperation(operation);
       const research = spec.profile === researchGetProfile;
       if (screen || allowed.inputs_digest !== undefined) requireThat(allowed.inputs_digest === sha(request), 'SCOPE_DENIED');
       let parameters;
-      if (screen) {
+      if (privateRead) {
+        validateSimulatorRead(operation, request, grant, binding);
+        requireThat(operation === accountOperation || selected, 'ACCOUNT_BINDING');
+        parameters = simulatorMcpArguments(operation, request, binding);
+      } else if (screen) {
         requireThat(allowed.name === STOCK_SCREEN_TOOL, 'SCHEMA_DRIFT');
         parameters = buildMoomooStockScreen(request);
       } else if (research) {
@@ -149,20 +187,20 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
           parameters[parameter] = spec.array_parameters?.includes(parameter) ? [value] : value;
         }
       }
-      const response = await rpc('tools/call', { name: allowed.name, arguments: parameters }, signal);
-      requireThat(!response.isError, 'PROVIDER_ERROR');
-      let source = response.structuredContent;
-      if (source === undefined) {
-        requireThat(response.content?.length === 1 && response.content[0].type === 'text', 'SOURCE_MAPPING_REQUIRED');
-        try { source = JSON.parse(response.content[0].text); } catch { fail('SOURCE_MAPPING_REQUIRED'); }
-      }
-      const raw = screen || research ? undefined : ownPath(source, spec.rows_path);
+      const { source, response } = await callTool(allowed.name, parameters, signal);
+      const raw = privateRead || screen || research ? undefined : ownPath(source, spec.rows_path);
       let rows, decimals = [], metadata = {};
-      if (screen) {
+      if (privateRead) {
+        const body = providerFields(source);
+        rows = simulatorPage(operation, body, binding, request);
+        decimals = rows.map(() => ({}));
+        metadata.account = operation === accountOperation ? rows[0] : selected;
+        if (operation === historyOperation) metadata.pagination = historyPagination(body, request, binding);
+      } else if (screen) {
         ({ rows, ...metadata } = projectMoomooStockScreen(request, source));
         decimals = rows.map(() => ({}));
       } else if (research) {
-        ({ rows, decimals, ...metadata } = projectMarketReadPage(researchMapping.operations[operation], request, researchFields(source)));
+        ({ rows, decimals, ...metadata } = projectMarketReadPage(researchMapping.operations[operation], request, providerFields(source)));
       } else if (spec.object_result) {
         requireThat(raw !== null && typeof raw === 'object' && !Array.isArray(raw), 'INVALID_PAGE');
         const { row, precise } = project(raw, spec);
