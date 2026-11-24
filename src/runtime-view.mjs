@@ -44,7 +44,15 @@ export async function mountRuntimeView(host) {
   const controls = node('div'); controls.className = 'agentic-dashboard-actions agentic-form-controls'; controls.append(label, refresh);
   const output = node('div'); output.id = 'runtime-output';
   const privacy = node('p', 'Read-only projection. Viewer tokens stay in memory; broker credentials never reach this page. Stored redacted observations do not authorize trades.');
-  host.replaceChildren(status, privacy, controls, output);
+  const simulator = node('details');
+  simulator.append(node('summary', 'Inspect a completed simulator read'));
+  simulator.addEventListener('toggle', async function open() {
+    if (!simulator.open) return;
+    simulator.removeEventListener('toggle', open);
+    try { (await import('./simulator-receipt-view.mjs')).mountSimulatorReceipts(simulator, node); }
+    catch { simulator.append(node('p', 'Simulator receipt viewer unavailable.')); }
+  });
+  host.replaceChildren(status, privacy, controls, output, simulator);
   const baseId = 'trading-runtime-projections-v1', tableId = 'observations', recordId = 'latest';
   const { run, ensureTable } = localFixtureTable(new IndexedDBAdapter({ databaseName: baseId }), {
     baseId, tableId, title: 'Redacted runtime observations', baseName: 'Trading runtime readback',
