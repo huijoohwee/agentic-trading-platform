@@ -2,11 +2,12 @@ import test from 'node:test';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { canonical, sha } from '../runtime/core.mjs';
 import { openStore } from '../runtime/store.mjs';
+import { runtimeCommand } from '../scripts/runtime.mjs';
 import { createGateway } from '../runtime/gateway.mjs';
 import { createGatewayMcp } from '../runtime/gateway-mcp.mjs';
 import { createRestMarketReadAdapter } from '../runtime/rest-market-read.mjs';
@@ -171,7 +172,7 @@ test('gateway admits a PROVIDER REST read with identical HTTP and MCP decisions 
   assert.equal(denied.error.code, 'UNAUTHORIZED');
 });
 
-async function researchRead(t, operation, inputs, response, inspect = () => {}) {
+async function researchRead(t, operation, inputs, response, inspect = () => {}, permittedInputs = inputs) {
   const { store } = await fixture(t);
   const spec = researchMapping.operations[operation];
   const provider = { ...definition, mapping: researchMapping, mapping_digest: sha(researchMapping),
@@ -181,7 +182,7 @@ async function researchRead(t, operation, inputs, response, inspect = () => {}) 
     mapping: researchMapping, attestation, scope, candidate, fetchImpl: fake.fetchImpl, now });
   const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter, now });
   const permit = grant('research', 'research', { mapping_digest: sha(researchMapping),
-    tools: [{ operation, name: spec.tool, effect: 'read', schema_digest: spec.schema_digest }] });
+    tools: [{ operation, name: spec.tool, effect: 'read', schema_digest: spec.schema_digest, inputs_digest: sha(permittedInputs) }] });
   try { return await boundary({ operation, inputs, grant: permit }); }
   finally { inspect(fake.calls); }
 }
@@ -218,4 +219,217 @@ test('rank reads return the provider cursor, refuse a repeated cursor and preser
     { ret_code: 0, data: { items: [] }, pagination: { completed: false, page_flag: 'a', total: 3 } }), /INVALID_PAGE/);
   await assert.rejects(researchRead(t, 'read.rank', { market: 'HK', page_size: 201 }, {},
     calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+});
+
+test('sector lookup preserves opaque IDs and provider refusals', async t => {
+  const inputs = { market: 'HK', plate_class: 'INDUSTRY' };
+  const sector = { code: 'HK.LIST001', plate_id: 'LIST001', plate_name: 'Transport' };
+  const result = await researchRead(t, 'read.plate', inputs,
+    { ret_code: 0, data: { plate_list: [sector] } }, calls => {
+      assert.equal(calls[0].url, 'https://webapi.moomoo.com/api/v1.0/quote/plate-list?market=HK&plate_class=INDUSTRY');
+    });
+  assert.deepEqual(result.rows, [sector]);
+  await assert.rejects(researchRead(t, 'read.plate', { ...inputs, plate_class: 'REGION' }, { ret_code: -8 }), /UNSUPPORTED/);
+  await assert.rejects(researchRead(t, 'read.plate', { ...inputs, plate_class: 'invalid' }, {},
+    calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+});
+
+test('Hong Kong IPO listings preserve absent prices and dates and omit private application fields', async t => {
+  const inputs = { market: 'HK', request_type: 10 };
+  const offering = { code: 'HK.12345', name: 'Fixture', list_time: '--', lot_size: 100,
+    ipo_price_min: 0, ipo_price_max: 0, list_price: '18.5000', apply_status: 'PRIVATE' };
+  const result = await researchRead(t, 'read.ipo', inputs, { ret_code: 0, data: [offering] },
+    calls => assert.equal(calls[0].url, 'https://webapi.moomoo.com/api/v1.0/quote/ipo-list/hk?request_type=10'));
+  assert.deepEqual(result.rows, [{ code: offering.code, name: 'Fixture', list_time: null, lot_size: 100,
+    ipo_price_min: null, ipo_price_max: null, list_price: 18.5 }]);
+  assert.equal(result.decimals[0].list_price, '18.5000');
+  for (const wrong of [{ market: 'US' }, { market: 'HK', request_type: 12 }]) {
+    await assert.rejects(researchRead(t, 'read.ipo', wrong, {}, calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+  }
+  await assert.rejects(researchRead(t, 'read.ipo', inputs, { ret_code: 0, data: [{ ...offering, code: 'US.DEMO' }] }), /SOURCE_MAPPING_REQUIRED/);
+  const empty = await researchRead(t, 'read.ipo', inputs, { ret_code: 0, data: [] });
+  assert.deepEqual(empty.rows, []);
+});
+
+test('news search projects only headline metadata and keeps news IDs opaque', async t => {
+  const inputs = { keyword: 'A & B', lang: 'en', source_ids: '2,42', page_size: 1 };
+  const headline = { news_id: '90071992547409931', title: 'Fixture headline', news_type: 'REPORT',
+    source: 'Fixture wire', publish_time: 1795490000000 };
+  const result = await researchRead(t, 'read.news', inputs, { ret_code: 0, data: { items: [
+    { ...headline, content: '<p>private article</p>', files: ['attachment'], source_url: 'https://example.invalid/' }
+  ] } }, calls => {
+    const url = new URL(calls[0].url);
+    assert.equal(url.pathname, '/api/v1.0/news/search');
+    for (const [key, value] of Object.entries(inputs)) assert.equal(url.searchParams.get(key), String(value));
+  });
+  assert.deepEqual(result.rows, [headline]);
+  const rows = items => ({ ret_code: 0, data: { items } });
+  await assert.rejects(researchRead(t, 'read.news', inputs, rows([headline, headline])), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, 'read.news', inputs, rows([{ ...headline, news_id: 2 ** 53 }])), /PRECISION_UNKNOWN/);
+  for (const wrong of [{ keyword: ' ' }, { keyword: 'x'.repeat(201) }, { source_ids: 'all' }, { account: 'other' }]) {
+    await assert.rejects(researchRead(t, 'read.news', { ...inputs, ...wrong }, {}, calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+  }
+});
+
+test('analyst rating pages keep provider target text and allow the documented cursor without a total', async t => {
+  const inputs = { analyst_uid: 'a-123', market: 'CA', page_size: 1 };
+  const rating = { code: 'CA.DEMO', rating: 0, target_price: 'N/A', recommendation_date: '2026-11-20' };
+  const response = { ret_code: 0, data: { items: [rating] }, pagination: { completed: false, page_flag: 'n/1+' } };
+  const page = await researchRead(t, 'read.research', inputs, response);
+  assert.deepEqual(page.rows, [rating]);
+  assert.deepEqual(page.pagination, { completed: false, next_cursor: 'n/1+' });
+  await assert.rejects(researchRead(t, 'read.research', { ...inputs, page_flag: 'n/1+' }, response), /INVALID_PAGE/);
+  await assert.rejects(researchRead(t, 'read.research', inputs, { ...response, pagination: { completed: true, page_flag: '', total: -1 } }), /INVALID_PAGE/);
+  assert.deepEqual((await researchRead(t, 'read.research', inputs, { ret_code: -10 })).pagination, { completed: true, next_cursor: null });
+  await assert.rejects(researchRead(t, 'read.research', inputs, { ret_code: -9 }), /SCOPE_DENIED/);
+});
+
+const hk = { symbol: 'HK.00700' };
+const response = data => ({ ret_code: 0, data });
+const pageEnd = { completed: true, page_flag: '' };
+
+test('company profile, dividends and shareholder disclosures preserve labels, dates and absent values', async t => {
+  const profile = { field_type: 1, attribute_type: 23, name: 'Website', value: 'https://example.invalid/' };
+  const title = { field_type: 2, attribute_type: 35, name: 'Description' };
+  const company = await researchRead(t, 'read.financials', hk, response({ items: [profile, title] }));
+  assert.deepEqual(company.rows, [profile, { ...title, value: null }]);
+  const dividend = { statement: 'Fixture cash dividend', currency: 'HKD', process: 'Plan', ex_date: '2024/02/29',
+    record_date: '', dividend_payable_date: '', dividend_per_share: 12 };
+  const actions = await researchRead(t, 'read.corporate-actions', hk, response({ dividend_list: [dividend] }));
+  assert.deepEqual(actions.rows[0], { statement: dividend.statement, currency: 'HKD', process: 'Plan',
+    ex_date: '2024/02/29', record_date: null, dividend_payable_date: null });
+  await assert.rejects(researchRead(t, 'read.corporate-actions', hk,
+    response({ dividend_list: [{ ...dividend, ex_date: '2026/02/29' }] })), /PRECISION_UNKNOWN/);
+  const holder = { name: 'Others', holder_pct: 28.3, holder_id: null, static_date_str: null };
+  const holders = await researchRead(t, 'read.holders', { ...hk, period_id: 0 }, response({ main_holder: [holder] }));
+  assert.deepEqual(holders.rows, [holder]);
+  await assert.rejects(researchRead(t, 'read.holders', hk, response({ main_holder: [] }),
+    calls => assert.equal(calls.length, 0), { symbol: 'US.AAPL' }), /SCOPE_DENIED/);
+});
+
+test('influencer holdings require their own response status and preserve USD estimates as supplied', async t => {
+  const inputs = { influencer: 'PELOSI', sort_dir: 'DESCENDING', page_size: 1 };
+  const row = { code: 'US.DEMO', name: 'Fixture', est_shares: '1,000', last_change_est_shares: '-200',
+    last_change_date: '2026-11-19', percent_of_portfolio: 12.5, est_position_value: '1.2M' };
+  const body = { code: 0, data: { items: [row] }, pagination: pageEnd };
+  const result = await researchRead(t, 'read.influencer', inputs, body);
+  assert.deepEqual(result.rows, [row]);
+  assert.deepEqual(result.pagination, { completed: true, next_cursor: null });
+  await assert.rejects(researchRead(t, 'read.influencer', inputs, { ...body, ret_code: -3 }), /INVALID_RESPONSE/);
+  await assert.rejects(researchRead(t, 'read.influencer', inputs, { code: -3 }), /INVALID_PARAMETER/);
+});
+
+test('regional macro IDs, ETF disclosure timestamps and series cursors remain source-specific', async t => {
+  const macro = await researchRead(t, 'read.macro', { region: 'SG' },
+    response([{ category_name: 'Prices', name: 'Fixture index', indicator_id: 287 }]));
+  assert.deepEqual(macro.rows, [{ category_name: 'Prices', name: 'Fixture index', indicator_id: '287' }]);
+  const holding = { code: '', holding_name: 'Unmapped', holding_rate: 1.5 };
+  const etf = await researchRead(t, 'read.etf', { symbol: 'US.SPY' }, response({ update_time: 1792071000000, items: [holding] }));
+  assert.deepEqual(etf.rows, [{ ...holding, disclosure_time_ms: 1792071000000 }]);
+  await assert.rejects(researchRead(t, 'read.etf', hk, response({ items: [holding] })), /SOURCE_MAPPING_REQUIRED/);
+  const series = { series: 'KS.KXNFLGAME' };
+  const event = { event_code: 'KS.FIXTURE', event_name: 'Fixture game' };
+  const events = await researchRead(t, 'read.event-contract', series, { ...response({ events: [event] }),
+    pagination: { completed: false, page_flag: 'b/=', total: 3 } });
+  assert.deepEqual(events.rows, [event]);
+  assert.equal(events.pagination.next_cursor, 'b/=');
+  await assert.rejects(researchRead(t, 'read.event-contract', { series: 'KS/..' }, {},
+    calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
+});
+
+test('market-wide crypto, historical valuation and unusual derivatives keep distinct units and statuses', async t => {
+  const crypto = { total_market_cap: 230000, total_market_cap_change_24h: -2.1, turnover_24h: 100, turnover_24h_change_24h: 1.2 };
+  assert.deepEqual((await researchRead(t, 'read.crypto-market', {}, response(crypto))).rows, [crypto]);
+  await assert.rejects(researchRead(t, 'read.crypto-market', {}, response([crypto])), /INVALID_PAGE/);
+  const point = { value: 12.1, plate_value: 15, time: 1780197931, time_str: '2026-05-31' };
+  const valuation = await researchRead(t, 'read.valuation', { ...hk, valuation_type: 1 }, response({ valuation_type: 1,
+    last_update_time: 1780200000, trend: { historical_items: [point] } }));
+  assert.deepEqual(valuation.rows, [{ ...point, valuation_type: 1, last_update_time: 1780200000 }]);
+  const none = { code: 1, time_range: '', content: '' };
+  assert.deepEqual((await researchRead(t, 'read.derivatives', hk, response(none))).rows, [none]);
+  await assert.rejects(researchRead(t, 'read.derivatives', hk, response({ ...none, code: 4 })), /SOURCE_MAPPING_REQUIRED/);
+});
+
+test('HK short interest, Stock Connect and both broker sides preserve signed integer shares exactly', async t => {
+  const point = { timestamp: 1780012800000, timestamp_str: '2026-05-29', aggregated_short: '9007199254740993', aggregated_short_ratio: 4.1 };
+  assert.deepEqual((await researchRead(t, 'read.short', hk, response({ items: [point] }))).rows, [point]);
+  await assert.rejects(researchRead(t, 'read.short', { symbol: 'US.AAPL' }, {}, calls => assert.equal(calls.length, 0)), /UNSUPPORTED/);
+  await assert.rejects(researchRead(t, 'read.short', hk, response({ items: [{ ...point, aggregated_short: 2 ** 53 }] })), /PRECISION_UNKNOWN/);
+  const day = { shares: '-9007199254740993', amount: '-73.5400', rank: 10 };
+  const flow = await researchRead(t, 'read.stock-connect', hk, response({ latest_daily_data: true, day }));
+  assert.deepEqual(flow.rows, [{ ...day, amount: -73.54 }]);
+  assert.equal(flow.decimals[0].amount, '-73.5400');
+  assert.deepEqual((await researchRead(t, 'read.stock-connect', hk, response({ latest_daily_data: false }))).rows, []);
+  const buy = { buy_sell_type: 1, broker_code: 'A', broker_name: 'Fixture A', net_vol: 17 };
+  const sell = { buy_sell_type: 2, broker_code: 'B', broker_name: 'Fixture B', net_vol: -12 };
+  const source = { data_time: 1780012800000, buy_brokers: [buy], sell_brokers: [sell] };
+  const brokers = await researchRead(t, 'read.top-brokers', hk, response(source));
+  assert.deepEqual(brokers.rows, [buy, sell].map(row => ({ ...row, net_vol: String(row.net_vol), data_time: source.data_time })));
+  await assert.rejects(researchRead(t, 'read.top-brokers', hk, response({ ...source, sell_brokers: [buy] })), /INVALID_PAGE/);
+});
+
+test('chip prices, profit ratios and CBBC outstanding quantities survive exact projection', async t => {
+  const chip = { timestamp: 1780012800, current_price: '19.3400', avg_cost: '20.000', profit_ratio: '45.10' };
+  const result = await researchRead(t, 'read.chip', { symbol: 'SH.600519', ktype: 2 }, response({ items: [chip] }));
+  assert.equal(result.decimals[0].current_price, '19.3400');
+  assert.equal(result.rows[0].profit_ratio, 45.1);
+  const cbbc = { timestamp: 1780012800, close_price: '18.05', prev_close_price: '18.00',
+    bull_outstanding: '90071992547409930', bear_outstanding: 10 };
+  const source = response({ currency: 'HKD', items: [cbbc] });
+  const page = await researchRead(t, 'read.cbbc', hk, source);
+  assert.deepEqual(page.rows, [{ ...cbbc, close_price: 18.05, prev_close_price: 18, bear_outstanding: '10', currency: 'HKD' }]);
+  await assert.rejects(researchRead(t, 'read.chip', hk, response({ items: [chip, chip] })), /INVALID_PAGE/);
+});
+
+test('running gateway replays one parameter-bound headline through HTTP and MCP and refuses a changed keyword', async t => {
+  const operation = 'read.news', spec = researchMapping.operations[operation];
+  const expiry = new Date(Date.now() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const issued = new Date(Date.now() - 2000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const provider = { ...definition, transport: { kind: 'REST', origin: 'https://research.invalid/', protocol: '1.0' },
+    mapping: researchMapping, mapping_digest: sha(researchMapping), schema_digest: spec.schema_digest, operations: [operation],
+    allowlist: [spec.tool], qualification: { ...definition.qualification, expires_utc: expiry } };
+  const { schema: _schema, mapping: _mapping, ...base } = provider;
+  const capability = { ...base, protocol: '1.0', transport: 'REST' }, audience = 'local-research-fixture-audience-0000';
+  const directory = await mkdtemp(join(tmpdir(), 'research-http-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const config = { schema: 'trading-runtime-config/v1', candidate, scope, database: 'research.sqlite', keys,
+    viewer_token: 'local-research-fixture-viewer-000000', providers: [provider],
+    provider_credentials: { [provider.provider]: { token: 'local-research-fixture-token', attestation } },
+    gateway: { audience_token: audience, capabilities: [capability] } };
+  const path = join(directory, 'config.json');
+  await writeFile(path, JSON.stringify(config), { mode: 0o600 });
+  const network = globalThis.fetch;
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (new URL(url).hostname === '127.0.0.1') return network(url, options);
+    assert.equal(String(url), 'https://research.invalid/api/v1.0/news/search?keyword=example');
+    calls.push(options.method);
+    return Response.json(response({ items: [{ news_id: 'H1', source: 'Fixture', news_type: 'REPORT',
+      title: 'Fixture headline', publish_time: 1795490000000, content: 'PRIVATE BODY' }] }));
+  });
+  const server = await runtimeCommand(['gateway', path, '0']);
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  async function post(route, body) {
+    const result = await fetch('http://127.0.0.1:' + server.address().port + route, { method: 'POST',
+      headers: { Authorization: 'Bearer ' + audience, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal(result.ok, true);
+    return result.json();
+  }
+  const parameters = { keyword: 'example' };
+  const permit = grant('headline-http', 'headline-http', { issued_utc: issued, expires_utc: expiry, mapping_digest: provider.mapping_digest,
+    proofs: ['cost', 'rights', 'account'].map(kind => ({ kind, digest: sha(kind), expires_utc: expiry })),
+    cost: { hard_cap_usd: 0, deny_at_exhaustion: true, remaining_calls: 24 },
+    tools: [{ operation, name: spec.tool, effect: 'read', schema_digest: spec.schema_digest, inputs_digest: sha(parameters) }] });
+  const request = { contract_version: '1', capability_digest: sha(capability), operation, scope, request_id: 'headline-request',
+    inputs: { ...parameters, grant: permit }, deadline_utc: new Date(Date.now() + 60000).toISOString().replace(/\.\d{3}Z$/, 'Z') };
+  const result = await post('/api/gateway', request);
+  assert.equal(result.status, 'OK', JSON.stringify(result.error));
+  assert.equal(result.data.rows[0].news_id, 'H1');
+  assert.equal(Object.hasOwn(result.data.rows[0], 'content'), false);
+  const replay = await post('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: operation, arguments: request } });
+  assert.deepEqual(replay.result.structuredContent, result);
+  const refusal = await post('/api/gateway', { ...request, request_id: 'changed-keyword', inputs: { grant: permit, keyword: 'changed' } });
+  assert.equal(refusal.status, 'REFUSED');
+  assert.equal(refusal.error.code, 'UNAUTHORIZED');
+  assert.deepEqual(calls, ['GET']);
 });

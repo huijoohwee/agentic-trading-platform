@@ -10,6 +10,7 @@ import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, 
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 const datePattern = /^\d{4}-\d\d-\d\d$/;
+const symbolPattern = /^[A-Z0-9_]+\.[A-Za-z0-9_.-]+$/;
 const dayMs = 86_400_000;
 const validDate = value => {
   if (typeof value !== 'string' || !datePattern.test(value)) return false;
@@ -29,6 +30,24 @@ const readPath = (object, path, optional) => {
   }
   return value;
 };
+
+function responseRows(body, spec) {
+  if (spec.available) {
+    const available = readPath(body, spec.available, false);
+    requireThat(typeof available === 'boolean', 'INVALID_PAGE');
+    if (!available) return [];
+  }
+  const raw = readPath(body, spec.rows_path, false);
+  if (spec.groups) {
+    return Object.entries(spec.groups).flatMap(([key, side]) => {
+      const group = readPath(raw, [key], false);
+      requireThat(Array.isArray(group) && group.length <= spec.group_limit &&
+        group.every(item => item?.[spec.group_field] === side), 'INVALID_PAGE');
+      return group;
+    });
+  }
+  return spec.single_row ? [raw] : raw;
+}
 
 // Enforce the wire limit before parsing, including when no Content-Length is sent.
 async function readResponse(response) {
@@ -68,14 +87,15 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       runtime: attestation.runtime, issued_utc, expires_utc: grant.expires_utc, ...data };
     return { key_id: attestation.key_id, payload, signature: sign(null, Buffer.from(canonical(payload)), privateKey).toString('base64url') };
   };
-  const project = (raw, spec) => {
+  const project = (raw, spec, body) => {
+    requireThat(raw && typeof raw === 'object' && !Array.isArray(raw), 'INVALID_PAGE');
     if (!spec.fields) return { row: boundedJson(raw), precise: {} };
     const row = {}, precise = {};
     for (const [target, projection] of Object.entries(spec.fields)) {
       requireThat(id(target) && !['__proto__', 'prototype', 'constructor'].includes(target), 'INVALID_MAPPING');
       const optional = spec.nullable?.includes(target);
-      const value = Object.hasOwn(projection, 'constant') ? projection.constant : readPath(raw, projection.path, optional);
-      if (value === undefined || value === null) {
+      const value = Object.hasOwn(projection, 'constant') ? projection.constant : readPath(projection.source === 'response' ? body : raw, projection.path, optional);
+      if (value === undefined || value === null || spec.missing_values?.[target]?.includes(value)) {
         // A missing estimate stays null; it is never coerced to zero or interpolated.
         requireThat(optional, 'PRECISION_UNKNOWN');
         row[target] = null; continue;
@@ -93,14 +113,45 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
           : (typeof value === 'string' && /^\d{1,19}$/.test(value) ? value : null);
         requireThat(text !== null && Number.isSafeInteger(Number(text)), 'PRECISION_UNKNOWN');
         precise[target] = text; row[target] = Number(text);
+      } else if (spec.exact_integer?.includes(target)) {
+        const text = Number.isSafeInteger(value) ? String(value) : value;
+        requireThat(typeof text === 'string' && /^-?\d{1,20}$/.test(text), 'PRECISION_UNKNOWN');
+        const integer = BigInt(text);
+        requireThat(integer >= -(1n << 63n) && integer < (1n << 63n), 'PRECISION_UNKNOWN');
+        row[target] = text;
+      } else if (spec.local_date?.includes(target)) {
+        requireThat(typeof value === 'string' && /^\d{4}\/\d\d\/\d\d$/.test(value) &&
+          validDate(value.replaceAll('/', '-')), 'PRECISION_UNKNOWN');
+        row[target] = value;
+      } else if (spec.opaque_ids?.includes(target)) {
+        requireThat(Number.isSafeInteger(value) && value >= 0 || typeof value === 'string' && value.length > 0 && value.length <= 128, 'PRECISION_UNKNOWN');
+        row[target] = String(value);
+      } else if (spec.text?.includes(target)) {
+        requireThat(typeof value === 'string', 'SOURCE_MAPPING_REQUIRED');
+        row[target] = value;
       } else if (spec.date?.includes(target)) {
         requireThat(validDate(value), 'PRECISION_UNKNOWN');
         row[target] = value;
       } else row[target] = value;
     }
+    if (spec.row_market) {
+      const code = row[spec.row_market.field];
+      requireThat(typeof code === 'string' && symbolPattern.test(code) &&
+        code.startsWith(spec.row_market.market + '.'), 'SOURCE_MAPPING_REQUIRED');
+    }
+    for (const [key, values] of Object.entries(spec.allowed_values ?? {}))
+      requireThat(values.includes(row[key]), 'SOURCE_MAPPING_REQUIRED');
     return { row, precise };
   };
   function query(spec, inputs) {
+    if (spec.strict_inputs) {
+      const accepted = new Set(['grant', ...Object.values(spec.input_map), ...Object.keys(spec.fixed_inputs ?? {})]);
+      if (spec.symbol_path) accepted.add('symbol');
+      requireThat(Object.keys(inputs).every(key => accepted.has(key)), 'INVALID_PARAMETER');
+    }
+    for (const [key, expected] of Object.entries(spec.fixed_inputs ?? {})) {
+      requireThat(inputs[key] === expected, 'INVALID_PARAMETER');
+    }
     const parameters = new URLSearchParams();
     for (const [parameter, inputKey] of Object.entries(spec.input_map ?? {})) {
       requireThat(id(parameter) && id(inputKey), 'SOURCE_MAPPING_REQUIRED');
@@ -111,8 +162,12 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       const value = inputs[inputKey];
       if (rule.enum) requireThat(typeof value === 'string' && rule.enum.includes(value), 'INVALID_PARAMETER');
       else if (rule.date) requireThat(validDate(value), 'INVALID_PARAMETER');
+      else if (rule.length) requireThat(typeof value === 'string' && value.trim().length >= rule.length[0] &&
+        [...value].length <= rule.length[1], 'INVALID_PARAMETER');
       else if (rule.integer) requireThat(Number.isSafeInteger(value) && value >= rule.integer[0] && value <= rule.integer[1], 'INVALID_PARAMETER');
       else requireThat(typeof value === 'string' && value.length <= 64, 'INVALID_PARAMETER');
+      if (rule.symbol) requireThat(symbolPattern.test(value), 'INVALID_PARAMETER');
+      if (rule.numeric_list) requireThat(/^[0-9]+(,[0-9]+)*$/.test(value), 'INVALID_PARAMETER');
       parameters.set(parameter, String(value));
     }
     if (spec.window) {
@@ -141,6 +196,10 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     async read({ operation, inputs, signal }) {
       const spec = mapping.operations[operation], allowed = grant.tools.find(tool => tool.operation === operation);
       requireThat(grant && spec && allowed, 'SCOPE_DENIED');
+      if (spec.pin_inputs || allowed.inputs_digest !== undefined) {
+        const { grant: requestGrant, ...parameters } = boundedJson(inputs);
+        requireThat(allowed.inputs_digest === sha(parameters), 'SCOPE_DENIED');
+      }
       beforeCall?.();
       requireThat(!signal?.aborted, 'TIMEOUT');
       requireThat(grant.revoked !== true, 'REVOKED');
@@ -152,7 +211,8 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (spec.symbol_path) {
         requireThat(path.includes('{symbol}'), 'INVALID_MAPPING');
         requireThat(typeof inputs.symbol === 'string' && inputs.symbol.length <= 32 &&
-          /^[A-Z0-9_]+\.[A-Za-z0-9_.-]+$/.test(inputs.symbol), 'INVALID_PARAMETER');
+          symbolPattern.test(inputs.symbol), 'INVALID_PARAMETER');
+        if (spec.symbol_markets) requireThat(spec.symbol_markets.includes(inputs.symbol.split('.')[0]), 'UNSUPPORTED');
         path = path.replace('{symbol}', encodeURIComponent(inputs.symbol));
       }
       const target = new URL(path, origin);
@@ -166,29 +226,38 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       requireThat(response.ok && !response.redirected, 'PROVIDER_UNAVAILABLE');
       requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'INVALID_RESPONSE');
       const body = await readResponse(response);
-      requireThat(body && typeof body === 'object' && !Array.isArray(body) && Number.isSafeInteger(body.ret_code), 'INVALID_RESPONSE');
+      requireThat(body && typeof body === 'object' && !Array.isArray(body), 'INVALID_RESPONSE');
+      const code = body[spec.response_code ?? 'ret_code'];
+      if (spec.response_code && Object.hasOwn(body, 'ret_code')) requireThat(body.ret_code === code, 'INVALID_RESPONSE');
+      requireThat(Number.isSafeInteger(code), 'INVALID_RESPONSE');
       const decimals = [];
       let rows;
-      if (body.ret_code === -10) { rows = []; } // no_data is an empty observation, never invented rows
+      if (code === -10 && !spec.response_code) { rows = []; } // no_data is an empty observation, never invented rows
       else {
-        requireThat(body.ret_code === 0, 'PROVIDER_ERROR');
-        const raw = readPath(body, spec.rows_path, false);
-        requireThat(Array.isArray(raw) && raw.length <= 600, 'INVALID_PAGE');
-        rows = raw.map(item => { const { row, precise } = project(item, spec); decimals.push(precise); return row; });
+        if (spec.strict_inputs && code === -3) fail('INVALID_PARAMETER');
+        if (code === -8) fail('UNSUPPORTED');
+        if (code === -9) fail('SCOPE_DENIED');
+        requireThat(code === 0, 'PROVIDER_ERROR');
+        const raw = responseRows(body, spec);
+        const limit = spec.row_limit ? inputs[spec.row_limit.input] ?? spec.row_limit.fallback
+          : inputs.page_size ?? spec.default_page_size ?? 600;
+        requireThat(Array.isArray(raw) && raw.length <= Math.min(600, limit), 'INVALID_PAGE');
+        rows = raw.map(item => { const { row, precise } = project(item, spec, body); decimals.push(precise); return row; });
       }
       const metadata = {};
       if (spec.last_valid_ms) {
-        const last = body.ret_code === 0 ? readPath(body, spec.last_valid_ms, false) : null;
+        const last = code === 0 ? readPath(body, spec.last_valid_ms, false) : null;
         requireThat(last === null || Number.isSafeInteger(last) && last >= 0, 'INVALID_PAGE');
         metadata.last_valid_time_ms = last;
       }
       if (spec.pagination) {
-        const page = body.ret_code === 0 ? readPath(body, spec.pagination, false) : { completed: true, page_flag: '', total: 0 };
+        const page = code === 0 ? readPath(body, spec.pagination, false) : { completed: true, page_flag: '', ...(spec.optional_total ? {} : { total: 0 }) };
         requireThat(typeof page?.completed === 'boolean' && typeof page.page_flag === 'string' &&
           page.page_flag.length <= 64 && (page.completed ? page.page_flag === '' : page.page_flag.length > 0 &&
-            page.page_flag !== inputs.page_flag) && rows.length <= (inputs.page_size ?? spec.default_page_size) &&
-          Number.isSafeInteger(page.total) && page.total >= rows.length, 'INVALID_PAGE');
-        metadata.pagination = { completed: page.completed, next_cursor: page.completed ? null : page.page_flag, total: page.total };
+            page.page_flag !== inputs.page_flag) && (spec.optional_total === true && !Object.hasOwn(page, 'total') ||
+          Number.isSafeInteger(page.total) && page.total >= rows.length), 'INVALID_PAGE');
+        metadata.pagination = { completed: page.completed, next_cursor: page.completed ? null : page.page_flag,
+          ...(Object.hasOwn(page, 'total') && { total: page.total }) };
       }
       const response_digest = sha(body);
       const observed_utc = new Date(Math.floor(now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');

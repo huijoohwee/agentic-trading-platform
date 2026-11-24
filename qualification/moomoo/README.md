@@ -39,3 +39,16 @@ The dashboard disclosure `#provider-desk` (`src/moomoo-desk-view.mjs`) composes 
 Open **Moomoo OpenAPI coverage** on a primed dashboard to search the pinned Gateway directory and mirror by tool name, HTTP path or push topic. The build includes digests for 107 publicly advertised tools and records the 109 missing mirror pages. The Desktop capture and hosted ticker each carry their own provenance.
 
 The reviewed definitions in `runtime/moomoo-research.mjs` map `read.capital-flow` to a single symbol and session, and `read.rank` to one hot-list page. Capital flow preserves signed amounts in native currency and Unix milliseconds. A ranking result includes the provider's completion flag, next cursor and total. Each subsequent page needs a new admitted request. Run `node --test test/runtime-rest-market-read.test.mjs test/provider-ticker-receipt.test.mjs` for signed local examples. A host that binds both transports for one provider supplies separate private `provider_credentials[provider].transports.MCP` and `.REST` entries. The dashboard renders saved evidence offline.
+
+The route inventory now identifies 22 REST mappings. Nineteen additional GETs have signed local fixtures. The dashboard lists the reviewed projection and units for each mapped route. Other endpoints in the same family keep their own status.
+
+| Research read | Fields covered by the fixture |
+| --- | --- |
+| Sector directory, HK IPOs | Market and sector IDs, listing dates, prices and lot size. Undisclosed IPO dates and prices are null. |
+| News search, analyst ratings | Headline, source, publication epoch and opaque ID. Analyst pages retain provider target-price text, market date and continuation. |
+| Company profile, dividends, shareholders, influencer holdings | Localized profile fields, dividend statement and dates, reported holder weights, and estimated positions. |
+| Macro, ETF, event contracts, crypto | Indicator directory by region, ETF weights and disclosure time, event directory by series, and aggregate USD market cap and turnover. |
+| Derivatives activity, valuation, HK short interest | Provider movement summary, historical PE/PB/PS ratios, and HK short shares and float percentages. |
+| Stock Connect, top brokers, chip distribution, CBBC | Daily flow in yuan and shares, both sides of HK broker rankings, chip prices and profit ratio, and outstanding bull/bear quantities with the supplied currency. |
+
+For these nineteen reads, the operator signs an `inputs_digest` on the grant’s tool entry. Compute it with `sha(parameters)` from `runtime/core.mjs`, using the exact request parameters including any cursor and excluding the grant envelope. Trading checks it before the provider GET. A fresh page or symbol requires its corresponding authorization. The existing calendar, capital-flow and ranking contracts continue to accept their reviewed grants. The signed fixtures use a local response transport. Connected research requires private REST credentials, current rights and call headroom for the named operation.
