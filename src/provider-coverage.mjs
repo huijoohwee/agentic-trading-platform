@@ -20,11 +20,11 @@ const family = (id, label, status, transport, operations, mcp, sources, note) =>
 const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE', 'BROKER_QUEUE', 'MARKET_STATE']);
 
 export const providerCoverage = Object.freeze([
-  family('market-reads', 'Realtime quotes, history, book and tape', 'mapped', 'MCP',
+  family('market-reads', 'Realtime quotes, history, book and tape', 'mapped', 'MCP+REST',
     ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape'],
     ['quote_stock_quote', 'quote_rt_ticker', 'quote_cur_kline', 'quote_order_book'],
     [source('api/quote/kline/list.md', '2d0a1de5628c5165adbbfad1ca0ac649874408f106723e7ca16f0baad08271a7')],
-    'Operation-shaped MCP reads share one durable $0 counter; decimal strings are preserved verbatim.'),
+    'Desktop MCP captures cover four reads. Signed local REST fixtures preserve quote price tokens, venue books, trade IDs and current candles.'),
   family('calendar', 'Earnings calendar', 'mapped', 'REST',
     ['read.calendar'], [],
     [source('api/quote/calendar/earnings-calendar.md', '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2')],
@@ -156,7 +156,12 @@ const researchMcpNames = new Set(Object.values(researchTools));
 const screenPath = 'POST /api/v1.0/quote/stock-screen';
 const stockScreenEvidence = { evidence: 'Signed local stock-screen fixture',
   units: 'Prices and market cap ×1000, valuation multiples ×100000, dividend yield percent ×1000, listing time in seconds. Exact raw integer and decimal text.' };
+const marketFixture = units => ({ evidence: 'Signed local market REST fixture', units });
 const reviewedRest = new Map([
+  ['POST /api/v1.0/quote/stock-quote', marketFixture('Source quote price and representation, market date, Unix milliseconds, shares and turnover')],
+  ['POST /api/v1.0/quote/order-book', marketFixture('Per-exchange book, source size, scaled size, order count and exchange time in Unix milliseconds')],
+  ['GET /api/v1.0/quote/{symbol}/rt-ticker', marketFixture('Exact trade sequence, source price, raw and scaled volume, session and Unix milliseconds')],
+  ['GET /api/v1.0/quote/{symbol}/cur-kline', marketFixture('Market-local date, OHLC, shares, turnover, percent changes, Unix milliseconds and requested candle settings')],
   [screenPath, stockScreenEvidence],
   ['GET /api/v1.0/quote/{symbol}/future/position-analysis', { evidence: 'Local CFTC positions fixture', units: 'Reported contract counts, weekly changes, open interest and report time in Unix seconds' }],
   ['GET /api/v1.0/quote/{symbol}/future/seasonal', { evidence: 'Local seasonality fixture', units: 'Unscaled source prices for each year or the historical mean, with UTC+8-aligned Unix seconds' }],

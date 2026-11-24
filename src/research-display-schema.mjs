@@ -1,4 +1,5 @@
 import { researchMapping } from '../runtime/moomoo-research.mjs';
+import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchRouteUnits } from './provider-coverage.mjs';
 
 // The builder seals these display fields. Dispatch definitions and Node runtime dependencies stay on the host.
@@ -21,7 +22,27 @@ function columns(spec) {
     ...(spec.nested && { nested: Object.fromEntries(Object.entries(spec.nested).map(([field, child]) => [field, columns(child)])) }) };
 }
 
+const level = { columns: ['price', 'raw_volume', 'volume', 'order_count'], decimalText: ['price', 'volume'],
+  exactIntegers: ['raw_volume'], integers: ['order_count'], nullable: ['volume'] };
+const marketColumns = {
+  'read.ticker': { columns: ['symbol', 'name', 'market_date', 'time_ms', 'last', 'price_source', 'open', 'high', 'low', 'prev_close', 'volume', 'turnover', 'suspended'],
+    text: ['symbol', 'name', 'market_date', 'price_source'], integers: ['time_ms'], booleans: ['suspended'], exactIntegers: ['volume'],
+    decimalText: ['last', 'open', 'high', 'low', 'prev_close', 'turnover'], nullable: ['open', 'high', 'low', 'prev_close', 'volume', 'turnover', 'suspended'] },
+  'read.depth': { columns: ['symbol', 'name', 'exchange', 'time_ms', 'volume_precision', 'bid_flag', 'ask_flag', 'bids', 'asks'],
+    text: ['symbol', 'name', 'exchange'], integers: ['time_ms', 'volume_precision', 'bid_flag', 'ask_flag'],
+    nullable: ['volume_precision'], nested: { bids: level, asks: level } },
+  'read.tape': { columns: ['symbol', 'time_ms', 'sequence', 'price', 'price_ex', 'raw_volume', 'volume_precision', 'volume', 'turnover',
+      'direction', 'tick_type', 'period', 'pred_side', 'trade_type'], rowLimit: 750, integers: ['time_ms', 'volume_precision'], exactIntegers: ['sequence'],
+    text: ['symbol', 'direction', 'tick_type', 'period', 'pred_side', 'trade_type'], decimalText: ['price', 'price_ex', 'raw_volume', 'volume', 'turnover'],
+    nullable: ['price_ex', 'volume_precision', 'volume', 'pred_side', 'trade_type'] },
+  'read.candles': { columns: ['symbol', 'time_ms', 'market_date', 'open', 'high', 'low', 'close', 'prev_close', 'volume', 'turnover',
+      'turnover_rate_pct', 'change_pct', 'ktype', 'autype', 'extended_time', 'pred_side'],
+    text: ['symbol', 'market_date'], integers: ['time_ms', 'ktype', 'autype', 'extended_time', 'pred_side'], exactIntegers: ['volume'],
+    decimalText: ['open', 'high', 'low', 'close', 'prev_close', 'turnover', 'turnover_rate_pct', 'change_pct'], nullable: ['prev_close', 'turnover_rate_pct', 'change_pct'] }
+};
 export const researchDisplaySchema = { 'read.calendar': calendar,
+  ...Object.fromEntries(Object.entries(marketRestSpecs).map(([operation, spec]) =>
+    [operation, { ...marketColumns[operation], units: researchRouteUnits(spec.method, spec.path) }])),
   ...Object.fromEntries(Object.entries(researchMapping.operations).map(([operation, spec]) => {
     const shape = operation === 'read.stock-screen'
       ? { columns: ['symbol', 'name', 'factors'], text: ['symbol', 'name'],

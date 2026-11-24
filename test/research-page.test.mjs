@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
 import { captureCalendarFixture } from '../scripts/export-calendar-fixture.mjs';
 import { researchDisplaySchema } from '../src/research-display-schema.mjs';
@@ -13,9 +14,9 @@ function gateway(operation, rows, decimals, metadata = {}) {
 }
 
 test('every reviewed research mapping has named columns, units and a readable empty result', async () => {
-  const operations = ['read.calendar', ...Object.keys(researchMapping.operations)].sort();
+  const operations = ['read.calendar', ...Object.keys(researchMapping.operations), ...Object.keys(marketRestSpecs)].sort();
   assert.deepEqual(Object.keys(researchDisplaySchema).sort(), operations);
-  assert.equal(operations.length, 30);
+  assert.equal(operations.length, 34);
   for (const name of operations) {
     const schema = researchDisplaySchema[name];
     assert.ok(schema.columns.length && schema.units);

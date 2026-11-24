@@ -26,7 +26,7 @@ function rowList(parent, rows, node) {
       const row = rows[index], item = node('details');
       const identity = [row.symbol, row.code, row.factor, row.display_name, row.category_name, row.name, row.holding_name, row.timestamp]
         .find(value => value != null && String(value).trim() !== '');
-      const detail = row.earnings_date ?? row.capital_flow_item_time ?? row.period_text ?? (row.factor ? row.value : undefined);
+      const detail = row.earnings_date ?? row.capital_flow_item_time ?? row.exchange ?? row.sequence ?? row.time_ms ?? row.period_text ?? (row.factor ? row.value : undefined);
       const summary = [identity ?? 'Row ' + (index + 1), detail].filter(value => value != null).join(' · ');
       item.append(node('summary', summary));
       item.addEventListener('toggle', function expand() {
@@ -54,7 +54,48 @@ function rowList(parent, rows, node) {
   render();
 }
 
-export function mountResearchPageView(parent, node) {
+function marketChart(parent, page, node, { diagrams, diagram, volumeChart }) {
+  const { operation, rows } = page;
+  if (!rows.length || !['read.depth', 'read.tape', 'read.candles'].includes(operation)) return;
+  const usable = value => value !== null && Number.isFinite(Number(value));
+  const volumeKnown = row => usable(row.volume) && Number(row.volume) >= 0;
+  const symbol = rows[0].symbol;
+  if (!rows.every(row => row.symbol === symbol && (!page.symbol || page.symbol === symbol))) {
+    parent.append(node('p', 'These rows have different symbols. Inspect their values below.')); return;
+  }
+  if (operation === 'read.depth') {
+    const select = node('select'), chart = node('section');
+    rows.forEach((row, i) => { const option = node('option', row.exchange || 'Aggregated book'); option.value = String(i); select.append(option); });
+    if (rows.length > 1) { const label = node('label', 'Exchange book '); label.append(select); parent.append(label); }
+    parent.append(chart);
+    const draw = () => {
+      const row = rows[Number(select.value)], bid = row.bids.slice(0, 10), ask = row.asks.slice(0, 10);
+      chart.replaceChildren();
+      if (![...bid, ...ask].every(volumeKnown)) { chart.append(node('p', 'Book size is unknown. Raw levels are available below.')); return; }
+      if (!bid.length && !ask.length) { chart.append(node('p', 'No reported book levels.')); return; }
+      diagram(chart, symbol + ' · ' + (row.exchange || 'Aggregated book') + ' · First 10 levels per side', diagrams.depth({ bid, ask }));
+    };
+    select.addEventListener('change', draw); draw(); return;
+  }
+  if (operation === 'read.tape') {
+    const tape = rows.slice(0, 40);
+    if (tape.every(volumeKnown)) diagram(parent, symbol + ' · Volume of first ' + tape.length + ' of ' + rows.length + ' trades', diagrams.tape(tape));
+    else parent.append(node('p', 'Trade size is unknown. Raw volumes are available below.'));
+    return;
+  }
+  const bars = rows.slice(-30);
+  if (!bars.every(row => ['open', 'high', 'low', 'close'].every(key => usable(row[key])) &&
+    row.ktype === bars[0].ktype && row.autype === bars[0].autype && row.extended_time === bars[0].extended_time && row.pred_side === bars[0].pred_side)) {
+    parent.append(node('p', 'The selected bars have inconsistent prices or settings. Inspect the rows below.')); return;
+  }
+  const intraday = [1, 6, 7, 8, 9, 10, 14, 15, 26, 29].includes(bars[0].ktype);
+  const chartRows = bars.map(row => ({ ...row, date: intraday ? new Date(row.time_ms).toISOString() : row.market_date }));
+  const title = symbol + ' · Last ' + bars.length + ' of ' + rows.length + ' candles in file order';
+  diagram(parent, title, diagrams.candles(chartRows, title));
+  if (chartRows.every(volumeKnown)) volumeChart(parent, 'Candle volume', chartRows);
+}
+
+export function mountResearchPageView(parent, node, charts) {
   const picker = node('input'), clear = node('button', 'Clear preview'), sample = node('button', 'Open example calendar');
   picker.type = 'file'; picker.accept = '.json,application/json'; clear.type = sample.type = 'button'; clear.disabled = true;
   const fileLabel = node('label', 'Research result JSON file '); fileLabel.append(picker);
@@ -91,7 +132,9 @@ export function mountResearchPageView(parent, node) {
         if (page.pagination.total !== null) fact('Reported total', page.pagination.total);
         if (page.pagination.cursor !== null) fact('Continuation cursor', page.pagination.cursor);
       }
-      result.append(facts, node('p', page.units)); rowList(result, page.rows, node);
+      result.append(facts, node('p', page.units));
+      marketChart(result, page, node, charts);
+      rowList(result, page.rows, node);
       status.textContent = example ? 'Synthetic example · ' + page.operation : 'Local file · ' + page.operation + ' · origin unverified';
     } catch (error) {
       if (reading === generation) { result.replaceChildren(); status.textContent = 'Cannot display this result. ' + error.message; }

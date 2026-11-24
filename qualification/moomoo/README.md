@@ -38,7 +38,7 @@ Open **Inspect a saved quote push** to preview one local JSON frame under 500 kB
 
 ## Route inventory and offline research reads
 
-In the market desk, open **Inspect a saved research result** and select the JSON returned by Trading’s `/api/gateway` or `/mcp`. The file stays in the tab. The inspector reads 30 research operations, including earnings calendars, capital flow, rankings, stock screens, financial statements and futures. Expand a row to see its exact values and units. Use **Next rows** to move within the saved file. A provider continuation cursor appears separately and requires an authorized new request.
+In the market desk, open **Inspect a saved research result** and select the JSON returned by Trading’s `/api/gateway` or `/mcp`. The file stays in the tab. The inspector reads 34 operations, including earnings calendars, capital flow, rankings, stock screens, financial statements and futures. Expand a row to see its exact values and units. Use **Next rows** to move within the saved file. A provider continuation cursor appears separately and requires an authorized new request.
 
 Choose **Open example calendar** to explore three synthetic earnings rows entirely on device. To try the export workflow, run `node scripts/export-calendar-fixture.mjs /tmp/calendar-example.json` with an unused destination and open the result. Its checksum detects a changed fixture. The inspector labels file origin as unverified and displays the source reported in the file.
 
@@ -68,7 +68,7 @@ Search for `/sim-trade/` in the route inventory. Six GETs cover account discover
 
 Opening an advertised tool in the route finder loads its public HTTP field register from the sealed site. The field list shows path variables, declared parameters, body fields, limits and top-level response names. Required and optional labels reflect explicit values in the published schema. Connected MCP admission still checks the host’s own descriptor.
 
-The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Thirty REST reads have local mappings. Nineteen MCP tools have mappings. Four have Desktop captures, one serves stock screens, and fourteen serve locally tested research reads. The connected captures retain their own host, operation and grant.
+The route finder combines 196 original mirror sources and 109 separately hashed public Markdown files. It lists 258 distinct REST routes, 107 public tool names and 24 push topics. Thirty-four REST reads have local mappings. Nineteen MCP tools have mappings. Four have Desktop captures, one serves stock screens, and fourteen serve locally tested research reads. The connected captures retain their own host, operation and grant.
 
 
 ## Research over MCP
@@ -82,3 +82,9 @@ Signed fixtures exercise sector lists, HK IPOs, headline search, profiles, state
 Use `read.stock-screen` with the REST definition from `researchMapping` or the separate `stockScreenMcpMapping` in `runtime/moomoo-research.mjs`. Both use the pinned Gateway connector. A screen takes one market and optional factor filters, retrieval columns, sorts, limit and cursor. For example, `{"market":"HK","factors":["last_price","pe_ttm"],"filters":[{"factor":"pe_ttm","upper":{"value":"15.25","includes":true}}],"limit":20}` returns a bounded market-wide page. Each factor includes its raw integer and exact scaled decimal text. Sorts, column order and the opaque cursor are part of the signed input digest. A terminal page has a null next cursor.
 
 The REST adapter builds a JSON POST only for the exact stock-screen route on the published origin. MCP discovers the host’s descriptor and calls the named tool. Both enforce the operator’s grant and local call reservation. Local fixtures verify dispatch and refusal. The four Desktop market captures and the hosted ticker retain their original evidence. Watchlists, holdings and advanced screen conditions require separate mappings. [Stock screen](https://open.moomoo.com/api/quote/screening/stock-screen)
+
+## Market REST reads
+
+Use `marketRestMapping` from `runtime/moomoo-market-rest.mjs` for a private provider bound to `https://webapi.moomoo.com/`. The mapping includes the existing research operations and the four market reads. The operator signs the exact selectors on each tool entry. The running gateway reserves the approved call budget and returns the same saved result when the same request is replayed through HTTP or MCP.
+
+`read.ticker` accepts one symbol or a list of up to 400. `read.depth` retains each exchange and scales its volumes using the supplied precision. `read.tape` keeps the exact 64-bit trade sequence, repeated session filters and trade direction. `read.candles` retains the market date, Unix milliseconds and requested interval and adjustment on each bar. The saved-result viewer reads these REST pages entirely offline. Select an exchange for a depth ladder, inspect the first 40 tape volumes or compare the last 30 candlesticks and their volume columns. Expand a row to inspect its exact source values. Signed local fixtures establish the mapping. A connected REST capture requires the host's current entitlement, rights and zero-cost grant.
