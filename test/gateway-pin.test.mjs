@@ -14,11 +14,12 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = '4637866d08af894c893e270906d9875fd424a05b';
+const REVISION = '29f955ffc9cd6f3b6ec480f6dfde4dab215b07fc';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-D96oGFv/TY/XjAMX/jQvopgV2iY4aQrOpU3KwNyZALcAUnTmoptJTELvEFcO3lXLQoeOAyG/F9Guo7NpjKkfSQ==';
+const LOCK_INTEGRITY = 'sha512-yvELJkjI3qkSnzGcUuLLjN1/pqbOW0INJzb8He1CGWpD6P5WUOBCprsmdbFt4x6viZFpA40TkWYs8T5W4qhURw==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
+  'connectors/moomoo-stock-screen.mjs': '637730130ac76d63f7f39c54527716e663694c458cc21612a6590d6db4b3d1a1',
   'connectors/moomoo-fields.json': '5a3adf13c7925ef33884fcbe87b882992a93733933fbd631f572218b6d7c1d13',
   'connectors/moomoo-catalog.json': 'b6046103367e103e9eca1424a1984d35c4cd9ef72ff1813cc1aca3c47dcbfe64',
   'connectors/profiles.json': '795ecdd823357d65438d6a061e05e58b7b11cc3c6e830d9e9eef2c1fc8a69b32',
@@ -50,7 +51,7 @@ test('Trading pins the exact reviewed Gateway manifest, lock and installed impor
   const installed = JSON.parse(read('node_modules/agentic-gateway/package.json'));
   assert.equal(installed.name, 'agentic-gateway');
   assert.equal(installed.version, INSTALLED_VERSION);
-  for (const key of ['.', './connectors/moomoo', './provider-profiles', './connectors/moomoo-catalog.json', './connectors/moomoo-fields.json']) {
+  for (const key of ['.', './connectors/moomoo', './connectors/moomoo-stock-screen', './provider-profiles', './connectors/moomoo-catalog.json', './connectors/moomoo-fields.json']) {
     assert.equal(typeof installed.exports[key], 'string');
   }
   for (const rel of Object.keys(INSTALLED_DIGESTS)) guardInstalled(rel);
