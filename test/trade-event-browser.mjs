@@ -52,15 +52,24 @@ export async function verifyTradeEvents(page) {
     assert.equal(await account.inputValue(), ''); assert.equal(await files.inputValue(), '');
     await select([first, json('conflict.json', { ...corrected, fill_infos: [{ ...fill, qty: '2' }] })]);
     await status.filter({ hasText: 'Conflicting copies' }).waitFor(); assert.equal(await output.innerText(), '');
+    await select([first, json('changed-note.json', { ...corrected, order_info: { ...order, remark: 'private amended note' } })]);
+    await status.filter({ hasText: 'Conflicting copies' }).waitFor();
+    assert.equal(await output.innerText(), ''); assert(!(await panel.innerText()).includes('private amended note'));
     await select([first], '987654321098765432');
     await status.filter({ hasText: 'account differs' }).waitFor(); assert.equal(await output.innerText(), '');
     await format.selectOption('crypto');
     const binary = Buffer.from('CgNldnQiQQoDb3JkEAEaA0JUQyIDVVNEKhQxLjAwMDAwMDAwMDAwMDAwMDAwMTIBMjgBQAJYgYCAgICAgBBgAGoBMXIDMS4wMARSNQoDb3JkEgRmaWxsGhQxLjAwMDAwMDAwMDAwMDAwMDAwMSIBMSoBMTABSgQxLjAwUgRmbG93', 'base64');
-    await files.setInputFiles({ name: 'partial.pb', mimeType: 'application/octet-stream', buffer: binary }); await show.click();
+    const report = { name: 'partial.pb', mimeType: 'application/octet-stream', buffer: binary };
+    await files.setInputFiles([report, { ...report, name: 'copy.pb' }]); await show.click();
+    await status.filter({ hasText: '1 unique · 1 duplicate' }).waitFor();
     await output.getByRole('heading', { name: 'Partial fill' }).waitFor();
     await panel.getByText(/wire format omits the account ID and event time/).waitFor();
     assert(!(await output.innerText()).includes('Event time (Unix µs)'));
     await output.locator('summary').click(); assert.match(await output.innerText(), /1 remaining/);
+    // Append a valid unknown Protobuf field. Both reports have the same display projection.
+    await files.setInputFiles([report, { ...report, name: 'extended.pb', buffer: Buffer.concat([binary, Buffer.from([0xa2, 6, 2, 0, 1])]) }]);
+    await show.click(); await status.filter({ hasText: 'Conflicting copies' }).waitFor();
+    assert.equal(await output.innerText(), '');
     await summary.click(); await page.waitForFunction(() => !document.querySelector('#private-trade-events section')?.childElementCount);
     await summary.click(); await format.selectOption('securities'); await select([first]);
     await output.getByRole('heading', { name: 'Fill corrected' }).waitFor();
