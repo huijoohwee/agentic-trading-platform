@@ -14,13 +14,14 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = 'a0b437fad862df3b501ffef50dfe115e09c62e6d';
+const REVISION = 'd4fa596b459eb7eecb62f4743d3238b6f25fc7c5';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-vV54DHy/JtHts4XRF/XxLCZZ7TUzmfd2WitEHQsjdgtDLfx8l+EN42cqQO+Jw1hAaI0vPbDWN1KTZpUERVnS6g==';
+const LOCK_INTEGRITY = 'sha512-Qwn0Qjd01X7xJs5KzHvs6WFyAs4rBZeRgYryaDlwTcLxA8hmT9xg6PUexzToYR+OKMPgDB0+Pd3qbVtZiY0nMQ==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
-  'connectors/profiles.json': '5ab694bf393ff22e42546bbe0d1053934746399c64409bc4b5e074804659198a',
-  'connectors/moomoo.mjs': '2ad30ba0eeec37a3ea4e6c38ace72fb84e2bdd2536eac34fad31ce9ae16cbe31',
+  'connectors/moomoo-catalog.json': '6953d2136c5eec2cb355867230e9afbbb561d4d35e02389f7353659e32149b77',
+  'connectors/profiles.json': 'a7a6277d17d485d8387892c987b00d6b477e0038891309b770d72427b4c7b845',
+  'connectors/moomoo.mjs': 'b3f9770be3210d05c6fdd7aabd3254268dc2701bcf1c8c6aa437ef7b6c3b95a3',
   'provider-profiles.mjs': 'dfee64327556cdf48bf3dbcee9d4a86938e010ab07985ea655083226055d1dea',
 };
 
@@ -48,7 +49,7 @@ test('Trading pins the exact reviewed Gateway manifest, lock and installed impor
   const installed = JSON.parse(read('node_modules/agentic-gateway/package.json'));
   assert.equal(installed.name, 'agentic-gateway');
   assert.equal(installed.version, INSTALLED_VERSION);
-  for (const key of ['.', './connectors/moomoo', './provider-profiles']) {
+  for (const key of ['.', './connectors/moomoo', './provider-profiles', './connectors/moomoo-catalog.json']) {
     assert.equal(typeof installed.exports[key], 'string');
   }
   for (const rel of Object.keys(INSTALLED_DIGESTS)) guardInstalled(rel);
