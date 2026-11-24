@@ -27,11 +27,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Read pinned owner revisions
+        id: owners
+        run: |
+          pins=$(jq -ce 'select(all(.[]; type == "string" and test("^[0-9a-f]{40}$")))' scripts/owner-revisions.json)
+          echo "pins=$pins" >> "$GITHUB_OUTPUT"
+
       - name: Checkout agentic-base owner bytes
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: huijoohwee/agentic-base
-          ref: 8da3ffb1484c6323ac197e82e670a957d695d8fd
+          ref: ${{ fromJSON(steps.owners.outputs.pins)['agentic-base'] }}
           path: owners/agentic-base
           fetch-depth: 1
 
@@ -39,7 +45,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: huijoohwee/agentic-sheets
-          ref: 349b43ccadbec4edf107cfef9f0c09fc1715f9f2
+          ref: ${{ fromJSON(steps.owners.outputs.pins)['agentic-sheets'] }}
           path: owners/agentic-sheets
           fetch-depth: 1
 
@@ -47,7 +53,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: huijoohwee/agentic-design-system
-          ref: d60b569179c23a14418616abc265d22f2da00e30
+          ref: ${{ fromJSON(steps.owners.outputs.pins)['agentic-design-system'] }}
           path: owners/agentic-design-system
           fetch-depth: 1
 
@@ -55,7 +61,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: huijoohwee/agentic-os
-          ref: eed72ec7597c94c95669cb537dda81c59596a0ed
+          ref: ${{ fromJSON(steps.owners.outputs.pins)['agentic-os'] }}
           path: owners/agentic-os
           fetch-depth: 1
 
@@ -63,7 +69,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: huijoohwee/agentic-commerce-os
-          ref: aa4151f82816c0e18796549a2be0e861d0e772d7
+          ref: ${{ fromJSON(steps.owners.outputs.pins)['agentic-commerce-os'] }}
           path: owners/agentic-commerce-os
           fetch-depth: 1
 

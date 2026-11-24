@@ -34,6 +34,7 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   }
   const search = node('input'); search.type = 'search';
   const dimensionFilter = select(dimensions), groupFilter = select(groups);
+  let relatedDimensions, relatedOption;
   const searchPanel = node('div'), filterPanel = node('div');
   searchPanel.className = filterPanel.className = 'route-query-controls';
   searchPanel.hidden = filterPanel.hidden = true;
@@ -43,7 +44,7 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   if (config.measure) {
     measure.append(node('option', title), node('option', config.measure.label));
     measurePanel.append(control('Count', measure));
-    measure.addEventListener('change', render);
+    measure.addEventListener('change', () => render());
   }
   shadow.append(css, localStyle, toolbarHost, searchPanel, filterPanel, measurePanel, content);
   host.append(root, evidence);
@@ -103,18 +104,20 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
       onLayoutChange(value) { layout = value; offset = 0; selected = null; evidence.replaceChildren(); render(); } };
     if (toolbar) toolbar.update(state); else toolbar = mountRecordViewToolbar(toolbarHost, state);
   }
-  function render() {
+  function render(revealSelection = false) {
     refreshToolbar();
     measurePanel.hidden = !config.measure || layout !== 'multiDimensional';
     content.dataset.layout = layout;
     if (!matches.length) { table?.destroy(); table = undefined; return; }
     const state = viewState();
+    if (revealSelection) state.revealSelection = true;
     if (table) table.update(state); else table = mountDataView(content, state);
   }
   function filterRows() {
-    config.onDimension?.(dimensionFilter.value);
+    const related = relatedOption && dimensionFilter.selectedOptions[0] === relatedOption;
+    config.onDimension?.(related ? 'All' : dimensionFilter.value);
     const term = search.value.trim().toLowerCase();
-    matches = rows.filter(row => (dimensionFilter.value === 'All' || row[rowDimension] === dimensionFilter.value) &&
+    matches = rows.filter(row => (related ? relatedDimensions.has(row[rowDimension]) : dimensionFilter.value === 'All' || row[rowDimension] === dimensionFilter.value) &&
       (groupFilter.value === 'All' || row[groupDimension] === groupFilter.value) && fields.some(field => String(row[field.id] ?? '').toLowerCase().includes(term)));
     if (sorted) matches.sort((a, b) => a.label.localeCompare(b.label, 'en'));
   }
@@ -125,9 +128,21 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
   for (const control of [dimensionFilter, groupFilter]) control.addEventListener('change', applyFilters);
   render();
   // A relationship opens the exact record even when a different page, layout or filter is active.
-  let focusObserver;
-  return { open({ key, dimension }) {
-    focusObserver?.disconnect();
+  function showRelated(values) {
+    relatedOption?.remove();
+    relatedOption = undefined;
+    relatedDimensions = new Set(values);
+    if (values.length === 1 && dimensions.includes(values[0])) {
+      dimensionFilter.value = values[0];
+    } else {
+      relatedOption = node('option', 'Related ' + labelFor(rowDimension).toLowerCase() + ' records');
+      dimensionFilter.append(relatedOption);
+      relatedOption.selected = true;
+    }
+    search.value = ''; groupFilter.value = 'All'; layout = 'table';
+    applyFilters();
+  }
+  return { showRelated, open({ key, dimension }) {
     const row = key === undefined ? null : rows.find(item => config.key(item) === key);
     if ((key !== undefined && !row) || (dimension !== undefined && !dimensions.includes(dimension)) ||
         (row && dimension !== undefined && row[rowDimension] !== dimension)) return false;
@@ -141,22 +156,10 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     layout = 'table'; filterRows();
     if (row && !matches.includes(row)) return false;
     offset = row ? Math.floor(matches.indexOf(row) / pageSize) * pageSize : 0;
-    showEvidence(row); render();
-    const focus = element => { element.focus({ preventScroll: true }); element.scrollIntoView({ block: 'center' }); };
-    if (row) {
-      // Base commits the new page asynchronously. Focus the selected row after its DOM update.
-      focusObserver = new MutationObserver(() => {
-        if (selected !== row) { focusObserver.disconnect(); return; }
-        const target = content.querySelector('tr[aria-selected="true"]');
-        if (target) { focusObserver.disconnect(); focus(target); }
-      });
-      focusObserver.observe(content, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-selected'] });
-      const current = content.querySelector('tr[aria-selected="true"]');
-      if (current && fields.every((f, i) => current.cells[i]?.textContent === String(row[f.id] ?? ''))) {
-        focusObserver.disconnect(); focus(current);
-      }
-    } else {
-      const heading = host.querySelector('h4'); heading.tabIndex = -1; focus(heading);
+    showEvidence(row); render(Boolean(row));
+    if (!row) {
+      const heading = host.querySelector('h4'); heading.tabIndex = -1;
+      heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'center' });
     }
     return true;
   } };

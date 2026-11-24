@@ -1,31 +1,32 @@
+import { createRecordRelation } from '../owners/base/packages/views-react/dist/browser-data-view.js';
+
 // The catalog retains each source spelling, including aliases folded into one REST route.
 export const routeId = row => row.transport + ' ' + row.label;
 
 export function coverageRelations(catalog, routes) {
   const documents = new Map(catalog.sources.filter(s => s.reference).map(source =>
     [catalog.origin + '/' + source.reference.file, source]));
-  const byTool = new Map(), byReference = new Map(), byRoute = new Map();
+  const toolLinks = [], documentLinks = [];
+  const routeIds = routes.map(routeId);
   for (const route of routes) {
-    const references = new Set();
+    const target = routeId(route);
     for (const source of route.sources) {
-      if (source.tool) {
-        if (!byTool.has(source.tool)) byTool.set(source.tool, new Set());
-        byTool.get(source.tool).add(route);
-      }
+      if (source.tool) toolLinks.push({ source: source.tool, target });
       const doc = documents.get(source.url);
       if (!doc) continue;
-      const spelling = source.http ?? 'PUSH ' + route.label;
-      if (source.digest !== doc.reference.sha256 || !doc.reference.routes.includes(spelling)) throw Error('REFERENCE_ROUTE_DRIFT');
-      if (!byReference.has(doc.path)) byReference.set(doc.path, new Map());
-      byReference.get(doc.path).set(spelling, route);
-      references.add(doc.path);
+      const label = source.http ?? 'PUSH ' + route.label;
+      if (source.digest !== doc.reference.sha256 || !doc.reference.routes.includes(label)) throw Error('REFERENCE_ROUTE_DRIFT');
+      documentLinks.push({ source: doc.path, target, label });
     }
-    byRoute.set(routeId(route), references);
   }
+  const references = createRecordRelation({ sources: [...documents.values()].map(doc => doc.path), targets: routeIds, links: documentLinks });
   for (const doc of documents.values()) {
-    if (!doc.reference.routes.every(spelling => byReference.get(doc.path)?.has(spelling))) throw Error('REFERENCE_ROUTE_MISSING');
+    const declared = doc.reference.routes;
+    const edges = references.from(doc.path);
+    if (edges.length !== declared.length || !declared.every(label => edges.some(edge => edge.label === label))) throw Error('REFERENCE_ROUTE_MISSING');
   }
-  return { byTool, byReference, byRoute };
+  const tools = createRecordRelation({ sources: catalog.tools.map(tool => tool.name), targets: routeIds, links: toolLinks });
+  return { references, tools, routesById: new Map(routes.map(row => [routeId(row), row])) };
 }
 
 const limits = {

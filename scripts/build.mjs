@@ -1,3 +1,4 @@
+import ownerRevisions from './owner-revisions.json' with { type: 'json' };
 import { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
 import { researchDisplaySchema } from '../src/research-display-schema.mjs';
 import { createHash } from 'node:crypto';
@@ -34,19 +35,19 @@ export function readPinnedBytes(repoRoot, revision, path, maxBuffer = 500000) {
   }
 }
 const pins = [
-  { repo: 'agentic-base', prefix: 'base', revision: '8da3ffb1484c6323ac197e82e670a957d695d8fd',
-    digest: '4f8e6b541de8d8802fa4fbba74423e6776b2fbcf4ad38914a28f5c2713e75d73',
+  { repo: 'agentic-base', prefix: 'base', revision: ownerRevisions['agentic-base'],
+    digest: '5cd07dc4f15bccf15ad1b987ed81307475e5673f93ac1c2917fb8065922178c7',
     paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
-  { repo: 'agentic-sheets', prefix: 'sheets', revision: '349b43ccadbec4edf107cfef9f0c09fc1715f9f2',
+  { repo: 'agentic-sheets', prefix: 'sheets', revision: ownerRevisions['agentic-sheets'],
     digest: '067f22546a65190f7010830ba6b9d9d66b70dd1a67b1c9a32c504c128fb95c69',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
-  { repo: 'agentic-design-system', prefix: 'design', revision: 'd60b569179c23a14418616abc265d22f2da00e30',
+  { repo: 'agentic-design-system', prefix: 'design', revision: ownerRevisions['agentic-design-system'],
     digest: '7ab1b507fc91793c3df29e2d85e3e9cb04a3e9ed1097b8f6e146cf8c8fc93581',
     paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/dashboard-range.mjs', 'site/dashboard-range.css', 'site/THIRD-PARTY-NOTICES.txt',
       'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js', 'site/floating-panel.js', 'site/floating-panel.css', 'site/hover.css',
       'site/skills-commands.js', 'site/skills-commands.css', 'site/collection-layout.js', 'site/toolbar.css'] },
-  { repo: 'agentic-os', prefix: 'os', revision: 'eed72ec7597c94c95669cb537dda81c59596a0ed',
+  { repo: 'agentic-os', prefix: 'os', revision: ownerRevisions['agentic-os'],
     digest: '95ae3322b49b5ae1475b692c477fbf5e9b33e5fafb2d23656b0c76ddc3889869',
     paths: ['LICENSE', 'catalog/invocation.json', 'skills/trading/SKILL.md'] },
 ];

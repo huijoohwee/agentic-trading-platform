@@ -111,6 +111,8 @@ export async function verifyRouteViews(page) {
   await routes.getByRole('searchbox').fill(cancel);
   await routes.getByRole('cell', { name: cancel, exact: true }).click();
   const forward = routeDetail.locator('a[href^="#provider-coverage?fields="]');
+  await fields.getByRole('table', { name: 'HTTP fields table', exact: true }).waitFor();
+  assert.deepEqual(await fields.locator('tbody tr td:first-child code').allTextContents(), ['acc_id', 'orderId', 'req_id']);
   await forward.click();
   await fields.getByText('1–3 of 3', { exact: true }).waitFor();
   await fields.getByRole('cell', { name: 'orderId', exact: true }).click();
@@ -122,6 +124,11 @@ export async function verifyRouteViews(page) {
 
   const bookmark = await page.context().newPage();
   try {
+    await bookmark.goto(page.url());
+    const linkedFields = bookmark.locator('#coverage-fields');
+    await linkedFields.scrollIntoViewIfNeeded();
+    await linkedFields.getByText('1–3 of 3', { exact: true }).waitFor();
+    assert.deepEqual(await linkedFields.locator('tbody tr td:first-child code').allTextContents(), ['acc_id', 'orderId', 'req_id']);
     await bookmark.goto(fieldUrl);
     const restored = bookmark.locator('#coverage-fields');
     await restored.getByRole('row', { name: 'Data row: orderId', selected: true }).waitFor();
