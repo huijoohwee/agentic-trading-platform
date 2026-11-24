@@ -1,13 +1,13 @@
 import { createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { bindMoomooQuoteCapture, MOOMOO_QUOTE_SOCKET } from 'agentic-gateway/connectors/moomoo-quote-socket';
-import { boundedJson, canonical, fail, hash, id, requireProofs, requireThat, sha, utcMillis, verifyEnvelope } from './core.mjs';
+import { boundedJson, canonical, fail, freeze, hash, id, requireProofs, requireThat, sha, utcMillis, verifyEnvelope } from './core.mjs';
 import { readBudgetScope, reserveReadCalls } from './read-budget.mjs';
 
 export const quoteStreamOperation = 'read.quote-stream';
-export const quoteStreamSchema = Object.freeze({ symbol: 'instrument', type: ['quote', 'order_book', 'ticker', 'kline'],
+export const quoteStreamSchema = freeze({ symbol: 'instrument', type: ['quote', 'order_book', 'ticker', 'kline'],
   kline: ['period', 'adjust'], frame_limit: [1, 64], capture_ms: [1, 60000], control_timeout_ms: [1, 10000] });
-export const quoteStreamMapping = Object.freeze({ profile: 'moomoo/quote-websocket/v1', operation: quoteStreamOperation,
+export const quoteStreamMapping = freeze({ profile: 'moomoo/quote-websocket/v1', operation: quoteStreamOperation,
   protocol: '13', controls: ['auth', 'subscribe', 'unsubscribe'], schema_digest: sha(quoteStreamSchema) });
 export const quoteStreamAdapterDigest = sha(readFileSync(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo-quote-socket'))));
 
@@ -54,7 +54,7 @@ export function createQuoteStreamReader({ store, scope, candidate, keys, definit
       rights.display === true && rights.private_ledger === true, 'SCOPE_DENIED');
     const quota = grant.proofs.find(proof => proof.kind === 'stream-quota');
     const checked = utcMillis(quota.observed_utc);
-    requireThat(quota.pool === credential.quota_pool && checked !== null && checked <= now &&
+    requireThat(quota.pool === credential.quota_pool && checked !== null && checked <= utcMillis(grant.issued_utc) &&
       positive(quota.remaining_sessions) && positive(quota.remaining_keys) && grant.limits?.max_calls === 3 &&
       grant.cost.remaining_calls >= 3 && positive(grant.limits.timeout_ms) && grant.limits.timeout_ms <= 600000, 'BUDGET_HALT');
     const expires = Math.min(...[grant, ...grant.proofs, definition.qualification, capability.qualification].map(x => utcMillis(x.expires_utc)));

@@ -62,8 +62,8 @@ export function openStore(path) {
       const states = scopes.map(read);
       const result = mutate(states);
       requireThat(!result || typeof result.then !== 'function', 'ASYNC_TRANSACTION_FORBIDDEN');
-      const output = boundedJson(result ?? null, 16_000_000);
       if (readOnlyWhen?.(result)) {
+        const output = boundedJson(result ?? null, 16_000_000);
         db.exec('ROLLBACK');
         return output;
       }
@@ -74,6 +74,7 @@ export function openStore(path) {
         requireThat(Buffer.byteLength(body) <= 16_000_000, 'LEDGER_CAPACITY');
         put.run(keys[index], state.revision, body);
       }
+      const output = boundedJson(result ?? null, 16_000_000);
       db.exec('COMMIT');
       return output;
     } catch (error) { db.exec('ROLLBACK'); throw error; }

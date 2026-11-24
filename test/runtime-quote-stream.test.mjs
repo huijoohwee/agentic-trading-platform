@@ -8,6 +8,7 @@ import { MOOMOO_QUOTE_SOCKET } from 'agentic-gateway/connectors/moomoo-quote-soc
 import { canonical, sha, verifyEnvelope } from '../runtime/core.mjs';
 import { quoteStreamAdapterDigest, quoteStreamMapping, quoteStreamOperation } from '../runtime/moomoo-quote-stream.mjs';
 import { readBudgetScope } from '../runtime/read-budget.mjs';
+import { createMarketReadBoundary } from '../runtime/market-ingestion.mjs';
 import { openStore } from '../runtime/store.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 
@@ -64,7 +65,9 @@ async function fixture(t) {
     }
     close() { this.readyState = 3; }
   }
-  t.mock.method(globalThis, 'WebSocket', Peer);
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'WebSocket');
+  Object.defineProperty(globalThis, 'WebSocket', { configurable: true, value: Peer });
+  t.after(() => Object.defineProperty(globalThis, 'WebSocket', original));
   const definition = { schema: 'trading-provider-definition/v1', provider: 'fixture-moomoo', adapter_version: '1',
     adapter_digest: quoteStreamAdapterDigest, schema_digest: quoteStreamMapping.schema_digest, mapping_digest: sha(quoteStreamMapping),
     mapping: quoteStreamMapping, transport: { kind: 'WEBSOCKET', protocol: '13', origin: MOOMOO_QUOTE_SOCKET },
@@ -117,7 +120,7 @@ async function fixture(t) {
     const store = openStore(join(dir, 'ledger.sqlite'));
     try { return store.read(scope); } finally { store.close(); }
   }
-  return { serve, request, control, peers, controls, read, connected: connected.promise };
+  return { serve, request, control, peers, controls, read, ledger: join(dir, 'ledger.sqlite'), connected: connected.promise };
 }
 
 for (const type of Object.keys(frames)) test('signed ' + type + ' capture replays across transports and restart', async t => {
@@ -167,7 +170,7 @@ test('one upstream user cannot spend the same headroom across aliases concurrent
   const first = await f.serve(), second = await f.serve(other);
   f.control.hold = true;
   const reading = first.post(f.request('first'));
-  await f.connected;
+  await Promise.race([f.connected, reading.then(result => assert.fail('Capture ended before subscribe: ' + result.status))]);
   const denied = await second.post(f.request('second', { bound: other }));
   assert.equal(denied.error.code, 'BUDGET_HALT');
   assert.deepEqual(f.read(readBudgetScope(other)).telemetry, {});
@@ -187,4 +190,23 @@ test('retains charges and the sanitized provider refusal after an interrupted su
   assert.equal(f.read(readBudgetScope(scope)).telemetry[sha('costquota')].calls, 3);
   assert.deepEqual(f.controls, ['auth', 'subscribe']);
   assert.doesNotMatch(JSON.stringify(f.read(scope)), /private error|local-quote-stream-fixture/);
+});
+
+test('a failed capture exhausts the same cost proof for a subsequent market read', async t => {
+  const f = await fixture(t), host = await f.serve();
+  f.control.hold = true;
+  const expired = await host.post(f.request('short-lease', { change(g) { g.limits.timeout_ms = 150; } }));
+  assert.equal(expired.error.code, 'STALE');
+  assert.equal(f.peers[0].readyState, 3);
+  const sibling = f.request('after-socket', { change(g) {
+    g.proofs[0].digest = sha('costshort-lease');
+    g.tools = [{ effect: 'read', name: 'quote_stock_quote', operation: 'read.ticker', schema_digest: sha('ticker') }];
+  } });
+  const store = openStore(f.ledger);
+  try {
+    const read = createMarketReadBoundary({ store, scope, candidate, keys,
+      adapter: { open() { assert.fail('Exhausted proof reached the provider'); } } });
+    await assert.rejects(read({ operation: 'read.ticker', inputs: { symbol }, grant: sibling.inputs.grant }), /BUDGET_HALT/);
+  } finally { store.close(); }
+  assert.deepEqual(f.controls, ['auth', 'subscribe']);
 });
