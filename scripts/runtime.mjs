@@ -81,7 +81,14 @@ export async function runtimeCommand(args) {
         if (!credential) continue;
         if (transport === 'WEBSOCKET') {
           const { createQuoteStreamReader } = await import('../runtime/moomoo-quote-stream.mjs');
-          streamReaders.set(definition.mapping_digest, createQuoteStreamReader({ ...common, definition, credential }));
+          const resolveBaseline = digest => {
+            const capability = config.gateway.capabilities.find(item => sha(item) === digest);
+            requireThat(capability?.transport === 'REST' && capability.provider === definition.provider, 'SCOPE_DENIED');
+            const binding = registry.bind(capability);
+            const keyId = providerCredential(config, definition.provider, 'REST')?.attestation?.key_id;
+            return { capability: { ...capability, capability_digest: digest }, definition: binding.definition, keyId };
+          };
+          streamReaders.set(definition.mapping_digest, createQuoteStreamReader({ ...common, definition, credential, resolveBaseline }));
           continue;
         }
         const shared = { provider: definition, token: credential.token, mapping: definition.mapping,
@@ -110,6 +117,7 @@ export async function runtimeCommand(args) {
         const result = await read({ operation, inputs, grant: inputs.grant, signal });
         return { source: result.source, at: Date.parse(result.observed_utc), rows: result.rows, decimals: result.decimals,
           ...(result.price_source && { price_source: result.price_source }),
+          ...(result.market_attestation && { market_attestation: result.market_attestation }),
           ...(result.pagination && { pagination: result.pagination }),
           ...(Object.hasOwn(result, 'last_valid_time_ms') && { last_valid_time_ms: result.last_valid_time_ms }),
           ...(result.account ? { account: result.account } : { market: { venue: 'provider', symbol: inputs.symbol ?? null, marketType: inputs.marketType ?? 'spot', frame: inputs.frame ?? null } }),

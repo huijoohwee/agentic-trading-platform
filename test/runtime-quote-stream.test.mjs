@@ -9,6 +9,7 @@ import { canonical, sha, verifyEnvelope } from '../runtime/core.mjs';
 import { quoteStreamAdapterDigest, quoteStreamMapping, quoteStreamOperation } from '../runtime/moomoo-quote-stream.mjs';
 import { readBudgetScope } from '../runtime/read-budget.mjs';
 import { createMarketReadBoundary } from '../runtime/market-ingestion.mjs';
+import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { openStore } from '../runtime/store.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 
@@ -128,7 +129,8 @@ async function fixture(t) {
     const store = openStore(join(dir, 'ledger.sqlite'));
     try { return store.read(scope); } finally { store.close(); }
   }
-  return { serve, request, control, peers, controls, read, ledger: join(dir, 'ledger.sqlite'), connected: connected.promise };
+  return { serve, request, control, peers, controls, read, ledger: join(dir, 'ledger.sqlite'), connected: connected.promise,
+    definition, capability, credential, expiry };
 }
 
 for (const type of Object.keys(frames)) test('signed ' + type + ' capture replays across transports and restart', async t => {
@@ -259,3 +261,82 @@ for (const frameCount of [0, 2]) test('looks up a completed capture with ' + fra
   assert.deepEqual(f.controls, ['auth', 'subscribe', 'unsubscribe']);
   assert.equal(f.read(scope).revision, result.ledger_revision);
 });
+
+for (const [type, operation] of [['quote', 'read.ticker'], ['order_book', 'read.depth']]) {
+  test(type + ' interruption requires a signed later REST snapshot before a new subscription', async t => {
+    const f = await fixture(t), spec = marketRestSpecs[operation];
+    const mapping = { protocol: '1.0', operations: { [operation]: spec } };
+    const rest = { ...f.definition, transport: { kind: 'REST', protocol: '1.0', origin: 'https://webapi.moomoo.com/' },
+      adapter_digest: sha('rest-fixture'), schema_digest: sha(spec), mapping_digest: sha(mapping), mapping,
+      operations: [operation], allowlist: [spec.tool] };
+    const { mapping: fields, transport, ...identity } = rest;
+    const capability = { ...identity, transport: transport.kind, protocol: transport.protocol };
+    const config = { providers: [f.definition, rest], gateway: { audience_token: audience, capabilities: [f.capability, capability] },
+      provider_credentials: { [rest.provider]: { transports: { WEBSOCKET: f.credential, REST: { attestation, token } } } } };
+    const fetchLocal = globalThis.fetch;
+    let upstream = 0;
+    t.mock.method(globalThis, 'fetch', (url, options) => {
+      if (!String(url).startsWith(rest.transport.origin)) return fetchLocal(url, options);
+      upstream++;
+      const data = type === 'quote' ? { quote_list: [{ code: symbol, name: 'Example', last_price: '345.600',
+        data_time: Date.now(), data_date: '2026-06-03', volume: '123' }] }
+        : [{ code: symbol, name: 'Example', books: [{ exchange: 'A', exchange_data_time_ms: Date.now(),
+          order_volume_precision: 2, bid_flag: 1, ask_flag: 0, bid_list: [], ask_list: [] }] }];
+      return new Response(JSON.stringify({ ret_code: 0, data }), { headers: { 'Content-Type': 'application/json' } });
+    });
+    const host = await f.serve(scope, config);
+    function snapshot(id) {
+      const parameters = { symbol, ...(type === 'order_book' && { count: 2 }) };
+      const request = f.request(id, { type, change(grant) {
+        grant.mapping_digest = rest.mapping_digest;
+        grant.definition_digest = sha(rest);
+        grant.proofs = grant.proofs.filter(proof => proof.kind !== 'stream-quota');
+        grant.tools = [{ operation, name: spec.tool, effect: 'read', schema_digest: spec.schema_digest, inputs_digest: sha(parameters) }];
+      } });
+      return { ...request, operation, capability_digest: sha(capability), inputs: { ...parameters, grant: request.inputs.grant } };
+    }
+    const earlier = snapshot('earlier'), oldResult = await host.post(earlier);
+    assert.equal(oldResult.status, 'OK', JSON.stringify(oldResult.error));
+    f.control.refuse = true;
+    const first = f.request('interrupted', { type });
+    assert.equal((await host.post(first)).status, 'REFUSED');
+    await host.close();
+    const later = Date.now() + 12000;
+    t.mock.method(Date, 'now', () => later);
+    const reopened = await f.serve(scope, config);
+    f.control.refuse = false;
+    assert.equal((await reopened.post(f.request('no-snapshot', { type }))).error.code, 'BASELINE_REQUIRED');
+    function resume(id, original, digest, previousId = first.request_id) {
+      return f.request(id, { type, change(grant) {
+        grant.proofs.push({ kind: 'stream-recovery', digest, previous_request_id: previousId, request: original, expires_utc: f.expiry });
+      } });
+    }
+    assert.equal((await reopened.post(resume('too-early', earlier, oldResult.data.digest))).error.code, 'BASELINE_REQUIRED');
+    const fresh = snapshot('fresh'), latest = await reopened.post(fresh);
+    assert.equal(latest.status, 'OK', JSON.stringify(latest.error));
+    assert.equal((await reopened.post(resume('wrong-digest', fresh, sha('unrelated')))).status, 'REFUSED');
+    assert.equal((await reopened.post(resume('wrong-session', fresh, latest.data.digest, 'other'))).status, 'REFUSED');
+    assert.equal((await reopened.post(resume('altered-read', { ...fresh, inputs: { ...fresh.inputs, symbol: 'US.AAPL' } },
+      latest.data.digest))).status, 'REFUSED');
+    assert.equal(f.peers.length, 1);
+    const request = resume('recovered', fresh, latest.data.digest);
+    const replay = await reopened.post(request, true);
+    assert.equal(replay.status, 'OK', JSON.stringify(replay.error));
+    const link = replay.data.receipt.payload.recovery;
+    assert.equal(link.previous_request_id, first.request_id);
+    assert.equal(link.request_id, fresh.request_id);
+    assert.equal(link.digest, latest.data.digest);
+    assert.equal((await reopened.inspect(request)).data.digest, replay.data.digest);
+    if (process.env.TRADING_STREAM_BROWSER === '1') {
+      const { verifyStreamBrowser } = await import('./quote-stream-receipt-browser.mjs');
+      await verifyStreamBrowser({ base: reopened.base, audience, request });
+    }
+    const store = openStore(f.ledger);
+    try {
+      store.transaction(scope, state => { state.checkpoints['gateway:fresh'].result.data.rows[0].name = 'altered'; });
+    } finally { store.close(); }
+    assert.equal((await reopened.inspect(request)).status, 'REFUSED');
+    assert.equal((await reopened.post(request)).status, 'REFUSED');
+    assert.equal(f.peers.length, 2); assert.equal(upstream, 2);
+  });
+}

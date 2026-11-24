@@ -38,7 +38,8 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       { keys, role: 'integration', kind: 'read-capabilities', scope, candidate, now: now() });
     requireThat(opened.tools && canonical(opened.tools) === canonical(grant.tools) &&
       Number.isSafeInteger(opened.calls) && opened.calls >= 0 && opened.calls < grant.limits.max_calls, 'SCHEMA_DRIFT');
-    const page = verifyEnvelope(await invoke(signal => adapter.read({ operation, inputs: boundedJson(inputs), signal })),
+    const envelopePage = await invoke(signal => adapter.read({ operation, inputs: boundedJson(inputs), signal }));
+    const page = verifyEnvelope(envelopePage,
       { keys, role: 'integration', kind: 'provider-market-page', scope, candidate, now: now() });
     requireThat(page.operation === operation && page.schema_digest === allowed.schema_digest && hash(page.response_digest) &&
       utcMillis(page.observed_utc) !== null && utcMillis(page.observed_utc) <= now() && id(page.source_event) &&
@@ -51,6 +52,10 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
       precision.price_source = page.price_source;
     }
     const metadata = {};
+    if (page.market_request) {
+      const { rows: signedRows, decimals: signedDecimals, ...header } = page;
+      metadata.market_attestation = { key_id: envelopePage.key_id, signature: envelopePage.signature, header };
+    }
     if (simulatorOperation(operation)) {
       const { account_market_id, currency, ...identity } = page.account ?? {};
       requireThat(scopeKey(identity) === scopeKey(scope) && Number.isSafeInteger(account_market_id) &&
