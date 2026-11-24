@@ -2,13 +2,14 @@ import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMo
 import { createPrivateKey, sign } from 'node:crypto';
 import { validateProviderDefinition } from './provider-mapping.mjs';
 import { marketReadParameters, marketReadSymbol, projectMarketReadPage } from './market-read-projection.mjs';
+import { isMarketRest, verifyMarketRest, marketRequest, marketPage } from './moomoo-market-rest.mjs';
 import { MARKET_READ_OPERATIONS } from './mcp-market-read.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
 
 // Reviewed REST adapter for operation-shaped market reads (for example the earnings calendar, which
 // has no MCP tool). It issues the same signed read-capabilities/provider-market-page envelopes as the
 // MCP adapter, so the shared boundary, single durable $0 counter and gateway admission are unchanged.
-// GET mappings and one fixed read-only stock-screen POST share the same signed admission.
+// Every POST is bound to a fixed reviewed read profile.
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 // Enforce the wire limit before parsing, including when no Content-Length is sent.
 async function readResponse(response) {
@@ -20,7 +21,7 @@ async function readResponse(response) {
     requireThat(size <= 480_000, 'INPUT_TOO_LARGE');
     chunks.push(chunk);
   }
-  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, size))); }
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, size)); }
   catch { fail('INVALID_RESPONSE'); }
 }
 
@@ -37,7 +38,8 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
   requireThat(mapping?.protocol === definition.transport.protocol && mapping.operations && typeof mapping.operations === 'object', 'INVALID_MAPPING');
   for (const [operation, spec] of Object.entries(mapping.operations)) {
     const screen = operation === 'read.stock-screen';
-    if (screen) requireThat(spec.method === 'POST' && spec.path === STOCK_SCREEN_PATH && spec.tool === STOCK_SCREEN_TOOL &&
+    if (isMarketRest(spec)) verifyMarketRest(operation, spec, origin);
+    else if (screen) requireThat(spec.method === 'POST' && spec.path === STOCK_SCREEN_PATH && spec.tool === STOCK_SCREEN_TOOL &&
       spec.profile === 'moomoo-stock-screen/v1' && spec.pin_inputs === true, 'INVALID_MAPPING');
     else requireThat(spec.method === 'GET' && spec.tool !== STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
     requireThat(id(spec.tool) && Array.isArray(spec.rows_path) && /^[a-f0-9]{64}$/.test(spec.schema_digest), 'INVALID_MAPPING');
@@ -59,6 +61,10 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       source_event: 'market-' + sha({ operation, response_digest }), response_digest, schema_digest });
   };
   return {
+    validateInputs(operation, inputs, allowed) {
+      const spec = mapping.operations[operation];
+      if (isMarketRest(spec)) marketRequest(spec, inputs, allowed);
+    },
     async open({ grant: admitted, beforeCall: revalidate }) {
       requireThat(admitted.mapping_digest === sha(mapping), 'MAPPING_DRIFT');
       grant = admitted; beforeCall = revalidate; calls = 0;
@@ -86,9 +92,11 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       requireProofs(grant, ['cost', 'rights', 'account'], now());
       requireThat(current(grant, now()) && calls < grant.limits.max_calls, 'BUDGET_HALT');
       calls++;
-      const postBody = screen ? JSON.stringify(buildMoomooStockScreen(parameters)) : undefined;
-      const search = screen ? '' : new URLSearchParams(marketReadParameters(spec, inputs)).toString();
-      let path = screen ? STOCK_SCREEN_PATH : spec.path;
+      const market = isMarketRest(spec);
+      const native = market ? marketRequest(spec, parameters, allowed) : null;
+      const requestBody = native?.body ?? (screen ? buildMoomooStockScreen(parameters) : undefined);
+      const search = screen || market ? '' : new URLSearchParams(marketReadParameters(spec, inputs)).toString();
+      let path = native?.path ?? (screen ? STOCK_SCREEN_PATH : spec.path);
       if (spec.symbol_path) {
         requireThat(path.includes('{symbol}'), 'INVALID_MAPPING');
         path = path.replace('{symbol}', encodeURIComponent(marketReadSymbol(spec, inputs)));
@@ -98,19 +106,22 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
       if (search) target.search = search;
       const url = target.href;
       let response;
-      const options = { method: screen ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+      const options = { method: native?.method ?? (screen ? 'POST' : 'GET'), headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
         signal, redirect: 'error' };
-      if (screen) {
-        requireThat(url === 'https://webapi.moomoo.com' + STOCK_SCREEN_PATH && allowed.name === STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
+      if (screen) requireThat(url === 'https://webapi.moomoo.com' + STOCK_SCREEN_PATH && allowed.name === STOCK_SCREEN_TOOL, 'INVALID_MAPPING');
+      if (requestBody) {
         options.headers['Content-Type'] = 'application/json';
-        options.body = postBody;
+        options.body = JSON.stringify(requestBody);
       }
       try { response = await fetchImpl(url, options); }
       catch { fail(signal?.aborted ? 'TIMEOUT' : 'PROVIDER_UNAVAILABLE'); }
       if ([401, 403].includes(response.status)) { await response.body?.cancel(); fail('SCOPE_DENIED'); }
       requireThat(response.ok && !response.redirected, 'PROVIDER_UNAVAILABLE');
       requireThat(response.headers.get('content-type')?.split(';')[0] === 'application/json', 'INVALID_RESPONSE');
-      const body = await readResponse(response);
+      const wire = await readResponse(response);
+      if (market) return issuePage(operation, marketPage(spec, parameters, wire), wire, allowed.schema_digest);
+      let body;
+      try { body = JSON.parse(wire); } catch { fail('INVALID_RESPONSE'); }
       requireThat(body && typeof body === 'object' && !Array.isArray(body), 'INVALID_RESPONSE');
       if (screen) {
         const { rows, pagination } = projectMoomooStockScreen(parameters, body);

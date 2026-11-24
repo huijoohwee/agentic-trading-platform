@@ -76,10 +76,11 @@ export async function mountMoomooDeskView(host) {
     deskTape.map(tick => [clock(tick.time), tick.price, tick.volume, tick.turnover, tick.direction]));
 
   diagram(sections, 'Daily candles · open / high / low / close', diagrams.candles(deskCandles));
-  mountDashboardChart(viewport(sections, 'Daily volume'), {
+  const volumeChart = (parent, title, candles) => mountDashboardChart(viewport(parent, title), {
     type: 'column', tone: 'blue', gridEnabled: true,
-    series: deskCandles.map(candle => ({ label: candle.date, value: candle.volume, detail: String(candle.volume) }))
+    series: candles.map(candle => ({ label: candle.date, value: Number(candle.volume), detail: String(candle.volume) }))
   });
+  volumeChart(sections, 'Daily volume', deskCandles);
   table(sections, `Daily candles (${deskCandles.length})`, ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Change %'],
     deskCandles.map(candle => [candle.date, candle.open, candle.high, candle.low, candle.close, candle.volume, candle.change_rate]));
 
@@ -111,7 +112,7 @@ export async function mountMoomooDeskView(host) {
   });
   inspector('research-page-inspector', 'Inspect a saved research result', async body => {
     const { mountResearchPageView } = await import('./research-page-view.mjs');
-    mountResearchPageView(body, node);
+    mountResearchPageView(body, node, { diagrams, diagram, volumeChart });
   });
 
   host.replaceChildren(DashboardCanvasLayout({

@@ -87,7 +87,7 @@ export async function readResearchPage(file) {
   const mock = source === 'MOCK' && data.source === 'synthetic-market/v1' && operation === 'read.calendar';
   check(mock || (source === 'PROVIDER' && data.source === 'AUTHENTICATED_ADAPTER'), 'Unrecognized Gateway research source.');
   const schema = researchDisplaySchema[operation];
-  check(Array.isArray(data.rows) && data.rows.length <= 600);
+  check(Array.isArray(data.rows) && data.rows.length <= (schema.rowLimit ?? 600));
   check((mock && data.decimals === undefined) || (Array.isArray(data.decimals) && data.decimals.length === data.rows.length),
     'The source decimals do not match the page.');
   const observed = isoTime(data.at);

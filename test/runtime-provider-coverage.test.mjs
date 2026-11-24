@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
+import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
 import { providerCoverage, coverageSummary, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
 
@@ -73,7 +74,7 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
     assert.match(screen.units, /Exact raw integer/);
   }
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
-  const researchPaths = Object.values(researchMapping.operations).map(spec => spec.method + ' ' + spec.path);
+  const researchPaths = Object.values({ ...researchMapping.operations, ...marketRestSpecs }).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
   assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 19);
   const dual = on('MCP').filter(row => row.evidence === 'Signed local MCP research fixture');

@@ -107,6 +107,13 @@ async function verifySavedResearch(page, calendar) {
   await view.getByText('Unmapped holding', { exact: true }).click();
   await view.getByText('Empty text', { exact: true }).waitFor();
   await view.getByText('1.500', { exact: true }).waitFor();
+  const book = { symbol: 'HK.00700', name: 'Example', time_ms: 1800000000000, volume_precision: 2, bid_flag: 1, ask_flag: 0,
+    bids: [{ price: '340.00', raw_volume: '120', volume: '1.20', order_count: 1 }], asks: [] };
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'book-fixture', operation: 'read.depth' },
+    data: { at: book.time_ms, source: 'AUTHENTICATED_ADAPTER', rows: [{ ...book, exchange: 'SEHK' }, { ...book, exchange: '' }], decimals: [{}, {}] } });
+  await view.getByRole('img', { name: /Order book depth diagram/ }).waitFor();
+  await view.getByLabel('Exchange book').selectOption('1');
+  await view.getByRole('heading', { name: /Aggregated book · First 10 levels/ }).waitFor();
   const rows = Array.from({ length: 11 }, (_, i) => ({ symbol: 'HK.' + i, name: 'Example ' + i,
     factors: [{ factor: 'market_cap', raw: '9007199254740993', value: '9007199254740.993' }] }));
   const result = { status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'screen-fixture', operation: 'read.stock-screen' },
@@ -338,6 +345,9 @@ try {
     await routes.getByText(/^Response fields \(\d+\)$/).click();
     assert.match(await routes.innerText(), /last_price|lastPrice/);
     assert.equal(await reopened.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await routes.getByLabel('Route or tool').fill('/rt-ticker');
+    await routes.getByText('REST · GET /api/v1.0/quote/{symbol}/rt-ticker · mapped', { exact: true }).click();
+    await routes.getByText('quote:read · Signed local market REST fixture').waitFor();
     await routes.getByLabel('Route or tool').fill('news_search');
     await routes.getByText('MCP · news_search · mapped', { exact: true }).click();
     await routes.getByText('review news access · Signed local MCP research fixture').waitFor();
