@@ -2,6 +2,7 @@ import { createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { bindMoomooQuoteCapture, MOOMOO_QUOTE_SOCKET } from 'agentic-gateway/connectors/moomoo-quote-socket';
 import { boundedJson, canonical, fail, freeze, hash, id, requireProofs, requireThat, sha, utcMillis, verifyEnvelope } from './core.mjs';
+import { completedRead } from './completed-read.mjs';
 import { readBudgetScope, reserveReadCalls } from './read-budget.mjs';
 
 export const quoteStreamOperation = 'read.quote-stream';
@@ -46,7 +47,7 @@ export function createQuoteStreamReader({ store, scope, candidate, keys, definit
     const { grant: envelope, ...parameters } = inputs;
     const tool = grant.tools?.[0];
     requireThat(id(grant.nonce) && grant.definition_digest === definitionDigest && grant.mapping_digest === definition.mapping_digest &&
-      grant.tools?.length === 1 && tool.operation === quoteStreamOperation && tool.name === 'subscribe' && tool.effect === 'read' &&
+      Array.isArray(grant.tools) && grant.tools.length === 1 && tool?.operation === quoteStreamOperation && tool.name === 'subscribe' && tool.effect === 'read' &&
       tool.schema_digest === definition.schema_digest && tool.inputs_digest === sha(parameters) &&
       only(parameters, ['symbol', 'type', 'period', 'adjust', 'frame_limit', 'capture_ms', 'control_timeout_ms']), 'SCOPE_DENIED');
     const rights = grant.proofs.find(proof => proof.kind === 'rights');
@@ -103,12 +104,23 @@ export function createQuoteStreamReader({ store, scope, candidate, keys, definit
     return { source: 'AUTHENTICATED_ADAPTER', digest: sha(receipt), receipt,
       cost: { tool_calls: 3, sessions: 1, subscription_keys: 1, provider_fees: 'UNKNOWN' } };
   }
-  return Object.assign(read, { validateReplay(request) {
-    validate(request);
+  function verifyReceipt(request) {
     const receipt = request.data?.receipt;
     const payload = verifyEnvelope(receipt, { keys, role: 'integration', kind: 'quote-stream-capture',
       scope, candidate, now: Date.now() });
     requireThat(receipt.key_id === signer.key_id && request.data.digest === sha(receipt) &&
       payload.grant_digest === sha(request.inputs.grant) && payload.definition_digest === definitionDigest, 'SCOPE_DENIED');
-  } });
+    return utcMillis(payload.expires_utc);
+  }
+  return Object.assign(read, {
+    validateReplay(request) { validate(request); verifyReceipt(request); },
+    inspect(request, capability) {
+      requireThat(request.operation === quoteStreamOperation && capability.operations.includes(quoteStreamOperation) &&
+        capability.allowlist.includes('subscribe'), 'SCOPE_DENIED');
+      const { expires } = validate({ capability, inputs: request.inputs });
+      const result = completedRead(store, scope, request, capability, definitionDigest);
+      const until = Math.min(expires, verifyReceipt({ inputs: request.inputs, data: result.data }));
+      return { ...result, display_until_utc: new Date(until).toISOString() };
+    },
+  });
 }

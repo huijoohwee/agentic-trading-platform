@@ -1,3 +1,4 @@
+import { refuseRead } from '../runtime/completed-read.mjs';
 import { simulatorOperation, simulatorSpecs, qualifySimulatorAdapter, withSimulatorAdmission } from '../runtime/moomoo-simulator-read.mjs';
 import { marketOperations, marketRead } from '../src/market-reads.mjs';
 import { resolve } from 'node:path';
@@ -151,7 +152,16 @@ export async function runtimeCommand(args) {
         capabilities: config.gateway.capabilities, readers, guard, keys: config.keys, audienceToken: config.gateway.audience_token, providers: registry });
       const gateway = withSimulatorAdmission(nativeGateway, { ...common, providers: registry,
         credentialFor: record => providerCredential(config, record.provider, record.transport) });
-      const gatewayApi = createGatewayApi({ gateway, mcp: createGatewayMcp({ gateway }) });
+      function inspectQuoteStreamReceipt(request) {
+        try {
+          const capability = gateway.discover().find(record => record.capability_digest === request?.capability_digest);
+          requireThat(capability?.mode === 'account', 'SCOPE_DENIED');
+          registry.bind(capability);
+          return streamReader(capability).inspect(request, capability);
+        } catch (error) { return refuseRead(request, error); }
+      }
+      const gatewayApi = createGatewayApi({ gateway, mcp: createGatewayMcp({ gateway }),
+        inspectQuoteStreamReceipt: streamReaders.size ? inspectQuoteStreamReceipt : undefined });
       const runtimeApi = createRuntimeApi({ ...common, viewerToken: config.viewer_token });
       const server = await serve(port, { runtimeApi: (request, response) => gatewayApi(request, response) || runtimeApi(request, response) });
       const stop = () => server.close();

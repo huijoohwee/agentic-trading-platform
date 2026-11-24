@@ -39,6 +39,7 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   const summary = coverageSummary();
   assert.ok(summary.mapped_operations.includes('read.calendar'));
   assert.ok(summary.mapped_operations.includes('read.ticker'));
+  assert.ok(summary.mapped_operations.includes('read.quote-stream'));
   assert.deepEqual(summary.rest_only_mapped, ['calendar', 'influencer', 'macro', 'etf', 'event-contract', 'crypto-market', 'stock-connect', 'chip-cbbc']);
   assert.ok(summary.excluded.includes('trading') && summary.excluded.includes('crypto-trading'));
   const calendar = providerCoverage.find(entry => entry.id === 'calendar');
@@ -70,6 +71,8 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   assert.deepEqual(on('Push').filter(row => row.status === 'offline replay').map(row => row.label.split('/').at(-1)).sort(),
     ['BROKER_QUEUE', 'KLINE', 'MARKET_STATE', 'ORDER_BOOK', 'QUOTE', 'TICKER', ...securitiesTradeTopics, ...cryptoReportTopics.map(String)].sort());
   assert.equal(on('Push').filter(row => row.status === 'candidate').length, 0);
+  assert.deepEqual(on('Push').filter(row => row.evidence.includes('WebSocket')).map(row => row.label.split('/').at(-1)).sort(),
+    ['KLINE', 'ORDER_BOOK', 'QUOTE', 'TICKER']);
   for (const [transport, label] of [['REST', 'POST /api/v1.0/quote/stock-screen'], ['MCP', 'quote_stock_screen']]) {
     const screen = on(transport).find(row => row.label === label);
     assert.deepEqual([screen.status, screen.scope, screen.evidence], ['mapped', 'quote:read', 'Signed local stock-screen fixture']);
