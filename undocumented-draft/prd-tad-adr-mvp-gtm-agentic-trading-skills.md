@@ -1,17 +1,17 @@
 ---
 title: "Agentic Trading Skills: native gateway consumer"
 doc_type: "PRD-TAD-ADR-MVP-GTM"
-version: "0.28.0"
+version: "0.29.0"
 date: "2026-11-24"
 lang: "en-US"
 frontmatter_contract: "required"
 owner: "Product function"
 continuity_id: "AGENTIC-TRADING-SKILLS-001"
-prd_revision: "0.28.0"
-tad_revision: "0.28.0"
-adr_revision: "0.28.0"
-mvp_revision: "0.28.0"
-gtm_revision: "0.28.0"
+prd_revision: "0.29.0"
+tad_revision: "0.29.0"
+adr_revision: "0.29.0"
+mvp_revision: "0.29.0"
+gtm_revision: "0.29.0"
 local_rung: "dev-proven"
 delivered_rung: "undocumented"
 lane: "authoring"
@@ -44,12 +44,12 @@ source_docs:
   - "agentic-gateway@a0b437fad862df3b501ffef50dfe115e09c62e6d:connectors/profiles.json"
   - "agentic-trading-platform@afb60fbbc966010767adf5ac8e201d3bea06e214:qualification/moomoo/README.md"
   - "agentic-os@1b7f3726fd250127d93d8a0ccaa08ae356974385:skills/trading/SKILL.md"
-  - "AGENTIC-TRADING-HYBRID-001@0.32.0"
+  - "AGENTIC-TRADING-HYBRID-001@0.33.0"
 ---
 
 # Agentic Trading Skills: native gateway consumer
 
-`AGENTIC-TRADING-SKILLS-001@0.28.0` accompanies [Trading 0.32.0](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests.
+`AGENTIC-TRADING-SKILLS-001@0.29.0` accompanies [Trading 0.33.0](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests.
 
 Trading admits API and MCP through one signed-grant boundary (Product E-42/E-44). Outbound mappings, connected rights and host binding require independent qualification. Graph Integrations can present admitted capabilities through Design System. The skill discovers and explains them with `authority: false`. Product-local scope and S1 ownership continue to apply.
 
@@ -67,7 +67,6 @@ Trading admits API and MCP through one signed-grant boundary (Product E-42/E-44)
 | Bounds | Time-box each qualification slice to 90 active minutes. One skill source ≤8,191 bytes, zero added runtime modules for this plan, <600 lines per plan and <500 kB per chunk. Use local fixtures first and require $0 provider spend. |
 
 ## Reference implementation — PRD
-
 ### Vision, user, and job
 
 Make reusable trading capability a **shared, headless, invocable asset** owned once and consumed by
@@ -565,6 +564,7 @@ E-01–30 refer to earlier candidates. E-31 verifies the current audit-lane sour
 | E-56 | Five private native simulator MCP reads | Admit the host’s exact tool descriptors and account binding. Allow four protocol calls to read one account with one catalog page, or five to discover the catalog, confirm the account and read its financial data. Budget for each extra catalog page. | The signed local fixture matched the five published read profiles. Missing account admission and a reused REST binding made zero calls. Qualification expiring after account selection stopped the financial read. The hosted simulator still needs connected evidence. [Trading #58](https://github.com/huijoohwee/agentic-trading-platform/pull/58) |
 | E-57 | Securities and crypto trade-event evidence | For securities, compare the selected account ID to the exact wire number. Inspect fill corrections and cancellations individually. For crypto, report the order creation time and keep the account unverified until a trusted capture binds it. | Offline phone and desktop checks covered repeated and conflicting events, account mismatch, exact decimal quantities and a binary partial fill. The preview cleared on close. Each file read used zero provider calls. [Gateway #12](https://github.com/huijoohwee/agentic-gateway/pull/12) · [Trading #61](https://github.com/huijoohwee/agentic-trading-platform/pull/61) |
 | E-58 | Visible journal and bounded quote socket | Use Market desk to inspect the four charts. Under Provider routes choose Table for fields, Multi-dimensional table for transport and disposition counts, or Kanban for route cards grouped by disposition. Filters apply across all three views. | The 389 routes and eight journal sections opened offline at 360 px and desktop. A separate Gateway fixture replayed four published quote topics over local TLS. A connected subscription needs its own host grant, call budget and recovery evidence. [Gateway #13](https://github.com/huijoohwee/agentic-gateway/pull/13) · [Trading #64](https://github.com/huijoohwee/agentic-trading-platform/pull/64) |
+| E-59 | Shared coverage records | Use the layout picker for 389 routes, 109 additional references or 26 families. Pivot references by locale and section, or group families by disposition. Select a row or card for its evidence. | All nine layouts ran offline on desktop and phone. Row details retain source links and full SHA-256 digests. [Trading #66](https://github.com/huijoohwee/agentic-trading-platform/pull/66) |
 [Previous Trading owner edition](https://github.com/huijoohwee/agentic-trading-platform/blob/afb60fbbc966010767adf5ac8e201d3bea06e214/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md) preserves the earlier owner text. The prior register retains exact commands, hashes, skipped tests, owner-supplied observations and historical lane dispositions for E-01–29. Product E-50 holds the N1 release evidence. [Archived skills register](https://github.com/huijoohwee/joohwee/blob/4bad2d7e0c0ce4cb753a108f62176fdb19d4d567/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md#evidence-register) · [Audited native instruction](https://github.com/huijoohwee/agentic-os/blob/f5cca6b1cd0d7bd16a0dd57abba35996262c481f/skills/trading/SKILL.md)
 
 ### Risk register
@@ -596,4 +596,4 @@ E-01–30 refer to earlier candidates. E-31 verifies the current audit-lane sour
 
 **0.18.0 handoff (E-42).** Use the paired 0.22.0 product roadmap for the released Gateway pin, host-specific evidence and remaining eligibility. In the offline desk, search the provider directory by transport or name and open a chart’s data table to verify its inputs. Run the OS portable-skill test for the packaged instruction and its refusals.
 
-**0.19.3 handoff (E-43–46).** Read product E-68–72 with this evidence. Check the price source before transferring a signed receipt to Graph. Existing signed files retain their original expiry and trust binding. In the offline route finder, select mapped REST routes to inspect their units. Each new research grant binds the precise inputs including a continuation cursor. The hosted and Desktop captures retain their original operation and host scope. **0.20.1 handoff (E-47–49).** Open the option, financial statement or futures route to inspect its wire reference, fields, units and fixture status. Use the origin-specific grant when a connected host qualifies the read. **0.21.0 handoff (E-50).** Select a saved quote frame under 500 kB and its expected target. Clear the file to remove the preview. Use the 18 trade-event entries in the route finder to inspect their outstanding qualification status. **0.21.1 handoff (E-51).** Verify the market and factor units before presenting a screen. Sign the returned cursor with the same selectors for a continuation. The offline finder identifies the local fixture evidence for each transport. **0.22.0 handoff (E-52).** Check the signed selectors, unit and returned cursor. Open the saved result locally, and use the evidence shown for the selected tool and host. **0.23.0 handoff (E-53).** Select the exchange before reading book depth. Use the exact trade ID and signed session filter when comparing tape rows. Check the selected candle interval and adjustment before comparing bars. **0.24.0 handoff (E-54).** Use the private runtime to inspect a simulator receipt. Account lookup uses one GET. Cash and positions each require an account lookup followed by one GET under the same allowance. **0.25.0 handoff (E-55).** Inspect the completed order read on the configured local gateway. Use its original signed request file. A missing checkpoint requires a separately admitted read. **0.26.0 handoff (E-56).** Use the hosted simulator binding for account, cash, positions, history or new-ticket buying power. Present the history continuation from that same transport, account and query window. Use REST to verify an existing ticket. **0.27.0 handoff (E-57).** Select the trade-event wire format under Runtime readback. Keep crypto report order and event time uncertainty visible. Stop if the same event ID has differing trade data. **0.28.0 handoff (E-58).** Use the section links and route views offline. Quote-socket fixture evidence covers four public examples on a local peer. Check host rights and recovery before presenting a connected stream.
+**0.19.3 handoff (E-43–46).** Read product E-68–72 with this evidence. Check the price source before transferring a signed receipt to Graph. Existing signed files retain their original expiry and trust binding. In the offline route finder, select mapped REST routes to inspect their units. Each new research grant binds the precise inputs including a continuation cursor. The hosted and Desktop captures retain their original operation and host scope. **0.20.1 handoff (E-47–49).** Open the option, financial statement or futures route to inspect its wire reference, fields, units and fixture status. Use the origin-specific grant when a connected host qualifies the read. **0.21.0 handoff (E-50).** Select a saved quote frame under 500 kB and its expected target. Clear the file to remove the preview. Use the 18 trade-event entries in the route finder to inspect their outstanding qualification status. **0.21.1 handoff (E-51).** Verify the market and factor units before presenting a screen. Sign the returned cursor with the same selectors for a continuation. The offline finder identifies the local fixture evidence for each transport. **0.22.0 handoff (E-52).** Check the signed selectors, unit and returned cursor. Open the saved result locally, and use the evidence shown for the selected tool and host. **0.23.0 handoff (E-53).** Select the exchange before reading book depth. Use the exact trade ID and signed session filter when comparing tape rows. Check the selected candle interval and adjustment before comparing bars. **0.24.0 handoff (E-54).** Use the private runtime to inspect a simulator receipt. Account lookup uses one GET. Cash and positions each require an account lookup followed by one GET under the same allowance. **0.25.0 handoff (E-55).** Inspect the completed order read on the configured local gateway. Use its original signed request file. A missing checkpoint requires a separately admitted read. **0.26.0 handoff (E-56).** Use the hosted simulator binding for account, cash, positions, history or new-ticket buying power. Present the history continuation from that same transport, account and query window. Use REST to verify an existing ticket. **0.27.0 handoff (E-57).** Select the trade-event wire format under Runtime readback. Keep crypto report order and event time uncertainty visible. Stop if the same event ID has differing trade data. **0.28.0 handoff (E-58).** Use the section links and route views offline. Quote-socket fixture evidence covers four public examples on a local peer. Check host rights and recovery before presenting a connected stream. **0.29.0 handoff (E-59).** All three inventories are visible in the journal. Record browsers use the shared Base package and Design System toolbar.
