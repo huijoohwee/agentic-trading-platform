@@ -14,11 +14,12 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = '577fe880bba78185539c157dbf734b9e31ae019b';
+const REVISION = 'd96977a4d54b7cf74f29cbe1ef75915304c2a2fc';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-HGlqLZSaMiYCxsOk1tyGtj8/Ttf+EVcPdoYMkWw1tzRGamPFT7vWDyjtOw1blPeGXnQPaY4/PG5r4SXutqQ1mA==';
+const LOCK_INTEGRITY = 'sha512-WcnZ/23dzS5Qy9yf5IyqnBweBGOld9sltTyeYNox9YBVqnNe8xIKsAGibE7VxQODZml6I/M3UbNTjJboAKrmbQ==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
+  'connectors/moomoo-quote-socket.mjs': 'be9510659679fd40c798867bd359de4eeca77c726b8fae9503511e79dedb7ff8',
   'connectors/moomoo-trade-event.mjs': 'b8cf85cd4c4f84c44bc9cedd2a90cc2ef5e271b321349fb9e1829e9b59a990f5',
   'connectors/moomoo-crypto-report.mjs': 'c2b3243017953859f0a3bd62488039fd9c9c52d2ce74e0459f7e033929d7cbb1',
   'connectors/moomoo-market-rest.mjs': '44eacd4e7f6290794bf4210b415dca0c7311ed435fdb69e806da1888101d7a26',
@@ -54,7 +55,7 @@ test('Trading pins the exact reviewed Gateway manifest, lock and installed impor
   const installed = JSON.parse(read('node_modules/agentic-gateway/package.json'));
   assert.equal(installed.name, 'agentic-gateway');
   assert.equal(installed.version, INSTALLED_VERSION);
-  for (const key of ['.', './connectors/moomoo', './connectors/moomoo-stock-screen', './connectors/moomoo-market-rest', './connectors/moomoo-trade-event', './provider-profiles', './connectors/moomoo-catalog.json', './connectors/moomoo-fields.json']) {
+  for (const key of ['.', './connectors/moomoo', './connectors/moomoo-stock-screen', './connectors/moomoo-market-rest', './connectors/moomoo-trade-event', './connectors/moomoo-quote-socket', './provider-profiles', './connectors/moomoo-catalog.json', './connectors/moomoo-fields.json']) {
     assert.equal(typeof installed.exports[key], 'string');
   }
   for (const rel of Object.keys(INSTALLED_DIGESTS)) guardInstalled(rel);
