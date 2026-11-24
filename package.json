@@ -35,6 +35,6 @@
     "agentic-os": "https://codeload.github.com/huijoohwee/agentic-os/tar.gz/140d9b1977ba0f304350e2aea7ab543642fc9a27"
   },
   "dependencies": {
-    "agentic-gateway": "https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/d4fa596b459eb7eecb62f4743d3238b6f25fc7c5"
+    "agentic-gateway": "https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/fefeb0e76fc059d02231b41dc30e78dacac9b7c5"
   }
 }

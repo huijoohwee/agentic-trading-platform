@@ -1,17 +1,17 @@
 ---
 title: "Agentic Trading Skills: native gateway consumer"
 doc_type: "PRD-TAD-ADR-MVP-GTM"
-version: "0.19.1"
+version: "0.19.2"
 date: "2026-11-24"
 lang: "en-US"
 frontmatter_contract: "required"
 owner: "Product function"
 continuity_id: "AGENTIC-TRADING-SKILLS-001"
-prd_revision: "0.19.1"
-tad_revision: "0.19.1"
-adr_revision: "0.19.1"
-mvp_revision: "0.19.1"
-gtm_revision: "0.19.1"
+prd_revision: "0.19.2"
+tad_revision: "0.19.2"
+adr_revision: "0.19.2"
+mvp_revision: "0.19.2"
+gtm_revision: "0.19.2"
 local_rung: "dev-proven"
 delivered_rung: "undocumented"
 lane: "authoring"
@@ -44,12 +44,12 @@ source_docs:
   - "agentic-gateway@a0b437fad862df3b501ffef50dfe115e09c62e6d:connectors/profiles.json"
   - "agentic-trading-platform@afb60fbbc966010767adf5ac8e201d3bea06e214:qualification/moomoo/README.md"
   - "agentic-os@1b7f3726fd250127d93d8a0ccaa08ae356974385:skills/trading/SKILL.md"
-  - "AGENTIC-TRADING-HYBRID-001@0.23.1"
+  - "AGENTIC-TRADING-HYBRID-001@0.23.2"
 ---
 
 # Agentic Trading Skills: native gateway consumer
 
-`AGENTIC-TRADING-SKILLS-001@0.19.1` accompanies [Trading 0.23.1](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests.
+`AGENTIC-TRADING-SKILLS-001@0.19.2` accompanies [Trading 0.23.2](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests.
 
 Trading admits API and MCP through one signed-grant boundary (Product E-42/E-44). Outbound mappings, connected rights and host binding require independent qualification. Graph Integrations can present admitted capabilities through Design System. The skill discovers and explains them with `authority: false`. Product-local scope and S1 ownership continue to apply.
 
@@ -551,6 +551,7 @@ E-01–30 refer to earlier candidates. E-31 verifies the current audit-lane sour
 | E-42 | Offline consumer and portable skill, 24 November 2026 | Trading #23 (`91eead1`) projects the quote board, 20 book levels, 20 trades and five candles through the sealed Gateway package. The route finder searches 348 transport entries offline. The 8,177-byte packed OS instruction passed discovery, digest-checked loading and refusal tests. | Desktop and mobile browser emulation, closed-tab offline reopen and exact-value inspection passed. A physical handset, fresh executing-host install and human acceptance have separate evidence requirements. [Trading #23](https://github.com/huijoohwee/agentic-trading-platform/pull/23) · [OS portable skill test](https://github.com/huijoohwee/agentic-os/blob/1b7f3726fd250127d93d8a0ccaa08ae356974385/__tests__/portable-skills.test.mjs) |
 | E-43 | Consumer research projections, 24 November 2026 | The route finder lists 22 locally mapped REST routes. Source-specific fields distinguish headline metadata, analyst target text, market-local dates, signed quantities and disclosure timestamps. | One parameter-bound local headline replay matched across HTTP and MCP. A changed keyword was refused before a second GET. No new connected REST receipt was produced. [Trading #25](https://github.com/huijoohwee/agentic-trading-platform/pull/25) |
 | E-44 | Paper rehearsal and mirror evidence, 24 November 2026 | Search the route finder for `/sim-trade/`. Six GETs describe account reads and three POSTs require independent paper approval. A MOCK broker refuses provider-labelled observations. | The current mirror index covers a smaller crawl. All 196 saved pages matched the Gateway catalog digests. Recheck simulator eligibility when a named alias, market and grant are available. [Trading #27](https://github.com/huijoohwee/agentic-trading-platform/pull/27) |
+| E-45 | Public tool fields, 24 November 2026 | The sealed Gateway register describes HTTP parameters, body fields, path variables, constraints and top-level response names across all 107 advertised tools. | Inspect the published field shape offline. Use the host’s own descriptor and a current Trading grant for connected admission. [Gateway #7](https://github.com/huijoohwee/agentic-gateway/pull/7) |
 [Previous Trading owner edition](https://github.com/huijoohwee/agentic-trading-platform/blob/afb60fbbc966010767adf5ac8e201d3bea06e214/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md) preserves the earlier owner text. The prior register retains exact commands, hashes, skipped tests, owner-supplied observations and historical lane dispositions for E-01–29. Product E-50 holds the N1 release evidence. [Archived skills register](https://github.com/huijoohwee/joohwee/blob/4bad2d7e0c0ce4cb753a108f62176fdb19d4d567/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md#evidence-register) · [Audited native instruction](https://github.com/huijoohwee/agentic-os/blob/f5cca6b1cd0d7bd16a0dd57abba35996262c481f/skills/trading/SKILL.md)
 
 ### Risk register
@@ -582,4 +583,4 @@ E-01–30 refer to earlier candidates. E-31 verifies the current audit-lane sour
 
 **0.18.0 handoff (E-42).** Use the paired 0.22.0 product roadmap for the released Gateway pin, host-specific evidence and remaining eligibility. In the offline desk, search the provider directory by transport or name and open a chart’s data table to verify its inputs. Run the OS portable-skill test for the packaged instruction and its refusals.
 
-**0.19.1 handoff (E-43–44).** Read product E-68–70 with this evidence. In the offline route finder, select mapped REST routes to inspect their units. Each new research grant binds the precise inputs including a continuation cursor. The hosted and Desktop captures retain their original operation and host scope.
+**0.19.2 handoff (E-43–45).** Read product E-68–71 with this evidence. In the offline route finder, select mapped REST routes to inspect their units. Each new research grant binds the precise inputs including a continuation cursor. The hosted and Desktop captures retain their original operation and host scope.
