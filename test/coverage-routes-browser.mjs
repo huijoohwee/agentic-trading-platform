@@ -141,4 +141,21 @@ export async function verifyRouteViews(page) {
     await restored.getByRole('button', { name: 'Next', exact: true }).click();
     await restored.getByText('49–96 of 1568', { exact: true }).waitFor();
   } finally { await bookmark.close(); }
+  const report = page.locator('#coverage-market-queries');
+  await report.getByText('1–12 of 238', { exact: true }).waitFor();
+  const reportLayout = report.getByLabel('View layout');
+  await reportLayout.selectOption('multiDimensional');
+  for (const value of ['238', '186', '52']) await report.getByRole('cell', { name: value, exact: true }).first().waitFor();
+  await reportLayout.selectOption('kanban');
+  await report.getByRole('button', { name: 'Search queries' }).click();
+  await report.getByRole('searchbox').fill('quote_history_kline');
+  await report.getByRole('button', { name: 'Card: quote_history_kline', exact: true }).click();
+  const queryDetail = report.getByRole('region', { name: 'Selected query evidence' });
+  assert.equal(await queryDetail.locator('dt').count(), 17);
+  await queryDetail.getByText('Historical candle REST read and chart shipped. Native MCP mapping pending.', { exact: true }).waitFor();
+  await queryDetail.getByRole('link', { name: 'Open provider route' }).click();
+  await routes.locator('tr[aria-selected=true]').getByRole('cell', { name: 'quote_history_kline', exact: true }).waitFor();
+  await reportLayout.selectOption('table');
+  await report.getByRole('searchbox').fill('');
+
 }

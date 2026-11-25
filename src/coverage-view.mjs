@@ -1,11 +1,11 @@
 import { createRecordLinkCodec } from '../owners/base/packages/views-react/dist/browser-data-view.js';
+import { report, unpackMarketQueries } from './market-query-report.mjs';
 import { mountCoverageRecords } from './coverage-routes-view.mjs';
 import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
 
 import { coverageRelations, httpFieldInventory, routeId } from './coverage-relations.mjs';
 
-// Lazy, read-only discovery surface for the moomoo OpenAPI feature-family coverage. It renders the
-// reviewed inventory metadata only: no provider call, no credential, no dispatch authority. Host-specific captures are labelled independently.
+// Browse the saved catalog and evidence for each host.
 export async function mountCoverageView(host) {
   const { default: catalog } = await import('../qualification/moomoo/route-inventory.json', { with: { type: 'json' } });
   const node = (tag, text) => { const element = document.createElement(tag); if (text !== undefined) element.textContent = text; return element; };
@@ -60,6 +60,21 @@ export async function mountCoverageView(host) {
     if (!tools.length) detail.append(node('p', 'The public tool directory has no field schema for this route.'));
     related(detail, 'Related references', [...new Set(links.references.to(routeId(row)).map(edge => edge.source))].map(path => link(path, { view: 'reference', record: path })));
   });
+  const queries = unpackMarketQueries(report, rows), querySection = node('section');
+  querySection.id = 'coverage-market-queries';
+  const revision = queries[0]['Trading main'].slice(0, 7);
+  const totals = [...new Set(queries.map(q => q.Transport))].map(kind =>
+    queries.filter(q => q.Transport === kind).length + ' ' + kind);
+  querySection.append(node('h4', 'Outstanding market and research queries'), node('p', totals.join(' · ') + ' · Report snapshot at Trading ' + revision));
+  mountCoverageRecords(querySection, queries, node, { id: 'market-query', title: 'Market queries', plural: 'queries', singular: 'query',
+    columns: [text('label', 'Route or tool'), category('Transport', 'Transport'), category('Source section', 'Source section'),
+      text('Related HTTP bindings', 'HTTP bindings'), text('Additional implementation evidence', 'Implementation evidence')],
+    rowDimension: 'Source section', groupDimension: 'Transport', boardPageSize: 48 }, (query, detail) => {
+    const facts = node('dl'); facts.className = 'facts';
+    for (const header of report.headers) facts.append(node('dt', header), node('dd', query[header] || '—'));
+    detail.append(node('h5', query.label), facts);
+    if (query.route) detail.append(link('Open provider route', { view: 'route', record: routeId(query.route) }));
+  });
   const supplement = node('section'), families = node('section');
   supplement.id = 'coverage-references'; families.id = 'coverage-families';
   supplement.append(node('h4', references.length + ' additional public references'));
@@ -106,7 +121,7 @@ export async function mountCoverageView(host) {
   });
   fields.id = 'coverage-fields'; fields.append(node('h4', 'Public HTTP fields'), fieldStatus, toolRoutes);
   notice.setAttribute('role', 'status');
-  host.replaceChildren(status, intro, notice, finder, fields, supplement, families);
+  host.replaceChildren(status, intro, notice, querySection, finder, fields, supplement, families);
   let pending;
   function loadFields() {
     if (pending) return pending;
