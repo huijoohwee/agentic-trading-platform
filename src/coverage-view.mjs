@@ -17,6 +17,21 @@ export async function mountCoverageView(host) {
   const references = catalog.sources.filter(source => source.reference);
   const intro = node('p', `${COVERAGE_INDEX.known_sources} known OpenAPI sources · ${COVERAGE_INDEX.imported_sources} from the original mirror · ${references.length} additional public references. Select a row or card for full values and source links. Connected qualification applies to the named host and read.`);
   const counts = node('p', Object.entries(summary.by_status).map(([key, value]) => `${key}: ${value}`).join(' · '));
+  const dictionaries = node('nav');
+  dictionaries.className = 'journal-sections-nav';
+  dictionaries.setAttribute('aria-label', 'Naming dictionaries');
+  dictionaries.append(node('strong', 'Naming dictionaries'));
+  const dictionaryNames = { quote: 'Quotes', trading: 'Securities trading', crypto_trading: 'Crypto trading' };
+  const sourcesByPath = new Map(catalog.sources.map(source => [source.path, source]));
+  for (const [area, name] of Object.entries(dictionaryNames)) {
+    const source = sourcesByPath.get('/api/' + area + '/naming-dictionary');
+    if (!source) throw Error('MISSING_NAMING_DICTIONARY');
+    const anchor = node('a', name);
+    anchor.href = new URL(source.path, catalog.origin);
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    dictionaries.append(anchor);
+  }
   const text = (id, name) => ({ id, name });
   const number = (id, name) => ({ id, name, kind: 'number' });
   const category = (id, name) => ({ id, name, kind: 'select' });
@@ -124,7 +139,7 @@ export async function mountCoverageView(host) {
   });
   fields.id = 'coverage-fields'; fields.append(node('h4', 'Public HTTP fields'), fieldStatus, toolRoutes);
   notice.setAttribute('role', 'status');
-  host.replaceChildren(status, intro, notice, querySection, finder, fields, supplement, families);
+  host.replaceChildren(status, intro, dictionaries, notice, querySection, finder, fields, supplement, families);
   let pending;
   function loadFields() {
     if (pending) return pending;
