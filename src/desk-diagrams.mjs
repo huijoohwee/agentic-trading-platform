@@ -2,25 +2,48 @@
 // Colors consume semantic tokens (--desk-up / --desk-down, defined scoped in web/journal.css) and
 // currentColor for axes/labels, so typography and palette stay owned by the Design System.
 // Geometry helpers are pure and pinned by test/desk-diagrams.test.mjs; no provider call is made.
+import { decimalParts, decimalPriceLabel } from './quote-display.mjs';
+
 const NS = 'http://www.w3.org/2000/svg';
 const UP = 'var(--desk-up)', DOWN = 'var(--desk-down)';
 
 export function candleGeometry(candles, { width = 640, height = 220, left = 46, right = 10, top = 10, bottom = 22 } = {}) {
-  const lows = candles.map(c => Number(c.low)), highs = candles.map(c => Number(c.high));
   if (!candles.length) return { candles: [], yTicks: [] };
-  const lo = Math.min(...lows), hi = Math.max(...highs), span = hi - lo;
-  const plotH = height - top - bottom, slot = (width - left - right) / candles.length;
-  const y = value => top + (span ? (hi - value) / span : 0.5) * plotH;
+  const prices = candles.map(candle => [candle.open, candle.high, candle.low, candle.close]
+    .map(value => decimalParts(String(value), { signed: true })));
+  if (prices.some(row => row.includes(null))) return { candles: [], yTicks: [] };
+  const power = Math.min(...prices.flat().map(price => price.power));
+  const bars = prices.map(row => row.map(price => price.units * 10n ** BigInt(price.power - power)));
+  let lo = bars[0][2], hi = bars[0][1];
+  for (const [open, high, low, close] of bars) {
+    if (low > open || low > close || high < open || high < close) return { candles: [], yTicks: [] };
+    if (low < lo) lo = low;
+    if (high > hi) hi = high;
+  }
+  const span = hi - lo;
+  const ticks = [lo];
+  if (span > 0n) {
+    const step = 10n ** BigInt(Math.max(0, String(span).length - 2));
+    for (const third of [1n, 2n]) {
+      const tick = (lo + span * third / 3n) / step * step;
+      if (tick > ticks.at(-1) && tick < hi) ticks.push(tick);
+    }
+    ticks.push(hi);
+  }
+  // Project the price difference only after decimal subtraction. The ratio stays in [0,1].
+  const y = value => top + (span ? Number((hi - value) * 1000000n / span) / 1000000 : 0.5) * (height - top - bottom);
+  const yTicks = ticks.map(value => ({ y: y(value), label: decimalPriceLabel(value, power) }));
+  const plotLeft = Math.max(left, ...yTicks.map(tick => tick.label.length * 7 + 8));
+  const slot = (width - plotLeft - right) / candles.length;
   return {
-    lo, hi, slot,
-    yTicks: (span ? [0, 1, 2, 3] : [0]).map(i => { const value = lo + (span * i) / 3; return { y: y(value), label: String(Math.round(value * 100) / 100) }; }),
-    candles: candles.map((c, i) => {
-      const open = Number(c.open), close = Number(c.close), x = left + (i + 0.5) * slot;
+    lo: Number(yTicks[0].label), hi: Number(yTicks.at(-1).label), slot, plotLeft, yTicks,
+    candles: bars.map(([open, high, low, close], i) => {
+      const x = plotLeft + (i + 0.5) * slot;
       return {
         x, bodyWidth: slot * 0.6, up: close >= open,
-        wickTop: y(Number(c.high)), wickBottom: y(Number(c.low)),
-        bodyTop: y(Math.max(open, close)), bodyHeight: Math.max(1, Math.abs(y(open) - y(close))),
-        label: c.date
+        wickTop: y(high), wickBottom: y(low),
+        bodyTop: y(close >= open ? close : open), bodyHeight: Math.max(1, Math.abs(y(open) - y(close))),
+        label: candles[i].date
       };
     })
   };
@@ -64,14 +87,19 @@ export function mountDeskDiagrams(document) {
   };
   const axis = (svg, geometry, width, height, bottom) => {
     for (const tick of geometry.yTicks ?? []) {
-      svg.append(el('line', { x1: 46, x2: width - 10, y1: tick.y, y2: tick.y, stroke: 'currentColor', 'stroke-opacity': 0.15 }));
-      svg.append(el('text', { x: width - 6, y: tick.y + 3, 'text-anchor': 'end', 'font-size': 10, fill: 'currentColor' }, tick.label));
+      svg.append(el('line', { x1: geometry.plotLeft, x2: width - 10, y1: tick.y, y2: tick.y, stroke: 'currentColor', 'stroke-opacity': 0.15 }));
+      svg.append(el('text', { x: geometry.plotLeft - 4, y: tick.y + 3, 'text-anchor': 'end', 'font-size': 10, fill: 'currentColor' }, tick.label));
     }
-    svg.append(el('line', { x1: 10, x2: width - 10, y1: height - bottom, y2: height - bottom, stroke: 'currentColor', 'stroke-opacity': 0.3 }));
+    svg.append(el('line', { x1: geometry.plotLeft ?? 10, x2: width - 10, y1: height - bottom, y2: height - bottom, stroke: 'currentColor', 'stroke-opacity': 0.3 }));
   };
   return {
     candles(candles, caption) {
       const width = 640, height = 220, g = candleGeometry(candles, { width, height });
+      if (candles.length && !g.candles.length) {
+        const note = document.createElement('p');
+        note.textContent = 'Candle prices cannot be plotted on this scale. Inspect the original rows below.';
+        return note;
+      }
       const svg = frame(width, height, caption ?? `Daily candlestick chart · ${candles.length} sessions · open/high/low/close`);
       axis(svg, g, width, height, 22);
       for (const c of g.candles) {

@@ -18,6 +18,30 @@ test('candle geometry inverts the price axis and keeps bodies inside wicks', () 
   assert.ok(g.candles[0].x < g.candles.at(-1).x);
 });
 
+test('candles retain exact direction, wicks and distinct price ticks in decimal space', () => {
+  for (const [low, close, open, high] of [
+    ['1.00000000000000000', '1.00000000000000001', '1.00000000000000002', '1.00000000000000003'],
+    ['0.0011', '0.0012', '0.0013', '0.0014'],
+    ['9007199254740992', '9007199254740993', '9007199254740994', '9007199254740995'],
+    ['-0.00003', '-2e-5', '-0.00001', '0'],
+    ['1e-300', '2e-300', '3e-300', '4e-300']
+  ]) {
+    const { candles: [bar], yTicks, plotLeft } = candleGeometry([{ open, close, high, low }]);
+    assert.equal(bar.up, false);
+    assert.ok(bar.wickTop < bar.bodyTop && bar.bodyTop + bar.bodyHeight < bar.wickBottom);
+    assert.equal(yTicks.length, 4);
+    assert.equal(new Set(yTicks.map(tick => tick.label)).size, 4);
+    assert.ok(yTicks.every(tick => tick.label.length * 6 < plotLeft));
+    assert.equal(yTicks[0].label, low === '1.00000000000000000' ? '1' : low);
+    assert.equal(yTicks.at(-1).label, high);
+  }
+  const flat = candleGeometry([{ open: '01.00', high: '100e-2', low: 1, close: '10e-1' }]);
+  assert.deepEqual(flat.yTicks.map(tick => tick.label), ['1']);
+  for (const high of ['unknown', '1', '1e999999']) {
+    assert.deepEqual(candleGeometry([{ open: '2', close: '1', low: '1', high }]).candles, []);
+  }
+});
+
 test('depth geometry mirrors bid/ask bars with volume-proportional lengths', () => {
   const g = depthGeometry(deskDepth);
   assert.equal(g.bids.length, 10); assert.equal(g.asks.length, 10);
