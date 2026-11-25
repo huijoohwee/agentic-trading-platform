@@ -52,6 +52,13 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
         ['decimal-string', 'json-number'].includes(page.price_source), 'INVALID_PAGE');
       precision.price_source = page.price_source;
     }
+    const projection = {};
+    for (const section of ['metadata', 'summary']) {
+      if (!Object.hasOwn(page, section)) continue;
+      const value = boundedJson(page[section]);
+      requireThat(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_PAGE');
+      projection[section] = value;
+    }
     const metadata = {};
     if (page.market_request) {
       const { rows: signedRows, decimals: signedDecimals, ...header } = page;
@@ -65,8 +72,9 @@ export function createMarketReadBoundary({ store, scope, candidate, keys, adapte
     }
     if (Object.hasOwn(page, 'last_valid_time_ms')) metadata.last_valid_time_ms = page.last_valid_time_ms;
     if (page.pagination) metadata.pagination = boundedJson(page.pagination);
-    return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, ...metadata, ...precision, observed_utc: page.observed_utc,
-      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest, ...(metadata.account && metadata), ...precision }),
+    return { operation, source: 'AUTHENTICATED_ADAPTER', rows, decimals, ...projection, ...metadata, ...precision, observed_utc: page.observed_utc,
+      response_digest: page.response_digest, digest: sha({ rows, decimals, response_digest: page.response_digest,
+        ...(metadata.account && metadata), ...projection, ...precision }),
       cost: { tool_calls: opened.calls + 1, tokens_in: 'UNKNOWN', tokens_out: 'UNKNOWN', provider_fees: 'UNKNOWN' } };
   };
 }
