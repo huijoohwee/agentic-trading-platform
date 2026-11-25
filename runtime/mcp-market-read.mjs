@@ -1,23 +1,20 @@
 import { STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMoomooStockScreen } from 'agentic-gateway/connectors/moomoo-stock-screen';
 import { rankingTools, regionalIpoTools } from '../src/moomoo-research-tools.mjs';
-import { requiresMarketRest, sessionMcpSpecs, isSessionMcp, verifySessionMcp, sessionMcpArguments, marketPage } from './moomoo-market-rest.mjs';
+import { requiresMarketRest, marketRestSpecs, sessionMcpSpecs, isSessionMcp, verifySessionMcp, sessionMcpArguments, marketPage } from './moomoo-market-rest.mjs';
 import { createPrivateKey, sign } from 'node:crypto';
 import { accountOperation, historyOperation, simulatorOperation, verifySimulatorMcpSpec, verifySimulatorDescriptor,
   validateSimulatorRead, simulatorMcpArguments, selectedSimulatorAccount, simulatorPage, historyPagination } from './moomoo-simulator-read.mjs';
 import { listReviewedTools, ownPath, rpcResponse } from './mcp-read.mjs';
 import { validateProviderDefinition } from './provider-mapping.mjs';
-import { researchGetProfile, researchMapping, researchMcpMapping, researchToolArguments } from './moomoo-research.mjs';
+import { companyResearchOperations, researchGetProfile, researchMapping, researchMcpMapping, researchToolArguments } from './moomoo-research.mjs';
 import { projectMarketReadPage } from './market-read-projection.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
 
 // Labelled provider adapter for operation-shaped market reads. It shares the sheet adapter's
 // transport owner (endpoint/protocols/ownPath/rpcResponse) and never exposes raw provider tools:
 // the reviewed private mapping binds each native operation to one read-only tool and projection.
-export const MARKET_READ_OPERATIONS = [...Object.keys(sessionMcpSpecs), ...Object.keys(rankingTools), ...Object.keys(regionalIpoTools), 'read.catalog', 'read.candles', 'read.candle-history', 'read.ticker', 'read.depth', 'read.tape', 'read.calendar', 'read.dividend-calendar', 'read.economic-calendar', 'read.capital-flow', 'read.capital-distribution', 'read.capital-flow-history', 'read.rank', 'read.stock-screen',
-  'read.plate', 'read.ipo', 'read.news', 'read.research', 'read.financials', 'read.corporate-actions', 'read.holders',
-  'read.financial-statements', 'read.influencer', 'read.macro', 'read.derivatives', 'read.option-chain', 'read.option-expiries', 'read.option-events',
-  'read.futures-positions', 'read.futures-seasonality', 'read.futures-correlation', 'read.etf', 'read.event-contract', 'read.crypto-market',
-  'read.valuation', 'read.short', 'read.stock-connect', 'read.top-brokers', 'read.chip', 'read.cbbc'];
+export const MARKET_READ_OPERATIONS = [...new Set(['read.catalog', 'read.calendar', ...Object.keys(sessionMcpSpecs),
+  ...Object.keys(marketRestSpecs), ...Object.keys(researchMapping.operations)])];
 const writeBan = /(?:place|submit|cancel|modify|withdraw|transfer|unlock|reset|delete|amend)(?:_|$)/i;
 const decimalPattern = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 
@@ -209,6 +206,8 @@ export function createMcpMarketReadAdapter({ provider, token, mapping, attestati
       } else if (screen) {
         ({ rows, ...metadata } = projectMoomooStockScreen(request, source));
         decimals = rows.map(() => ({}));
+      } else if (research && Object.hasOwn(companyResearchOperations, operation)) {
+        ({ rows, decimals, ...metadata } = marketPage(spec, request, JSON.stringify(providerFields(source))));
       } else if (research) {
         ({ rows, decimals, ...metadata } = projectMarketReadPage(researchMapping.operations[operation], request, providerFields(source)));
       } else if (spec.object_result) {

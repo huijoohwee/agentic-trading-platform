@@ -1,6 +1,7 @@
 import test from 'node:test';
 import { compareResearchTransports } from './research-mcp-fixture.mjs';
-import { researchMapping } from '../runtime/moomoo-research.mjs';
+import { companyResearchOperations, researchMapping } from '../runtime/moomoo-research.mjs';
+import { marketRestMapping } from '../runtime/moomoo-market-rest.mjs';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -175,14 +176,15 @@ test('gateway admits a PROVIDER REST read with identical HTTP and MCP decisions 
 
 async function researchRead(t, operation, inputs, response, inspect = () => {}, permittedInputs = inputs) {
   const { store } = await fixture(t);
-  const spec = researchMapping.operations[operation];
-  const provider = { ...definition, mapping: researchMapping, mapping_digest: sha(researchMapping),
+  const mapping = Object.hasOwn(companyResearchOperations, operation) ? marketRestMapping : researchMapping;
+  const spec = mapping.operations[operation];
+  const provider = { ...definition, mapping, mapping_digest: sha(mapping),
     operations: [operation], allowlist: [spec.tool], schema_digest: spec.schema_digest };
   const fake = fakeRest({ result: response });
   const adapter = createRestMarketReadAdapter({ provider, token: 'fixture-rest-token-000',
-    mapping: researchMapping, attestation, scope, candidate, fetchImpl: fake.fetchImpl, now });
+    mapping, attestation, scope, candidate, fetchImpl: fake.fetchImpl, now });
   const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter, now });
-  const permit = grant('research', 'research', { mapping_digest: sha(researchMapping),
+  const permit = grant('research', 'research', { mapping_digest: sha(mapping),
     tools: [{ operation, name: spec.tool, effect: 'read', schema_digest: spec.schema_digest, inputs_digest: sha(permittedInputs) }] });
   try { return await compareResearchTransports(() => boundary({ operation, inputs, grant: permit }),
     { operation, inputs, permittedInputs, response, definition, restCalls: fake.calls, grant, store, scope, candidate, keys, now, attestation }); }
@@ -307,6 +309,44 @@ test('company profile, dividends and shareholder disclosures preserve labels, da
   assert.deepEqual(holders.rows, [holder]);
   await assert.rejects(researchRead(t, 'read.holders', hk, response({ main_holder: [] }),
     calls => assert.equal(calls.length, 0), { symbol: 'US.AAPL' }), /SCOPE_DENIED/);
+});
+
+test('company executive and operating-efficiency reads share Gateway REST and MCP descriptors', async t => {
+  const symbol = 'HK.00700';
+  const background = await researchRead(t, 'read.company-executive-background', { symbol, leader_name: 'Fixture Leader' },
+    response({ brief_background: 'Synthetic public biography.' }), calls => {
+      assert.equal(calls[0].url, 'https://webapi.moomoo.com/api/v1.0/quote/HK.00700/company/executive-background?leader_name=Fixture+Leader');
+    });
+  assert.deepEqual(background.rows, [{ symbol, leader_name: 'Fixture Leader', brief_background: 'Synthetic public biography.' }]);
+
+  const executive = { leader_name: 'Fixture Leader', display_leader_name: 'Fixture Leader', position_name: 'Director',
+    leader_gender: 'Unknown', leader_age: '45', highest_education: 'Graduate', begin_date: 1609459200,
+    begin_date_str: '2021-01-01', issue_date: null, issue_date_str: null, shares: '123456789012345.678900',
+    annual_salary: '900000.0100', annual_salary_currency: 'HKD' };
+  const executives = await researchRead(t, 'read.company-executives', { symbol },
+    response({ executives: [executive] }), calls => assert.equal(calls[0].url,
+      'https://webapi.moomoo.com/api/v1.0/quote/HK.00700/company/executives'));
+  assert.equal(executives.rows[0].shares, '123456789012345.678900');
+  assert.equal(executives.rows[0].annual_salary, '900000.0100');
+  assert.equal(executives.rows[0].begin_date, 1609459200);
+
+  const efficiency = { fiscal_year: 2025, financial_type: 7, period_text: 'FY2025', end_date: 1767139200,
+    end_date_str: '2025-12-31', employee_num: 1000, employee_num_yoy: '0.1250', income_per_capita: '987654321.123456',
+    income_per_capita_yoy: null, profit_per_capita: '12.3400', profit_per_capita_yoy: '0.0100',
+    net_profit_per_capita: '10.0001', net_profit_per_capita_yoy: '0.0001' };
+  const operating = await researchRead(t, 'read.company-operational-efficiency', { symbol, limit: 1, next_key: '1767225600',
+    currency_code: 'HKD', financial_type: 7 }, { ...response({ currency_code: 'HKD', item_list: [efficiency] }),
+      pagination: { has_more: true, next_key: '1767312000' } }, calls => {
+      const url = new URL(calls[0].url);
+      assert.equal(url.pathname, '/api/v1.0/quote/HK.00700/company/operational-efficiency');
+      assert.equal(url.searchParams.get('next_key'), '1767225600');
+      assert.equal(url.searchParams.get('currency_code'), 'HKD');
+    });
+  assert.equal(operating.rows[0].income_per_capita, '987654321.123456');
+  assert.equal(operating.rows[0].income_per_capita_yoy, null);
+  assert.deepEqual(operating.pagination, { completed: false, next_cursor: '1767312000', next_page_token: '1767312000' });
+  await assert.rejects(researchRead(t, 'read.company-executive-background', { symbol }, response({ brief_background: 'x' })), /INVALID_PARAMETER/);
+  await assert.rejects(researchRead(t, 'read.company-operational-efficiency', { symbol, limit: 101 }, response({})), /INVALID_PARAMETER/);
 });
 
 test('influencer holdings require their own response status and preserve USD estimates as supplied', async t => {

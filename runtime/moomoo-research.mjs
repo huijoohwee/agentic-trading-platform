@@ -1,4 +1,5 @@
 import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL } from 'agentic-gateway/connectors/moomoo-stock-screen';
+import { describeMoomooCompany } from 'agentic-gateway/connectors/moomoo-market-rest';
 import { requireThat, sha } from './core.mjs';
 import fieldRegister from 'agentic-gateway/connectors/moomoo-fields.json' with { type: 'json' };
 import { researchTools } from '../src/moomoo-research-tools.mjs';
@@ -91,6 +92,24 @@ const statementItem = {
   integer: ['field_id'], text: ['display_name', 'value_type'], wire_decimal: ['data', 'yoy', 'qoq'],
   nullable: ['data', 'yoy', 'qoq'], allowed_values: { value_type: ['amount', 'percent', ''] }
 };
+export const companyResearchOperations = Object.freeze(Object.fromEntries(Object.entries(researchTools)
+  .filter(([operation]) => operation.startsWith('read.company-'))
+  .map(([operation, tool]) => {
+    const descriptor = describeMoomooCompany(tool), [method, path] = descriptor.route.split(' ');
+    const fields = Object.fromEntries(Object.entries(descriptor.fields).map(([name, field]) => [name,
+      field.source === 'response' ? { ...field, path: ['data', ...field.path] } : field]));
+    const projection = { tool: 'quote.' + tool, method, path, strict_inputs: true, pin_inputs: true, symbol_path: true,
+      input_map: Object.fromEntries(Object.keys(descriptor.params).map(name => [name, name])), params: descriptor.params,
+      rows_path: ['data', ...descriptor.rows_path], fields, text: descriptor.text,
+      ...(descriptor.integers && { integer: descriptor.integers }), ...(descriptor.decimal_text && { decimal_text: descriptor.decimal_text }),
+      ...(descriptor.nullable && { nullable: descriptor.nullable }), ...(descriptor.single_row && { single_row: true }),
+      ...(descriptor.default_page_size && { default_page_size: descriptor.default_page_size }),
+      ...(descriptor.pagination && { pagination: descriptor.pagination }),
+      ...(descriptor.pagination_mode && { pagination_mode: descriptor.pagination_mode }),
+      ...(descriptor.cursor_limit && { cursor_limit: descriptor.cursor_limit }),
+      ...(descriptor.row_limit && { row_limit: descriptor.row_limit }) };
+    return [operation, Object.freeze(projection)];
+  })));
 const futuresPositionFields = ['long', 'short', 'spread', 'net', 'net_change_weekly', 'open_interest', 'open_interest_change_weekly'];
 const seasonalPoint = { fields: fields(['timestamp', 'close', 'prev_close']), integer: ['timestamp'],
   decimal_text: ['close', 'prev_close'], nullable: ['close', 'prev_close'] };
@@ -142,6 +161,7 @@ const operations = {
       params: { option_market: { required: true, enum: ['US_SECURITY', 'US_INDEX', 'HK_SECURITY', 'HK_INDEX'] },
         code: { symbol: true, length: [0, 64], allow_empty: true }, page_size: boundedCount(1, 300),
         page_flag: { length: [0, 256] } }, pagination: ['pagination'], default_page_size: 50, cursor_limit: 256 }),
+  ...companyResearchOperations,
   'read.news': news, 'read.research': ratings,
   'read.financials': quote('company-profile', symbol + 'company/profile', items,
     { text: ['name', 'value'], integer: ['field_type', 'attribute_type'] }, { nullable: ['value'] }),
@@ -214,10 +234,11 @@ export const researchMapping = {
 };
 
 const publishedFields = new Map(fieldRegister.tools.map(tool => [tool.name, tool]));
+const allResearchTools = Object.freeze({ ...researchTools });
 export const researchGetProfile = 'moomoo-research-get/v1';
 export const researchMcpMapping = {
   protocol: stockScreenMcpMapping.protocol, operations: { ...stockScreenMcpMapping.operations,
-    ...Object.fromEntries(Object.entries(researchTools).map(([operation, tool]) => {
+    ...Object.fromEntries(Object.entries(allResearchTools).map(([operation, tool]) => {
       const spec = researchMapping.operations[operation], publicFields = publishedFields.get(tool);
       requireThat(spec.method === 'GET' && publicFields && !publicFields.body.length, 'INVALID_MAPPING');
       return [operation, { profile: researchGetProfile, tool, rows_path: spec.rows_path, pin_inputs: true,
@@ -229,7 +250,7 @@ export function researchToolArguments(operation, inputs) {
   const spec = researchMapping.operations[operation];
   const parameters = marketReadParameters(spec, inputs, true);
   if (spec.symbol_path) parameters.symbol = marketReadSymbol(spec, inputs);
-  const fields = publishedFields.get(researchTools[operation]).params;
+  const fields = publishedFields.get(allResearchTools[operation]).params;
   requireThat(Object.keys(parameters).every(name => fields.some(field => field.name === name)), 'INVALID_MAPPING');
   for (const field of fields) {
     if (!Object.hasOwn(parameters, field.name)) { requireThat(!field.required, 'INVALID_PARAMETER'); continue; }

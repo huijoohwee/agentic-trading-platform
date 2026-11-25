@@ -1,5 +1,5 @@
 import fieldRegister from 'agentic-gateway/connectors/moomoo-fields.json' with { type: 'json' };
-import { rankingTools, regionalIpoTools, sessionTools } from '../src/moomoo-research-tools.mjs';
+import { rankingTools, regionalIpoTools, researchTools, sessionTools } from '../src/moomoo-research-tools.mjs';
 import { buildMoomooSessionArguments, buildMoomooMarketRequest, projectMoomooMarketResponse, marketRestRoutes } from 'agentic-gateway/connectors/moomoo-market-rest';
 import { requireThat, sha } from './core.mjs';
 import { researchMapping } from './moomoo-research.mjs';
@@ -20,6 +20,7 @@ export const marketRestSpecs = Object.fromEntries(Object.entries({
   ...sessionTools,
   'read.ticker': 'quote_stock_quote', 'read.depth': 'quote_order_book',
   'read.tape': 'quote_rt_ticker', 'read.candles': 'quote_cur_kline', ...restOnly,
+  ...Object.fromEntries(Object.entries(researchTools).filter(([operation]) => operation.startsWith('read.company-'))),
 }).map(([operation, tool]) => {
   const [method, path] = marketRestRoutes[tool].split(' ');
   const spec = { profile, tool, method, path, rows_path: [], pin_inputs: true };
