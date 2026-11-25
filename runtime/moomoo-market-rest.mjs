@@ -3,9 +3,17 @@ import { requireThat, sha } from './core.mjs';
 import { researchMapping } from './moomoo-research.mjs';
 
 const profile = 'moomoo-market-rest/v1';
+const restOnly = {
+  'read.candle-history': 'quote_history_kline',
+  'read.capital-distribution': 'quote_capital_distribution',
+  'read.capital-flow-history': 'quote_capital_flow_history',
+};
+export function requiresMarketRest(operation, tool) {
+  return Object.hasOwn(restOnly, operation) || Object.values(restOnly).includes(tool);
+}
 export const marketRestSpecs = Object.fromEntries(Object.entries({
   'read.ticker': 'quote_stock_quote', 'read.depth': 'quote_order_book',
-  'read.tape': 'quote_rt_ticker', 'read.candles': 'quote_cur_kline', 'read.candle-history': 'quote_history_kline',
+  'read.tape': 'quote_rt_ticker', 'read.candles': 'quote_cur_kline', ...restOnly,
 }).map(([operation, tool]) => {
   const [method, path] = marketRestRoutes[tool].split(' ');
   const spec = { profile, tool, method, path, rows_path: [], pin_inputs: true };
@@ -32,7 +40,7 @@ export function marketPage(spec, parameters, wire) {
   const page = { rows: requested ? rows.map(row => ({ ...row, ...requested })) : rows, decimals: rows.map(() => ({})) };
   if (pagination) {
     page.pagination = { completed: !pagination.has_more, next_cursor: pagination.next_page_token ?? pagination.next_time?.toString() ?? null,
-      next_page_token: pagination.next_page_token, next_time: pagination.next_time };
+      ...(Object.hasOwn(pagination, 'next_page_token') && { next_page_token: pagination.next_page_token }), next_time: pagination.next_time };
   }
   return page;
 }

@@ -30,6 +30,7 @@ const INSTALLED_DIGESTS = {
   'connectors/moomoo-crypto-report.mjs': 'c2b3243017953859f0a3bd62488039fd9c9c52d2ce74e0459f7e033929d7cbb1',
   'connectors/moomoo-watchlist.mjs': 'c413faab25621f69dd450d3f31e57d22e5cf4e64122bf60f71f1fa823af135b6',
   'connectors/moomoo-rest-wire.mjs': '83c70e80614c537f821300e8c9126cfb186554241958940cd357b21aa76eea65',
+  'connectors/moomoo-capital-flow.mjs': '7e4e3d57007eda2ff44705b9b6e3ee0190ec981fab0ead9ff695e58b58a1cf61',
   'connectors/moomoo-market-rest.mjs': '844dcda2985cee55b9d10fc10f022956abd733a87a3beaffc266ae8f9d41269f',
   'connectors/moomoo-stock-screen.mjs': '637730130ac76d63f7f39c54527716e663694c458cc21612a6590d6db4b3d1a1',
   'connectors/moomoo-fields.json': '5a3adf13c7925ef33884fcbe87b882992a93733933fbd631f572218b6d7c1d13',

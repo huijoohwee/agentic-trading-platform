@@ -16,15 +16,30 @@ function gateway(operation, rows, decimals, metadata = {}) {
 test('every reviewed research mapping has named columns, units and a readable empty result', async () => {
   const operations = ['read.calendar', ...Object.keys(researchMapping.operations), ...Object.keys(marketRestSpecs)].sort();
   assert.deepEqual(Object.keys(researchDisplaySchema).sort(), operations);
-  assert.equal(operations.length, 35);
+  assert.equal(operations.length, 37);
   for (const name of operations) {
     const schema = researchDisplaySchema[name];
     assert.ok(schema.columns.length && schema.units);
     const page = await readResearchPage(gateway(name, [], [], schema.paged
-      ? { pagination: { completed: true, next_cursor: null, total: 0, ...(name === 'read.candle-history' && { next_page_token: null, next_time: null }) } } : {}));
+      ? { pagination: { completed: true, next_cursor: null, total: 0, ...(name === 'read.candle-history' && { next_page_token: null, next_time: null }),
+          ...(name === 'read.capital-flow-history' && { next_time: null }) } } : {}));
     assert.deepEqual(page.rows, []);
     assert.equal(page.units, schema.units);
   }
+});
+
+test('saved capital flow history binds its millisecond cursor to the page and rejects mixed series', async () => {
+  const operation = 'read.capital-flow-history';
+  const row = { symbol: 'US.QQQ', period_type: 'DAY', capital_flow_item_time: at, in_flow: '-0.0010',
+    main_in_flow: '1', super_in_flow: '2', big_in_flow: '-1', mid_in_flow: '0', sml_in_flow: '3' };
+  const open = (rows, page) => readResearchPage(gateway(operation, rows, rows.map(() => ({})), { pagination: page }));
+  const more = { completed: false, next_cursor: String(at), next_time: at };
+  assert.equal((await open([row], more)).rows[0].in_flow, '-0.0010');
+  await assert.rejects(open([], more));
+  await assert.rejects(open([row], { ...more, next_time: at - 1 }));
+  await assert.rejects(open([row], { ...more, completed: true, next_cursor: null }));
+  await assert.rejects(open([row, row], more));
+  await assert.rejects(open([row, { ...row, symbol: 'US.DIA', capital_flow_item_time: at + 1 }], more));
 });
 
 test('saved candle history distinguishes backward timestamps from opaque tokens and rejects conflicting continuations', async () => {
