@@ -24,7 +24,16 @@ function columns(spec) {
 
 const level = { columns: ['price', 'raw_volume', 'volume', 'order_count'], decimalText: ['price', 'volume'],
   exactIntegers: ['raw_volume'], integers: ['order_count'], nullable: ['volume'] };
+const distributionAmounts = ['in', 'out'].flatMap(side =>
+  ['super', 'big', 'mid', 'small'].map(size => 'capital_' + side + '_' + size));
+const flowAmounts = ['in_flow', 'main_in_flow', 'super_in_flow', 'big_in_flow', 'mid_in_flow', 'sml_in_flow'];
+const optionalFlow = ['main_deal_ratio', 'acc_main_in_flow'];
 const marketColumns = {
+  'read.capital-distribution': { columns: ['symbol', 'update_time', ...distributionAmounts], rowLimit: 1,
+    text: ['symbol'], integers: ['update_time'], decimalText: distributionAmounts },
+  'read.capital-flow-history': { columns: ['symbol', 'period_type', 'capital_flow_item_time', ...flowAmounts],
+    text: ['symbol', 'period_type'], integers: ['capital_flow_item_time'], optional: optionalFlow,
+    decimalText: [...flowAmounts, ...optionalFlow], rowLimit: 1000, paged: true },
   'read.ticker': { columns: ['symbol', 'name', 'market_date', 'time_ms', 'last', 'price_source', 'open', 'high', 'low', 'prev_close', 'volume', 'turnover', 'suspended'],
     text: ['symbol', 'name', 'market_date', 'price_source'], integers: ['time_ms'], booleans: ['suspended'], exactIntegers: ['volume'],
     decimalText: ['last', 'open', 'high', 'low', 'prev_close', 'turnover'], nullable: ['open', 'high', 'low', 'prev_close', 'volume', 'turnover', 'suspended'] },

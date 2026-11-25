@@ -3,7 +3,7 @@ import { STOCK_SCREEN_PATH, STOCK_SCREEN_TOOL, buildMoomooStockScreen, projectMo
 import { createPrivateKey, sign } from 'node:crypto';
 import { validateProviderDefinition } from './provider-mapping.mjs';
 import { marketReadParameters, marketReadSymbol, projectMarketReadPage } from './market-read-projection.mjs';
-import { isMarketRest, verifyMarketRest, marketRequest, marketPage } from './moomoo-market-rest.mjs';
+import { isMarketRest, requiresMarketRest, verifyMarketRest, marketRequest, marketPage } from './moomoo-market-rest.mjs';
 import { MARKET_READ_OPERATIONS } from './mcp-market-read.mjs';
 import { boundedJson, canonical, current, fail, id, requireProofs, requireThat, scopeKey, sha } from './core.mjs';
 
@@ -41,7 +41,7 @@ export function createRestMarketReadAdapter({ provider, token, mapping, attestat
     const screen = operation === 'read.stock-screen';
     if (simulatorOperation(operation) || spec.profile === 'moomoo-simulator-read/v1' ||
       spec.path?.startsWith('/api/v1.0/sim-trade/') || spec.tool?.startsWith('sim_trade_')) verifySimulatorSpec(operation, spec, origin);
-    else if (operation === 'read.candle-history' || isMarketRest(spec)) verifyMarketRest(operation, spec, origin);
+    else if (requiresMarketRest(operation, spec.tool) || isMarketRest(spec)) verifyMarketRest(operation, spec, origin);
     else if (screen) requireThat(spec.method === 'POST' && spec.path === STOCK_SCREEN_PATH && spec.tool === STOCK_SCREEN_TOOL &&
       spec.profile === 'moomoo-stock-screen/v1' && spec.pin_inputs === true, 'INVALID_MAPPING');
     else requireThat(spec.method === 'GET' && spec.tool !== STOCK_SCREEN_TOOL, 'INVALID_MAPPING');

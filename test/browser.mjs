@@ -129,6 +129,13 @@ async function verifySavedResearch(page, calendar) {
   await view.getByRole('img', { name: /US.QQQ.*candles in file order/ }).waitFor();
   await view.getByText('Volume scale unavailable. Raw quantities are shown in the rows.').waitFor();
   await view.getByText('Backward cursor (Unix ms)', { exact: true }).waitFor();
+  const flow = { symbol: 'US.QQQ', period_type: 'WEEK', capital_flow_item_time: bar.time_ms, in_flow: '-9007199254740993.1000',
+    main_in_flow: '10.000', super_in_flow: '3.00', big_in_flow: '7', mid_in_flow: '0', sml_in_flow: '-2' };
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'flow-fixture', operation: 'read.capital-flow-history' },
+    data: { at: bar.time_ms + 1, source: 'AUTHENTICATED_ADAPTER', rows: [flow], decimals: [{}],
+      pagination: { completed: false, next_cursor: String(bar.time_ms), next_time: bar.time_ms } } });
+  await view.getByText('US.QQQ · ' + bar.time_ms, { exact: true }).click();
+  await view.getByText(flow.in_flow, { exact: true }).waitFor();
   const rows = Array.from({ length: 11 }, (_, i) => ({ symbol: 'HK.' + i, name: 'Example ' + i,
     factors: [{ factor: 'market_cap', raw: '9007199254740993', value: '9007199254740.993' }] }));
   const result = { status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'screen-fixture', operation: 'read.stock-screen' },

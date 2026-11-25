@@ -80,7 +80,15 @@ test('running gateway signs current and historical market REST reads, replays th
   const observation = utc(Date.now() - 2000);
   const historicBar = { time_key: time, date: 20260603, time_zone: 480, open: 344, high: 346, low: 343, close: '345.0000',
     volume: '9007199254740993', turnover: '34500.0' };
+  const distribution = Object.fromEntries(['in', 'out'].flatMap(side =>
+    ['super', 'big', 'mid', 'small'].map(size => ['capital_' + side + '_' + size, '9007199254740993.1000'])));
+  const flowTime = time - 1000;
   const cases = [
+    ['read.capital-distribution', { symbol }, 'GET', symbol + '/capital-distribution', null, { ...distribution, update_time: time }],
+    ['read.capital-flow-history', { symbol, period_type: 'WEEK', count: 2, next_time: time }, 'GET',
+      symbol + '/capital-flow/history?period_type=WEEK&count=2&next_time=' + time, null,
+      { flow_list: [{ capital_flow_item_time: flowTime, in_flow: '-9007199254740993.1000', main_in_flow: '-3.000',
+        super_in_flow: '1.000', big_in_flow: '-4.000', mid_in_flow: '0', sml_in_flow: '-2.00', main_deal_ratio: '0.5000' }], next_time: flowTime }],
     [history, historyInputs, 'GET', symbol + '/history-kline?start=2026-06-03&end=2026-06-04&ktype=110&num=1', null,
       { kline_list: [historicBar], volume_precision: 3, next_time: time }],
     ['read.ticker', { symbol }, 'POST', 'stock-quote', { code_list: [symbol] }, { quote_list: [{ code: symbol, name: 'Example', last_price: '345.600',
@@ -100,7 +108,7 @@ test('running gateway signs current and historical market REST reads, replays th
     if (new URL(url).hostname === '127.0.0.1') return network(url, options);
     const entry = cases.find(x => url === origin + 'api/v1.0/quote/' + x[3]);
     calls.push({ url, method: options.method, body: options.body && JSON.parse(options.body), token: options.headers.Authorization, redirect: options.redirect });
-    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23])"/g, '$1');
+    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...(entry?.[0] === 'read.capital-flow-history' && { pagination: { has_more: true } }), ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23]|-?9007199254740993\.1000)"/g, '$1');
     return new Response(wire, { headers: { 'content-type': 'application/json' } });
   });
   const server = await runtimeCommand(['gateway', path, '0']); t.after(() => new Promise(resolve => server.close(resolve)));
@@ -150,6 +158,13 @@ test('running gateway signs current and historical market REST reads, replays th
       body: body ?? undefined, token: 'Bearer fixture-market-rest-credential', redirect: 'error' });
     const display = await readResearchPage(replay);
     pages[op] = display.rows;
+    if (op === 'read.capital-flow-history') {
+      assert.deepEqual(display.pagination, { completed: false, cursor: String(flowTime), total: null, nextTime: flowTime });
+      assert.equal(display.rows[0].in_flow, '-9007199254740993.1000');
+      assert.equal(display.rows[0].main_deal_ratio, '0.5000');
+      assert.equal(Object.hasOwn(display.rows[0], 'acc_main_in_flow'), false);
+    }
+    if (op === 'read.capital-distribution') assert.equal(display.rows[0].capital_in_super, '9007199254740993.1000');
     if (op === history) {
       assert.deepEqual(display.pagination, { completed: false, cursor: token, total: null, token, nextTime: time });
       const exhausted = await post('/api/gateway', request(op, op + '-exhausted', inputs, sha(inputs)));

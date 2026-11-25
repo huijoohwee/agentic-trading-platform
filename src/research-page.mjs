@@ -49,6 +49,12 @@ function pagination(page, required, operation, rows) {
   check(page.completed ? page.next_cursor === null : typeof page.next_cursor === 'string' &&
     page.next_cursor.length > 0 && page.next_cursor.length <= 1000, 'Invalid continuation cursor.');
   if (Object.hasOwn(page, 'total')) check(Number.isSafeInteger(page.total) && page.total >= 0);
+  if (operation === 'read.capital-flow-history') {
+    const time = page.next_time;
+    check(page.completed ? time === null : Number.isSafeInteger(time) && time > 0 && rows.length > 0);
+    check(page.next_cursor === (time?.toString() ?? null) && rows.every(row => time === null || time <= row.capital_flow_item_time));
+    return { completed: page.completed, cursor: page.next_cursor, total: null, nextTime: time };
+  }
   if (operation === 'read.candle-history') {
     const { next_page_token: token, next_time: time } = page;
     check(token === null || (typeof token === 'string' && /^[0-9a-f]{48}$/.test(token)));
@@ -103,6 +109,14 @@ export async function readResearchPage(file) {
   const symbol = data.market?.symbol;
   check(symbol == null || typeof symbol === 'string' && symbol.length <= 128);
   const rows = data.rows.map((row, i) => projectRow(row, schema, data.decimals?.[i]));
+  if (operation === 'read.capital-flow-history') {
+    const times = rows.map(row => row.capital_flow_item_time);
+    check(new Set(times).size === rows.length && times.every(time => time >= 0 && time <= 8.64e15));
+    check(rows.every(row => row.symbol === (symbol ?? rows[0].symbol) && row.period_type === rows[0].period_type &&
+      ['DAY', 'WEEK', 'MONTH'].includes(row.period_type)));
+  }
+  if (operation === 'read.capital-distribution') check(rows.every(row =>
+    row.update_time >= 0 && row.update_time <= 8.64e15 && row.symbol === (symbol ?? row.symbol)));
   if (operation === 'read.candle-history') check(rows.every(row => Math.abs(row.time_ms) <= 8.64e15));
   return { operation, binding: provider + ' · ' + source, observed, symbol, revision, units: schema.units,
     rows, pagination: pagination(data.pagination, schema.paged, operation, rows),
