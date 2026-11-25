@@ -87,6 +87,12 @@ test('the sealed graph rejects legacy Sheets imports and modified UI projection 
   }
   const basePrefix = 'owners/base/';
   const baseSources = new Map([...assets].filter(([path]) => path.startsWith(basePrefix)).map(([path, bytes]) => [path.slice(basePrefix.length), bytes]));
+  const stylesheet = 'packages/views-react/dist/browser-data-view.css';
+  const css = baseSources.get(stylesheet);
+  const include = '@import "../../../../design/profile.css";\n';
+  if (css.toString().startsWith(include)) {
+    baseSources.set(stylesheet, Buffer.concat([assets.get('owners/design/profile.css'), css.subarray(Buffer.byteLength(include))]));
+  }
   verifyOwner('agentic-base', baseSources);
   baseSources.set('packages/views-react/dist/browser-data-view.js', Buffer.from('export const mountDataView = () => {};'));
   assert.throws(() => verifyOwner('agentic-base', baseSources), /Owner bytes/);

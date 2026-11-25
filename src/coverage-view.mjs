@@ -1,6 +1,6 @@
 import { createRecordLinkCodec } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 import { report, unpackMarketQueries } from './market-query-report.mjs';
-import { mountCoverageRecords } from './coverage-routes-view.mjs';
+import { mountCoverageRecords as mountRecords } from './coverage-routes-view.mjs';
 import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
 
 import { coverageRelations, httpFieldInventory, routeId } from './coverage-relations.mjs';
@@ -9,6 +9,8 @@ import { coverageRelations, httpFieldInventory, routeId } from './coverage-relat
 export async function mountCoverageView(host) {
   const { default: catalog } = await import('../qualification/moomoo/route-inventory.json', { with: { type: 'json' } });
   const node = (tag, text) => { const element = document.createElement(tag); if (text !== undefined) element.textContent = text; return element; };
+  const mountCoverageRecords = (parent, records, config, inspect) =>
+    mountRecords(parent, records, node, { ...config, exportable: true }, inspect);
   const summary = coverageSummary();
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
@@ -44,7 +46,7 @@ export async function mountCoverageView(host) {
   finder.append(node('h4', 'Find a provider route'), summaryLine,
     node('p', 'Gateway owns provider route definitions. Trading owns mappings and admission. Each connected read requires host-specific rights, a provider-enforced $0 limit and remaining quota.'));
   let selectedTools, fieldView;
-  const routeView = mountCoverageRecords(finder, rows, node, { id: 'route', key: routeId, onSelect: row => remember({ view: 'route', record: routeId(row) }), plural: 'routes', singular: 'route', title: 'Routes',
+  const routeView = mountCoverageRecords(finder, rows, { id: 'route', key: routeId, onSelect: row => remember({ view: 'route', record: routeId(row) }), plural: 'routes', singular: 'route', title: 'Routes',
     columns: [text('label', 'Route or tool'), category('transport', 'Transport'), category('status', 'Disposition'), category('scope', 'Access scope')],
     rowDimension: 'transport', groupDimension: 'status' }, (row, detail) => {
     detail.append(node('h5', row.label), node('p', row.scope + ' · ' + row.evidence), node('p', row.units));
@@ -66,7 +68,8 @@ export async function mountCoverageView(host) {
   const totals = [...new Set(queries.map(q => q.Transport))].map(kind =>
     queries.filter(q => q.Transport === kind).length + ' ' + kind);
   querySection.append(node('h4', 'Outstanding market and research queries'), node('p', totals.join(' · ') + ' · Report snapshot at Trading ' + revision));
-  mountCoverageRecords(querySection, queries, node, { id: 'market-query', title: 'Market queries', plural: 'queries', singular: 'query',
+  mountCoverageRecords(querySection, queries, { id: 'market-query', title: 'Market queries', plural: 'queries', singular: 'query',
+    exportColumns: report.headers.map(name => ({ id: name, name })),
     columns: [text('label', 'Route or tool'), category('Transport', 'Transport'), category('Source section', 'Source section'),
       text('Related HTTP bindings', 'HTTP bindings'), text('Additional implementation evidence', 'Implementation evidence')],
     rowDimension: 'Source section', groupDimension: 'Transport', boardPageSize: 48 }, (query, detail) => {
@@ -84,7 +87,7 @@ export async function mountCoverageView(host) {
     const section = parts[0] === 'api' ? parts[1] ?? 'api' : parts[0] ?? 'Home';
     return { label: source.path, section, locale, hash: source.reference.sha256, routeCount: source.reference.routes.length, reference: source.reference };
   });
-  const referenceView = mountCoverageRecords(supplement, sources, node, { id: 'reference', key: row => row.label, onSelect: row => remember({ view: 'reference', record: row.label }), title: 'References', plural: 'references', singular: 'reference',
+  const referenceView = mountCoverageRecords(supplement, sources, { id: 'reference', key: row => row.label, onSelect: row => remember({ view: 'reference', record: row.label }), title: 'References', plural: 'references', singular: 'reference',
     columns: [text('label', 'Reference path'), category('section', 'Section'), category('locale', 'Locale'), text('hash', 'SHA-256'), number('routeCount', 'Routes listed')],
     rowDimension: 'locale', groupDimension: 'section' }, (row, detail) => {
     sourceLine(detail, row.label, catalog.origin + '/' + row.reference.file, row.hash);
@@ -95,7 +98,7 @@ export async function mountCoverageView(host) {
   });
   families.append(node('h4', 'Feature families'), counts);
   const entries = providerCoverage.map(entry => ({ ...entry, operationNames: entry.operations.join(', '), readCount: mappedReads([entry]).length }));
-  mountCoverageRecords(families, entries, node, { id: 'family', title: 'Feature families', plural: 'families', singular: 'family',
+  mountCoverageRecords(families, entries, { id: 'family', title: 'Feature families', plural: 'families', singular: 'family',
     columns: [text('label', 'Feature family'), category('transport', 'Transport'), category('status', 'Disposition'), { id: 'operationNames', name: 'Operation IDs', format: 'code-list' }, number('readCount', 'Mapped reads')],
     measure: { label: 'Distinct mapped reads', count: group => mappedReads(group).length },
     rowDimension: 'transport', groupDimension: 'status' }, (entry, detail) => {
@@ -130,7 +133,7 @@ export async function mountCoverageView(host) {
       const records = httpFieldInventory(register, catalog);
       if (!register.tools.every(tool => links.tools.from(tool.name).length)) throw Error('FIELD_ROUTE_MISSING');
       fieldStatus.textContent = records.length + ' field records across ' + register.tools.length + ' public tools';
-      fieldView = mountCoverageRecords(fields, records, node, { id: 'field', plural: 'fields', singular: 'field', title: 'HTTP fields',
+      fieldView = mountCoverageRecords(fields, records, { id: 'field', plural: 'fields', singular: 'field', title: 'HTTP fields',
         onDimension(value) {
           toolRoutes.replaceChildren();
           if (value !== 'All') related(toolRoutes, 'Routes for ' + value, routeLinks(value));

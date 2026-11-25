@@ -1,8 +1,24 @@
+import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+
+async function downloadView(page, view, label) {
+  await view.getByRole('button', { name: 'Export view' }).click();
+  const download = page.waitForEvent('download');
+  await view.getByRole('button', { name: label, exact: true }).click();
+  const file = await download;
+  assert.equal(await file.failure(), null);
+  return readFile(await file.path(), 'utf8');
+}
 
 export async function verifyRouteViews(page) {
   const routes = page.locator('#coverage-routes');
   const layout = routes.getByRole('combobox', { name: 'View layout' });
+  const records = JSON.parse(await downloadView(page, routes, 'JSON'));
+  assert.equal(records.rows.length, 389);
+  assert.equal(records.columns[0], 'Route or tool');
+  const csv = await downloadView(page, page.locator('#coverage-market-queries'), 'CSV');
+  const snapshot = await readFile(new URL('../qualification/moomoo/outstanding-market-queries.csv', import.meta.url), 'utf8');
+  assert.equal(csv.replaceAll('\r\n', '\n'), snapshot.replaceAll('\r\n', '\n'));
   const family = page.locator('#coverage-families'), reference = page.locator('#coverage-references');
   const operations = ['read.catalog', 'read.candles', 'read.ticker', 'read.depth', 'read.tape', 'read.candle-history'];
   const firstCell = family.getByRole('row').filter({ hasText: 'Realtime quotes, history, book and tape' }).getByRole('cell').nth(3);
@@ -50,7 +66,12 @@ export async function verifyRouteViews(page) {
   for (const total of ['258', '107', '24', '389']) await matrix.getByRole('cell', { name: total, exact: true }).first().waitFor();
   await matrix.getByRole('button', { name: /Current table orientation/ }).click();
   await matrix.getByText('389', { exact: true }).first().waitFor();
+  const counts = JSON.parse(await downloadView(page, routes, 'JSON'));
+  assert.equal(counts.columns[0], 'Field');
+  assert.equal(counts.rows.at(-1).at(-1), 389);
   await layout.selectOption('kanban');
+  const markdown = await downloadView(page, routes, 'Markdown');
+  assert.equal(markdown.trimEnd().split('\n').length, records.rows.length + 2);
   const board = routes.getByRole('region', { name: 'Routes by disposition', exact: true });
   await board.getByRole('heading', { name: /offline replay.*24/ }).waitFor();
   const more = board.getByRole('button', { name: 'Show more candidate records' });

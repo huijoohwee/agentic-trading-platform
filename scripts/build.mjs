@@ -77,8 +77,8 @@ export function readPinnedBytes(repoRoot, revision, path, maxBuffer = 500000) {
 }
 const pins = [
   { repo: 'agentic-base', prefix: 'base', revision: ownerRevisions['agentic-base'],
-    digest: '5cd07dc4f15bccf15ad1b987ed81307475e5673f93ac1c2917fb8065922178c7',
-    paths: ['LICENSE', ...['index','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
+    digest: '0585f0a073a30c21640108b20b72719ad2f513d9bdc6a233ffef720ddb95c194',
+    paths: ['LICENSE', ...['index','record-workspace','record-field-controls','record-fields','record-links','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
   { repo: 'agentic-sheets', prefix: 'sheets', revision: ownerRevisions['agentic-sheets'],
     digest: '067f22546a65190f7010830ba6b9d9d66b70dd1a67b1c9a32c504c128fb95c69',
@@ -138,6 +138,17 @@ export async function assemble({ devDocumentPolicy } = {}) {
       assets.set('owners/' + pin.prefix + '/' + output, body);
     }
   }
+  // Both verified owners ship the same token profile. Resolve it once even inside a shadow root.
+  const baseCss = 'owners/base/packages/views-react/dist/browser-data-view.css';
+  const profile = assets.get('owners/design/profile.css');
+  const bundled = assets.get(baseCss);
+  if (bundled.subarray(0, profile.length).equals(profile) && !/url\(|@import/i.test(profile.toString())) {
+    assets.set(baseCss, Buffer.concat([Buffer.from('@import "../../../../design/profile.css";\n'), bundled.subarray(profile.length)]));
+  }
+  for (const name of ['browser-files', 'record-export']) {
+    const source = import.meta.resolve('agentic-gateway/transfer/' + name);
+    assets.set('owners/gateway/transfer/' + name + '.mjs', await readFile(new URL(source)));
+  }
   const files = ['web/observe.html','src/observer-view.mjs','web/desk.html', 'web/trading.css', 'web/desk.css', ...['desk-lab','research-catalog','desk-actions','landing-tools','contracts','market','market-reads','indicators','chart','experiment','strategy-language','scientific-packages','strategy-example','experiment-worker',
     'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
@@ -178,6 +189,13 @@ export async function assemble({ devDocumentPolicy } = {}) {
       const metaPolicy = devDocumentPolicy.split('; ').filter(rule => !rule.startsWith('frame-ancestors ')).join('; ');
       assets.set(document, Buffer.from(template.replace(policyTag, (_, open, close) => open + metaPolicy + close)));
     }
+  }
+  // Compact the dashboard views for the sealed offline download. Keep module boundaries for lazy loading.
+  const { transform } = await import('esbuild');
+  for (const [path, bytes] of assets) {
+    if (!/^src\/(?:.+-view|desk-.+|rehearsal-.+|market-.+|replay)\.mjs$/.test(path)) continue;
+    const { code } = await transform(bytes, { sourcefile: path, format: 'esm', target: 'esnext', minify: true });
+    assets.set(path, Buffer.from(code));
   }
   verifyImports(assets);
   const template = await readFile(join(root, 'web/sw.js'), 'utf8');
