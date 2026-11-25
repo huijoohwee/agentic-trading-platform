@@ -133,7 +133,14 @@ export async function readResearchPage(file) {
   if (operation === 'read.capital-distribution') check(rows.every(row =>
     row.update_time >= 0 && row.update_time <= 8.64e15 && row.symbol === (symbol ?? row.symbol)));
   if (operation === 'read.candle-history') check(rows.every(row => Math.abs(row.time_ms) <= 8.64e15));
+  // REST ingestion keeps provider context inside the signed page attestation.
+  const attestedPage = data.market_attestation?.header;
+  const metadataSource = data.metadata ?? attestedPage?.metadata;
+  const summarySource = data.summary ?? attestedPage?.summary;
+  const metadata = schema.metadata ? projectRow(metadataSource, schema.metadata) : undefined;
+  const summary = schema.summary ? projectRow(summarySource, schema.summary) : undefined;
   return { operation, binding: provider + ' · ' + source, observed, symbol, revision, units: schema.units,
+    ...(metadata && { metadata }), ...(summary && { summary }),
     rows, pagination: pagination(data.pagination, schema.paged, operation, rows),
     ...(Object.hasOwn(data, 'last_valid_time_ms') && {
       lastValid: data.last_valid_time_ms === null ? null : isoTime(data.last_valid_time_ms) }) };

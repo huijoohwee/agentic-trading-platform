@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
 import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
-import { researchRestTools, researchTools } from '../src/moomoo-research-tools.mjs';
-import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
+import { arkTools, researchRestTools, researchTools } from '../src/moomoo-research-tools.mjs';
+import { providerCoverage, providerCoverageForCatalog, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
 
 const statuses = ['mapped', 'candidate', 'paper-candidate', 'excluded'];
 const transports = ['MCP', 'REST', 'MCP+REST', 'PUSH'];
@@ -53,6 +53,30 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   assert.deepEqual(Object.keys(researchRestTools).filter(operation => !analyst.operations.includes(operation)), []);
   assert.equal(Object.keys(researchRestTools).length, 10);
   for (const operation of Object.keys(researchRestTools)) assert(summary.mapped_operations.includes(operation));
+});
+
+test('ARK coverage is derived from the pinned Gateway catalog and descriptors', () => {
+  const entries = providerCoverageForCatalog(catalog), summary = coverageSummary(entries);
+  const family = entries.find(entry => entry.id === 'ark-market-research');
+  assert.equal(Object.keys(arkTools).length, 9);
+  assert.deepEqual(family.operations, Object.keys(arkTools));
+  assert.equal(family.sources.length, 9);
+  assert.equal(family.transport, 'REST');
+  assert.equal(family.status, 'mapped');
+  for (const source of family.sources) {
+    const doc = catalog.sources.find(item => item.file === source.path);
+    assert.equal(doc?.sha256, source.sha256, source.path);
+  }
+  for (const [operation, tool] of Object.entries(arkTools)) {
+    const spec = marketRestSpecs[operation], route = routeInventory(catalog).find(row => row.label === spec.method + ' ' + spec.path);
+    assert.equal(route.status, 'mapped', operation);
+    assert.equal(route.scope, 'quote:read');
+    assert.equal(route.evidence, 'Signed local market REST fixture');
+    assert.match(route.units, /Documented fields:/);
+    assert(summary.mapped_operations.includes(operation));
+  }
+  assert.equal(summary.families, providerCoverage.length + 1);
+  assert(summary.rest_only_mapped.includes('ark-market-research'));
 });
 
 test('pinned route inventory reconciles aliases, transport-specific evidence and known gaps', () => {

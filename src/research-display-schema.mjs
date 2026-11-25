@@ -1,7 +1,7 @@
 import { researchMapping } from '../runtime/moomoo-research.mjs';
 import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
-import { describeMoomooIpo, describeMoomooRanking, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
-import { rankingTools, regionalIpoTools, researchRestTools } from './moomoo-research-tools.mjs';
+import { describeMoomooArk, describeMoomooIpo, describeMoomooRanking, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { arkTools, rankingTools, regionalIpoTools, researchRestTools } from './moomoo-research-tools.mjs';
 import { researchRouteUnits } from './provider-coverage.mjs';
 
 // The builder seals these display fields. Dispatch definitions and Node runtime dependencies stay on the host.
@@ -36,6 +36,24 @@ function researchRestColumns(tool) {
     ...(spec.pagination && { paged: true, cursorLimit: spec.cursor_limit,
       optionalTotal: spec.optional_total !== false }) };
 }
+function arkFields(names, descriptor, optional = []) {
+  const dates = descriptor.date.filter(name => names.includes(name));
+  return { columns: names.filter(name => !optional.includes(name)),
+    ...(optional.length && { optional }),
+    text: [...new Set([...descriptor.text, ...dates])].filter(name => names.includes(name)),
+    integers: descriptor.integers.filter(name => names.includes(name)),
+    decimalText: descriptor.decimal_text.filter(name => names.includes(name)) };
+}
+function arkColumns(tool) {
+  const descriptor = describeMoomooArk(tool);
+  const pageLimit = descriptor.row_limit
+    ? descriptor.params[descriptor.row_limit.input]?.integer?.[1] ?? descriptor.row_limit.fallback
+    : descriptor.series_limit ?? 1;
+  return { ...arkFields(descriptor.field_names, descriptor, descriptor.optional_fields), rowLimit: pageLimit,
+    ...(descriptor.pagination && { paged: true, cursorLimit: descriptor.cursor_limit, optionalTotal: true }),
+    ...(descriptor.metadata_fields && { metadata: arkFields(descriptor.metadata_fields, descriptor) }),
+    ...(descriptor.summary_fields && { summary: arkFields(descriptor.summary_fields, descriptor) }) };
+}
 
 const level = { columns: ['price', 'raw_volume', 'volume', 'order_count'], decimalText: ['price', 'volume'],
   exactIntegers: ['raw_volume'], integers: ['order_count'], nullable: ['volume'] };
@@ -44,6 +62,7 @@ const distributionAmounts = ['in', 'out'].flatMap(side =>
 const flowAmounts = ['in_flow', 'main_in_flow', 'super_in_flow', 'big_in_flow', 'mid_in_flow', 'sml_in_flow'];
 const optionalFlow = ['main_deal_ratio', 'acc_main_in_flow'];
 const marketColumns = {
+  ...Object.fromEntries(Object.entries(arkTools).map(([operation, tool]) => [operation, arkColumns(tool)])),
   ...Object.fromEntries(Object.entries(researchRestTools).map(([operation, tool]) =>
     [operation, researchRestColumns(tool)])),
   ...Object.fromEntries(Object.entries(regionalIpoTools).map(([operation, tool]) => {

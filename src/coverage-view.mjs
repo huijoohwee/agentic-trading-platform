@@ -1,17 +1,18 @@
 import { createRecordLinkCodec } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 import { report, unpackMarketQueries } from './market-query-report.mjs';
 import { mountCoverageRecords as mountRecords } from './coverage-routes-view.mjs';
-import { providerCoverage, coverageSummary, mappedReads, routeInventory } from './provider-coverage.mjs';
+import { providerCoverageForCatalog, coverageSummary, mappedReads, routeInventory } from './provider-coverage.mjs';
 
 import { coverageRelations, httpFieldInventory, namingDictionaries, routeId } from 'agentic-gateway/connectors/moomoo-coverage';
 
 // Browse the saved catalog and evidence for each host.
 export async function mountCoverageView(host) {
   const { default: catalog } = await import('../qualification/moomoo/route-inventory.json', { with: { type: 'json' } });
+  const entries = providerCoverageForCatalog(catalog);
   const node = (tag, text) => { const element = document.createElement(tag); if (text !== undefined) element.textContent = text; return element; };
   const mountCoverageRecords = (parent, records, config, inspect) =>
     mountRecords(parent, records, node, { ...config, exportable: true }, inspect);
-  const summary = coverageSummary();
+  const summary = coverageSummary(entries);
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
   const references = catalog.sources.filter(source => source.reference);
@@ -112,8 +113,8 @@ export async function mountCoverageView(host) {
       link(edge.label, { view: 'route', record: edge.target })));
   });
   families.append(node('h4', 'Feature families'), counts);
-  const entries = providerCoverage.map(entry => ({ ...entry, operationNames: entry.operations.join(', '), readCount: mappedReads([entry]).length }));
-  mountCoverageRecords(families, entries, { id: 'family', title: 'Feature families', plural: 'families', singular: 'family',
+  const familyRows = entries.map(entry => ({ ...entry, operationNames: entry.operations.join(', '), readCount: mappedReads([entry]).length }));
+  mountCoverageRecords(families, familyRows, { id: 'family', title: 'Feature families', plural: 'families', singular: 'family',
     columns: [text('label', 'Feature family'), category('transport', 'Transport'), category('status', 'Disposition'), { id: 'operationNames', name: 'Operation IDs', format: 'code-list' }, number('readCount', 'Mapped reads')],
     measure: { label: 'Distinct mapped reads', count: group => mappedReads(group).length },
     rowDimension: 'transport', groupDimension: 'status' }, (entry, detail) => {

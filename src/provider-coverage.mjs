@@ -1,6 +1,6 @@
 import { publicRoutes } from 'agentic-gateway/connectors/moomoo-coverage';
-import { marketRestRoutes, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
-import { ipoRegions, regionalIpoTools, rankingNames, rankingTools, researchRestTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
+import { marketRestRoutes, describeMoomooArk, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { arkTools, ipoRegions, regionalIpoTools, rankingNames, rankingTools, researchRestTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
 // source (path + on-disk SHA-256), the listed MCP tool names (see each route for evidence), the proposed semantic read operations, the outbound transport and an honest status.
@@ -208,8 +208,16 @@ const researchRestEvidence = Object.entries(researchRestTools).map(([, tool]) =>
     (decimals.length ? '; exact decimal text: ' + decimals.join(', ') : '');
   return [marketRestRoutes[tool], marketFixture(units)];
 });
+const arkRestEvidence = Object.entries(arkTools).map(([, tool]) => {
+  const descriptor = describeMoomooArk(tool);
+  const fields = descriptor.field_names;
+  const decimals = descriptor.decimal_text;
+  const units = 'Documented fields: ' + fields.join(', ') +
+    (decimals.length ? '; exact decimal text: ' + decimals.join(', ') : '');
+  return [marketRestRoutes[tool], marketFixture(units)];
+});
 const reviewedRest = new Map([
-  ...researchRestEvidence,
+  ...researchRestEvidence, ...arkRestEvidence,
   ...ipoRegions.map(region => ['GET /api/v1.0/quote/ipo-list/' + region, marketFixture('Native offering currency, share counts and timestamps as reported')]),
   ...rankingNames.map(name => ['GET /api/v1.0/quote/rank/' + name, marketFixture('Provider-ranked symbols, original field units and exact numeric values')]),
   ['POST /api/v1.0/quote/market-state', marketFixture('Provider state per symbol and broker, with reported session seconds and optional trade section')],
@@ -345,4 +353,22 @@ export function routeInventory(catalog) {
       : name === 'quote_stock_screen' ? stockScreenEvidence.units : (researchMcpNames.has(name) || sessionMcpNames.has(name)) ? reviewedRest.get(methodPath)?.units : undefined;
     return { ...route, status, scope, evidence, units: units ?? 'See source field definitions' };
   });
+}
+
+export function providerCoverageForCatalog(catalog) {
+  const routes = routeInventory(catalog);
+  const byLabel = new Map(routes.filter(route => route.transport === 'REST').map(route => [route.label, route]));
+  const sources = [...new Map(Object.values(arkTools).flatMap(tool => {
+    const route = byLabel.get(marketRestRoutes[tool]);
+    if (!route) throw Error('MISSING_ARK_ROUTE_BINDING');
+    return route.sources.map(item => {
+      const doc = catalog.sources.find(entry => entry.path === new URL(item.url).pathname);
+      if (!doc) throw Error('MISSING_ARK_SOURCE_BINDING');
+      return [doc.file, source(doc.file, doc.sha256)];
+    });
+  })).values()];
+  const operations = Object.keys(arkTools);
+  const arkFamily = family('ark-market-research', 'ARK market research', 'mapped', 'REST', operations, [], sources,
+    'Nine Gateway descriptor-backed REST reads. Signed local fixtures preserve exact decimals, dates, bounded cursors, metadata and summary fields.');
+  return Object.freeze([...providerCoverage, arkFamily]);
 }

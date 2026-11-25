@@ -14,14 +14,14 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = '9b37a78d9f72ff8281dcd3fd05a25f35194b556b';
+const REVISION = '995041137eff1c271606fe303d45c5cc08ad9711';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-HKSIHzwrhWCEeYqEDiyZCgcclmFOTP/mLLrPGn4wxrcUR2jDAIetgnbunpWNPklbKJRDgoaMw6NDjJa29sqzKA==';
+const LOCK_INTEGRITY = 'sha512-TnCSkE3ssyKzRnJds+h+Fc7SJgO5VjoZxrGXVuNsnBXWp0H6HxucPk9jIXsvYGQgDimJoKUwxJpu0WyLM+ddkg==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
   'transfer/record-export.mjs': '79e108308b536935f48277d956a25a76d0fa9c3fe0a90e2b63cb3645a121c5b8',
   'transfer/browser-files.mjs': '5816be9e6336695bf53e5b4d4d3019e99c1ccb18a8665783ece9471dfa52f595',
-  'package.json': '47e9671f21001b312b54a1cecbb342f5929cd151cc3d61c85e95bfcf0321e6da',
+  'package.json': '801504a8d4c3fc336741f4130ea6c81ed1837ac0a5b70449d5d0bb250aea90c5',
   'connectors/moomoo-securities-history.mjs': '3006992c4c22f3add8b53ab0752ba9fbb864284b02960b5458dc14a2d70f9e2b',
   'vendor/agentic-base/record-links.mjs': 'abe47bd1d080c4522b3f3808c724ddaf7283abb75e6499bba213a1cbfb301b1f',
   'resolver.mjs': '3beccdaaa511086434c8628edab831ad47ebe3a585c04947fc9020b7f66d4116',
@@ -35,7 +35,8 @@ const INSTALLED_DIGESTS = {
   'connectors/moomoo-rank.mjs': 'df8ceb300faf0624332de33d2efeeaf06db0bb0f949fb145cc7bd8c127985375',
   'connectors/moomoo-calendar.mjs': '5b107f499457cc2cb308e8efa18783eb309a98cf5c4c9630b087d6bb3841858f',
   'connectors/moomoo-ipo.mjs': 'fb026793c3aff46d76784ec1f50bc992539babdb0af3b94662c1cd5c0bde29d6',
-  'connectors/moomoo-market-rest.mjs': 'f437ac97e15066a82566a40498cedbef4b0d872240e6ab022f6d4084048f3f36',
+  'connectors/moomoo-market-rest.mjs': '27fa8ecc36f92c6f4475f87dacfbef2a8dd18767ee9d6b44ed3424735eee7a9e',
+  'connectors/moomoo-ark.mjs': '30c78240788dec3cadf815eb78cb5160b1e457f41938c9f365e622f51d44d262',
   'connectors/moomoo-research.mjs': 'd2fafff4e1043483a5a579822d508a946201a31d554570f5a3e09089df3ff458',
   'connectors/moomoo-stock-screen.mjs': '637730130ac76d63f7f39c54527716e663694c458cc21612a6590d6db4b3d1a1',
   'connectors/moomoo-fields.json': '5a3adf13c7925ef33884fcbe87b882992a93733933fbd631f572218b6d7c1d13',
