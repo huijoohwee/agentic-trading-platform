@@ -25,13 +25,18 @@ export async function verifyTradingSkills(page, mobile) {
   await trigger.waitFor();
   assert.equal(await toolbar.count(), 1);
   assert.deepEqual(await toolbar.locator(':scope > .agentic-toolbar-item').allTextContents(),
-    ['Open paper trading desk', 'Decision journal', 'Skills & Commands']);
+    ['Open paper trading desk', 'Decision journal', 'OpenAPI coverage', 'Skills & Commands']);
   const deskLink = toolbar.getByRole('link', { name: 'Open paper trading desk', exact: true });
   const journalLink = toolbar.getByRole('link', { name: 'Decision journal', exact: true });
   assert.equal(await deskLink.getAttribute('href'), './desk.html');
   assert.equal(await journalLink.getAttribute('href'), './');
   assert.equal(await toolbar.locator('[aria-current="page"]').count(), 1);
   const current = new URL(page.url()).pathname.endsWith('/desk.html') ? deskLink : journalLink;
+  const coverage = toolbar.getByRole('link', { name: 'OpenAPI coverage', exact: true });
+  const target = new URL(await coverage.getAttribute('href'), page.url());
+  assert.equal(target.origin, new URL(page.url()).origin);
+  assert.equal(target.hash, '#provider-coverage');
+  assert.equal(target.pathname.endsWith('/desk.html'), false);
   assert.equal(await current.getAttribute('aria-current'), 'page');
   const ticketBefore = await ticketValues();
   assert.equal(await trigger.getAttribute('aria-expanded'), 'false');

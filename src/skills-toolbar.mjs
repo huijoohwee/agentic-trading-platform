@@ -1,5 +1,18 @@
 // Both Trading pages use the native Design System toolbar and the same lazy panel.
 const toolbar = document.getElementById('trading-toolbar');
+const journal = toolbar.querySelector('[data-page="journal"]');
+if (journal.hasAttribute('aria-current')) {
+  const coverage = toolbar.querySelector('[data-page="coverage"]');
+  coverage.setAttribute('href', '#provider-coverage');
+  function markLocation() {
+    const onCoverage = location.hash.split('?')[0] === coverage.hash;
+    (onCoverage ? journal : coverage).removeAttribute('aria-current');
+    (onCoverage ? coverage : journal).setAttribute('aria-current', onCoverage ? 'location' : 'page');
+  }
+  markLocation();
+  window.addEventListener('hashchange', markLocation);
+  window.navigation?.addEventListener('currententrychange', markLocation);
+}
 const trigger = document.createElement('button');
 const root = document.createElement('div');
 root.id = 'trading-skills-panel';

@@ -12,6 +12,14 @@ async function downloadView(page, view, label) {
 }
 
 export async function verifyRouteViews(page) {
+  const coverageLink = page.getByRole('navigation', { name: 'Trading tools' }).getByRole('link', { name: 'OpenAPI coverage' });
+  await coverageLink.click();
+  assert.equal(await coverageLink.getAttribute('aria-current'), 'location');
+  const dictionaries = page.getByRole('navigation', { name: 'Naming dictionaries' });
+  for (const [area, name] of [['quote', 'Quotes'], ['trading', 'Securities trading'], ['crypto_trading', 'Crypto trading']]) {
+    const source = dictionaries.getByRole('link', { name, exact: true });
+    assert.equal(await source.getAttribute('href'), 'https://open.moomoo.com/api/' + area + '/naming-dictionary');
+  }
   const routes = page.locator('#coverage-routes');
   const layout = routes.getByRole('combobox', { name: 'View layout' });
   const records = JSON.parse(await downloadView(page, routes, 'JSON'));
