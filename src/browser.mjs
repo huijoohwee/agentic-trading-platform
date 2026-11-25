@@ -1,6 +1,7 @@
 import { IndexedDBAdapter } from '../owners/base/src/index.mjs';
 import { assessTicket, readFixture, ticketInputs, utcMillis } from './rules.mjs';
 import { createTicketStore } from './tickets.mjs';
+import { prepareOffline } from './offline-shell.mjs';
 import { mountTradingDashboard } from './dashboard.mjs';
 
 mountTradingDashboard(document);
@@ -16,7 +17,6 @@ let calculationVisible = false, updateCalculation;
 const sections = new Map([
   ['provider-desk', () => import('./moomoo-desk-view.mjs').then(m => m.mountMoomooDeskView(byId('desk-body')))],
   ['private-watchlists', () => import('./watchlist-view.mjs').then(m => m.mountWatchlists(byId('watchlist-body')))],
-  ['provider-coverage', () => import('./coverage-view.mjs').then(m => m.mountCoverageView(byId('coverage-body')))],
   ['provider-capture', () => import('./capture-view.mjs').then(m => m.mountCaptureView(byId('capture-body')))],
   ['provider-hosted', () => import('./hosted-view.mjs').then(m => m.mountHostedView(byId('hosted-body')))],
   ['runtime-readback', () => import('./runtime-view.mjs').then(m => m.mountRuntimeView(byId('runtime-body')))],
@@ -38,29 +38,35 @@ function loadSection(id) {
   }
   return mounted.get(id);
 }
-if ('IntersectionObserver' in window) {
-  const observer = new IntersectionObserver(entries => {
-    for (const item of entries) if (item.isIntersecting) {
-      observer.unobserve(item.target); void loadSection(item.target.id);
-    }
-  }, { rootMargin: '160px 0px' });
-  for (const id of sections.keys()) observer.observe(byId(id));
-} else {
-  for (const id of sections.keys()) void loadSection(id);
+function observeSections() {
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => {
+      for (const item of entries) if (item.isIntersecting) {
+        observer.unobserve(item.target); void loadSection(item.target.id);
+      }
+    }, { rootMargin: '160px 0px' });
+    for (const id of sections.keys()) observer.observe(byId(id));
+  } else {
+    for (const id of sections.keys()) void loadSection(id);
+  }
+}
+function redirectCoverageBookmark() {
+  const hash = location.hash;
+  if (hash !== '#provider-coverage' && !hash.startsWith('#provider-coverage?')) return false;
+  location.replace('./coverage.html' + (hash.includes('?') ? hash : ''));
+  return true;
 }
 async function followSectionLink() {
+  if (redirectCoverageBookmark()) return;
   const hash = location.hash.slice(1);
-  const coverageRecord = hash.startsWith('provider-coverage?');
-  const id = coverageRecord ? 'provider-coverage' : hash === 'replay-dashboard' ? 'rehearsal' : hash;
+  const id = hash === 'replay-dashboard' ? 'rehearsal' : hash;
   if (!sections.has(id)) return;
-  if (!coverageRecord) byId(id).scrollIntoView({ block: 'start' });
+  byId(id).scrollIntoView({ block: 'start' });
   const view = await loadSection(id);
   if (location.hash.slice(1) !== hash) return;
-  if (coverageRecord) await view?.follow(hash);
   if (hash === 'replay-dashboard') await view?.showDashboard();
 }
 window.addEventListener('hashchange', followSectionLink);
-void followSectionLink();
 const form = byId('ticket');
 const fields = byId('fields');
 const feedback = byId('feedback');
@@ -73,54 +79,6 @@ const descriptions = {
   FUTURE_QUOTE: 'The quote was observed after the evaluation time.',
   MISSING_INPUT: 'A valid source timestamp, evaluation time and policy are required.',
 };
-
-async function prepareOffline() {
-  const status = byId('offline-status');
-  try {
-    const registration = await navigator.serviceWorker.register('./sw.js');
-    if (!navigator.serviceWorker.controller) await new Promise((resolve, reject) => {
-      const pending = registration.installing ?? registration.waiting ?? registration.active;
-      const timer = setTimeout(() => finish(false), 15000);
-      function finish(ok) {
-        clearTimeout(timer);
-        pending?.removeEventListener('statechange', observe);
-        navigator.serviceWorker.removeEventListener('controllerchange', observe);
-        if (ok) resolve(); else reject(new Error('Offline shell installation failed.'));
-      }
-      function observe() {
-        if (navigator.serviceWorker.controller) finish(true);
-        else if (pending?.state === 'redundant') finish(false);
-      }
-      pending?.addEventListener('statechange', observe);
-      navigator.serviceWorker.addEventListener('controllerchange', observe);
-      observe();
-    });
-    function show() {
-      status.textContent = registration.waiting
-        ? 'Update ready. Save edits, close all Trading tabs at this address, then reopen.'
-        : navigator.onLine ? 'Offline ready' : 'Working offline';
-    }
-    function watchInstall() {
-      registration.installing?.addEventListener('statechange', show);
-      show();
-    }
-    // Let the browser activate the verified shell after the last old tab closes.
-    // An active journal or paper desk can still contain unsaved work.
-    let lastCheck = 0;
-    function checkOnReturn() {
-      show();
-      if (document.hidden || !navigator.onLine || registration.waiting || registration.installing ||
-          Date.now() - lastCheck < 60_000) return;
-      lastCheck = Date.now();
-      void registration.update().catch(show);
-    }
-    registration.addEventListener('updatefound', watchInstall);
-    watchInstall();
-    window.addEventListener('online', checkOnReturn);
-    window.addEventListener('offline', show);
-    document.addEventListener('visibilitychange', checkOnReturn);
-  } catch { status.textContent = 'Offline shell unavailable'; }
-}
 
 async function start() {
   const response = await fetch('./src/fixture.json');
@@ -254,9 +212,13 @@ async function start() {
   fields.disabled = false;
 }
 
-void prepareOffline();
-start().catch(error => {
-  fields.disabled = true;
-  byId('fatal').hidden = false;
-  byId('fatal').textContent = error.message;
-});
+if (!redirectCoverageBookmark()) {
+  observeSections();
+  void followSectionLink();
+  void prepareOffline(byId('offline-status'));
+  start().catch(error => {
+    fields.disabled = true;
+    byId('fatal').hidden = false;
+    byId('fatal').textContent = error.message;
+  });
+}

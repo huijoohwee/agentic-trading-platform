@@ -14,7 +14,11 @@ async function downloadView(page, view, label) {
 export async function verifyRouteViews(page) {
   const coverageLink = page.getByRole('navigation', { name: 'Trading tools' }).getByRole('link', { name: 'OpenAPI coverage' });
   await coverageLink.click();
-  assert.equal(await coverageLink.getAttribute('aria-current'), 'location');
+  await page.waitForURL('**/coverage.html');
+  assert.equal(await coverageLink.getAttribute('aria-current'), 'page');
+  await page.getByRole('heading', { level: 1, name: 'Moomoo OpenAPI coverage', exact: true }).waitFor();
+  assert.equal(await page.locator('main [data-agentic-base-dashboard-layout]').count(), 1);
+  assert.equal(await page.locator('#journal, #ticket').count(), 0);
   const dictionaries = page.getByRole('navigation', { name: 'Naming dictionaries' });
   for (const [area, name] of [['quote', 'Quotes'], ['trading', 'Securities trading'], ['crypto_trading', 'Crypto trading']]) {
     const source = dictionaries.getByRole('link', { name, exact: true });
@@ -163,7 +167,10 @@ export async function verifyRouteViews(page) {
     await linkedFields.scrollIntoViewIfNeeded();
     await linkedFields.getByText('1–3 of 3', { exact: true }).waitFor();
     assert.deepEqual(await linkedFields.locator('tbody tr td:first-child code').allTextContents(), ['acc_id', 'orderId', 'req_id']);
-    await bookmark.goto(fieldUrl);
+    const oldFieldUrl = new URL('./', fieldUrl);
+    oldFieldUrl.hash = new URL(fieldUrl).hash;
+    await bookmark.goto(oldFieldUrl.href);
+    await bookmark.waitForURL(fieldUrl);
     const restored = bookmark.locator('#coverage-fields');
     await restored.getByRole('row', { name: 'Data row: orderId', selected: true }).waitFor();
     await restored.getByRole('combobox', { name: 'View layout' }).selectOption('multiDimensional');

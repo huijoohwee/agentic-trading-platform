@@ -91,12 +91,12 @@ async function checkDashboard(page, columns) {
   assert.equal(await dashboard.getByRole('region', {name:'Dashboard highlight'}).locator('#window').count(), 1);
   assert.equal(await dashboard.locator(':scope > .agentic-base-dashboard-layout-sections #evidence').count(), 1);
   const sections = dashboard.locator('.journal-section');
-  assert.equal(await sections.count(), 9);
+  assert.equal(await sections.count(), 8);
   for (const section of await sections.all()) {
     assert.equal(await section.locator(':scope > h2').isVisible(), true);
     assert.equal(await section.locator(':scope > summary').count(), 0);
   }
-  assert.equal(await dashboard.getByRole('navigation', { name: 'Journal sections' }).getByRole('link').count(), 9);
+  assert.equal(await dashboard.getByRole('navigation', { name: 'Journal sections' }).getByRole('link').count(), 8);
   const cards = dashboard.getByRole('list', { name: 'Trading ticket workflow' });
   assert.deepEqual(await cards.locator('li h2').allTextContents(), [
     'Quote freshness', 'Draft ticket', 'Saved observation',
@@ -288,8 +288,13 @@ try {
     await reopened.waitForFunction(() => document.querySelector('#desk-status')?.textContent.includes('HK.00700'));
     assert.ok((await reopened.locator('#desk-status').innerText()).includes('read-only desk'));
     await reopened.locator('#desk-body').getByText('15 h 9 min 54 s', { exact: true }).waitFor();
-    await reopened.locator('#provider-coverage > h2').scrollIntoViewIfNeeded();
-    await verifyRouteViews(reopened);
+    assert.equal(await reopened.locator('#provider-coverage, #coverage-body').count(), 0);
+    const coveragePage = await context.newPage();
+    await coveragePage.goto(origin);
+    await verifyRouteViews(coveragePage);
+    await coveragePage.getByRole('link', { name: 'Decision journal' }).click();
+    await expectText(coveragePage, 'revision', 'Revision 1');
+    await coveragePage.close();
     const bookDetails = reopened.locator('#desk-body details').filter({ has: reopened.locator('summary', { hasText: 'Order book' }) });
     await bookDetails.locator('summary').click();
     await bookDetails.getByRole('cell', { name: '272400', exact: true }).waitFor();

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <title>{{title}} · Agentic Trading</title>
+  <link rel="icon" href="./owners/design/site/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./owners/design/profile.css">
+  <link rel="stylesheet" href="./owners/design/site/collection-layout.css">
+  <link rel="stylesheet" href="./owners/design/site/toolbar.css">
+  <link rel="stylesheet" href="./trading.css">
+  <link rel="stylesheet" href="./journal.css">
+  <script type="module" src="./src/landing-tools.mjs"></script>
+  <script type="module" src="./src/{{entry}}.mjs"></script>
+  <script type="module" src="./src/skills-toolbar.mjs"></script>
+</head>
+<body data-agentic-typography>
+  <!-- trading-toolbar -->
+  <main id="{{mainId}}" aria-label="{{title}}">
+    <noscript>Enable JavaScript to open this page.</noscript>
+  </main>
+  <template id="session-slot">
+    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" class="agentic-text-detail" role="status">Opening local workspace…</span></div>
+  </template>
+  <!-- page-content -->
+</body>
+</html>

@@ -1,7 +1,18 @@
 import { createNativeDashboard } from '../owners/design/site/dashboard.mjs';
 
+export function mountDashboardPage(document, { description, hero, overview, sections }) {
+  const main = document.querySelector('main');
+  const { DashboardCanvasLayout, DashboardPrimitive } = createNativeDashboard(document);
+  main.replaceChildren(DashboardCanvasLayout({
+    beforeHeader: document.getElementById('session-slot').content,
+    title: DashboardPrimitive({ kind: 'heading', level: 1, children: main.getAttribute('aria-label') }),
+    description: description && DashboardPrimitive({ kind: 'text', children: description }),
+    hero, overview, sections,
+  }));
+}
+
 export function mountTradingDashboard(document) {
-  const { DashboardCanvasLayout, DashboardCardGrid, DashboardPrimitive } = createNativeDashboard(document);
+  const { DashboardCardGrid } = createNativeDashboard(document);
   const slot = name => document.getElementById(name + '-slot').content;
   const label = (id, text) => {
     const span = document.createElement('span');
@@ -18,12 +29,8 @@ export function mountTradingDashboard(document) {
       { id: 'saved', accent: 'success', eyebrow: label('revision', 'Unsaved'), title: label('saved-heading', 'Saved observation'), content: slot('saved') },
     ],
   });
-  document.getElementById('journal').replaceChildren(DashboardCanvasLayout({
-    beforeHeader: slot('session'),
-    title: DashboardPrimitive({ kind: 'heading', level: 1, children: 'Decision journal' }),
-    description: DashboardPrimitive({ kind: 'text', children: 'Synthetic trading workspace · 19 Nov 2026 · UTC' }),
-    hero: slot('age'),
-    overview,
-    sections: slot('evidence'),
-  }));
+  mountDashboardPage(document, {
+    description: 'Synthetic trading workspace · 19 Nov 2026 · UTC',
+    hero: slot('age'), overview, sections: slot('evidence'),
+  });
 }

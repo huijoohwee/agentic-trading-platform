@@ -150,7 +150,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
     assets.set('owners/gateway/transfer/' + name + '.mjs', await readFile(new URL(source)));
   }
   const files = ['web/observe.html','src/observer-view.mjs','web/desk.html', 'web/trading.css', 'web/desk.css', ...['desk-lab','research-catalog','desk-actions','landing-tools','contracts','market','market-reads','indicators','chart','experiment','strategy-language','scientific-packages','strategy-example','experiment-worker',
-    'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
+    'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/coverage-page.mjs', 'src/offline-shell.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
     'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/simulator-receipt-view.mjs', 'src/private-receipt-view.mjs', 'src/trade-event-view.mjs', 'src/skills-toolbar.mjs', 'src/skills-panel.mjs', 'src/provider-coverage.mjs', 'src/moomoo-research-tools.mjs', 'src/coverage-view.mjs', 'src/coverage-routes-view.mjs', 'src/coverage-relations.mjs', 'src/provider-capture.mjs', 'src/capture-view.mjs', 'src/provider-hosted.mjs', 'src/hosted-view.mjs', 'src/moomoo-desk-view.mjs', 'src/desk-diagrams.mjs', 'src/quote-display.mjs', 'src/quote-push-view.mjs', 'src/research-page.mjs', 'src/research-page-view.mjs'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
@@ -172,8 +172,19 @@ export async function assemble({ devDocumentPolicy } = {}) {
   const deskRows = { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles };
   assets.set('src/provider-desk.mjs', Buffer.from(Object.entries(deskRows)
     .map(([name, value]) => 'export const ' + name + ' = ' + JSON.stringify(value) + ';').join('\n')));
+  const pageTemplate = await readFile(join(root, 'web/dashboard-page.html'), 'utf8');
+  for (const [path, mainId, title, entry] of [
+    ['index.html', 'journal', 'Decision journal', 'browser'],
+    ['coverage.html', 'provider-coverage', 'Moomoo OpenAPI coverage', 'coverage-page'],
+  ]) {
+    const page = { mainId, title, entry };
+    const content = assets.get(path)?.toString() ?? '';
+    const html = pageTemplate.replace(/{{(mainId|title|entry)}}/g, (_, key) => page[key])
+      .replace('<!-- page-content -->', () => content);
+    assets.set(path, Buffer.from(html));
+  }
   const toolbar = await readFile(join(root, 'web/trading-toolbar.html'), 'utf8');
-  for (const [document, page] of [['index.html', 'journal'], ['desk.html', 'desk']]) {
+  for (const [document, page] of [['index.html', 'journal'], ['desk.html', 'desk'], ['coverage.html', 'coverage']]) {
     const html = assets.get(document).toString();
     const slot = '<!-- trading-toolbar -->';
     const active = 'data-page="' + page + '"';
@@ -181,7 +192,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
     assets.set(document, Buffer.from(html.replace(slot, toolbar.trimEnd().replace(active, active + ' aria-current="page"'))));
   }
   if (devDocumentPolicy !== undefined) {
-    for (const document of ['index.html','desk.html','observe.html']) {
+    for (const document of ['index.html','coverage.html','desk.html','observe.html']) {
       const template = assets.get(document).toString();
       const policyTag = /(<meta http-equiv="Content-Security-Policy" content=")[^"]*(">)/g;
       if ([...template.matchAll(policyTag)].length !== 1) throw new Error('Expected one document policy');
@@ -193,7 +204,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   // Compact the dashboard views for the sealed offline download. Keep module boundaries for lazy loading.
   const { transform } = await import('esbuild');
   for (const [path, bytes] of assets) {
-    if (!/^src\/(?:.+-view|desk-.+|rehearsal-.+|market-.+|replay)\.mjs$/.test(path)) continue;
+    if (!/^src\/(?:.+-view|desk-.+|rehearsal-.+|market-.+|replay|browser|offline-shell|coverage-page|coverage-relations|skills-toolbar)\.mjs$/.test(path)) continue;
     const { code } = await transform(bytes, { sourcefile: path, format: 'esm', target: 'esnext', minify: true });
     assets.set(path, Buffer.from(code));
   }

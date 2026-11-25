@@ -35,8 +35,7 @@ export async function verifyTradingSkills(page, mobile) {
   const coverage = toolbar.getByRole('link', { name: 'OpenAPI coverage', exact: true });
   const target = new URL(await coverage.getAttribute('href'), page.url());
   assert.equal(target.origin, new URL(page.url()).origin);
-  assert.equal(target.hash, '#provider-coverage');
-  assert.equal(target.pathname.endsWith('/desk.html'), false);
+  assert.equal(target.href, new URL('./coverage.html', page.url()).href);
   assert.equal(await current.getAttribute('aria-current'), 'page');
   const ticketBefore = await ticketValues();
   assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
