@@ -1,4 +1,4 @@
-import { researchTools } from './moomoo-research-tools.mjs';
+import { researchTools, sessionTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
 // source (path + on-disk SHA-256), the listed MCP tool names (see each route for evidence), the proposed semantic read operations, the outbound transport and an honest status.
@@ -29,6 +29,10 @@ export const providerCoverage = Object.freeze([
     [source('api/quote/kline/list.md', '2d0a1de5628c5165adbbfad1ca0ac649874408f106723e7ca16f0baad08271a7'),
      source('api/quote/basic-data/history-kline.md', 'd3437cdb21c9392ba50e2a9944aa6e69f10fac354ba13ee82b758960da098f59')],
     'Desktop MCP captures cover four reads. Signed local REST fixtures preserve quote price tokens, venue books, trade IDs, current candles and dated historical pages with separate quota accounting.'),
+  family('sessions', 'Market sessions and trading days', 'mapped', 'MCP+REST', Object.keys(sessionTools), Object.values(sessionTools),
+    [source('api/quote/basic-data/market-state.md', '06663b21294864bab85b0592de52bb2fcbfc8380c29eed27c53532c1af30b645'),
+     source('api/quote/basic-data/trading-days.md', 'ef0ab0b3d990498bc26880fe089833b590cc57cad7f4475c869cacb49b5dcce2')],
+    'Signed local fixtures cover symbol sessions, crypto broker rows and market-local trading dates.'),
   family('calendar', 'Earnings calendar', 'mapped', 'REST',
     ['read.calendar'], [],
     [source('api/quote/calendar/earnings-calendar.md', '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2')],
@@ -175,8 +179,11 @@ const researchMcpNames = new Set(Object.values(researchTools));
 const screenPath = 'POST /api/v1.0/quote/stock-screen';
 const stockScreenEvidence = { evidence: 'Signed local stock-screen fixture',
   units: 'Prices and market cap ×1000, valuation multiples ×100000, dividend yield percent ×1000, listing time in seconds. Exact raw integer and decimal text.' };
+const sessionMcpNames = new Set(Object.values(sessionTools));
 const marketFixture = units => ({ evidence: 'Signed local market REST fixture', units });
 const reviewedRest = new Map([
+  ['POST /api/v1.0/quote/market-state', marketFixture('Provider state per symbol and broker, with reported session seconds and optional trade section')],
+  ['GET /api/v1.0/quote/trading-days', marketFixture('Market-local date, session type and reported trading seconds')],
   ['POST /api/v1.0/quote/stock-quote', marketFixture('Source quote price and representation, market date, Unix milliseconds, shares and turnover')],
   ['POST /api/v1.0/quote/order-book', marketFixture('Per-exchange book, source size, scaled size, order count and exchange time in Unix milliseconds')],
   ['GET /api/v1.0/quote/{symbol}/rt-ticker', marketFixture('Exact trade sequence, source price, raw and scaled volume, session and Unix milliseconds')],
@@ -275,6 +282,7 @@ function disposition(methodPath, topic, name) {
     return ['excluded', 'trade:write', 'Live effect excluded'];
   }
   if (name === 'quote_stock_screen' && methodPath === screenPath) return ['mapped', 'quote:read', stockScreenEvidence.evidence];
+  if (sessionMcpNames.has(name) && reviewedRest.has(methodPath)) return ['mapped', 'quote:read', 'Signed local session MCP fixture'];
   if (name && researchMcpNames.has(name) && reviewedRest.has(methodPath)) {
     return ['mapped', path.startsWith('/api/v1.0/news/') ? 'review news access' : 'quote:read', 'Signed local MCP research fixture'];
   }
@@ -299,7 +307,7 @@ export function routeInventory(catalog) {
     if (!route) {
       const [status, scope, evidence] = disposition(methodPath, topic, name);
       const units = transport === 'REST' ? (reviewedRest.get(methodPath) ?? simulationRoutes.get(methodPath))?.units
-        : name === 'quote_stock_screen' ? stockScreenEvidence.units : researchMcpNames.has(name) ? reviewedRest.get(methodPath)?.units : undefined;
+        : name === 'quote_stock_screen' ? stockScreenEvidence.units : (researchMcpNames.has(name) || sessionMcpNames.has(name)) ? reviewedRest.get(methodPath)?.units : undefined;
       route = { transport, label, status, scope, evidence, units: units ?? 'See source field definitions', sources: [] };
       routes.set(key, route);
     }

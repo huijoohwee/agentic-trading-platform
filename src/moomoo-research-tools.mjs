@@ -15,3 +15,8 @@ export const researchTools = Object.freeze({
   'read.short': 'quote_short_interest',
   'read.top-brokers': 'quote_top_ten_brokers'
 });
+
+export const sessionTools = Object.freeze({
+  'read.market-state': 'quote_market_state',
+  'read.trading-days': 'quote_trading_days',
+});

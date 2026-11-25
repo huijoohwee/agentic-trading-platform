@@ -81,7 +81,7 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
   const researchPaths = Object.values({ ...researchMapping.operations, ...marketRestSpecs, ...simulatorSpecs }).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
-  assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 24);
+  assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 26);
   const dual = on('MCP').filter(row => row.evidence === 'Signed local MCP research fixture');
   assert.equal(dual.length, 14);
   for (const row of dual) {

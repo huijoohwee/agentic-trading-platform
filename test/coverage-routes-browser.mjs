@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { providerCoverage, mappedReads } from '../src/provider-coverage.mjs';
 
 async function downloadView(page, view, label) {
   await view.getByRole('button', { name: 'Export view' }).click();
@@ -36,7 +37,7 @@ export async function verifyRouteViews(page) {
 
   for (const grid of [
     { id: 'references', count: 109, cell: '/', record: /Card: \/api-reference$/, evidence: 'Selected reference evidence', link: '/api-reference' },
-    { id: 'families', count: 26, cell: 'Earnings calendar', record: /Card: Earnings calendar$/, evidence: 'Selected family evidence', link: 'api/quote/calendar/earnings-calendar.md' },
+    { id: 'families', count: providerCoverage.length, cell: 'Earnings calendar', record: /Card: Earnings calendar$/, evidence: 'Selected family evidence', link: 'api/quote/calendar/earnings-calendar.md' },
   ]) {
     const surface = page.locator('#coverage-' + grid.id);
     await surface.getByText('1–12 of ' + grid.count, { exact: true }).waitFor();
@@ -46,7 +47,7 @@ export async function verifyRouteViews(page) {
     await surface.getByRole('cell', { name: String(grid.count), exact: true }).first().waitFor();
     if (grid.id === 'families') {
       await surface.getByLabel('Count', { exact: true }).selectOption({ label: 'Distinct mapped reads' });
-      await surface.getByRole('cell', { name: '45', exact: true }).first().waitFor();
+      await surface.getByRole('cell', { name: String(mappedReads(providerCoverage).length), exact: true }).first().waitFor();
     }
     await surface.getByRole('button', { name: /Current table orientation/ }).click();
     await choose.selectOption('kanban');

@@ -1,6 +1,7 @@
 import { exampleCalendarPage, readResearchPage } from './research-page.mjs';
 
 const labels = {
+  trade_second: 'Trading seconds', trade_date_type: 'Trading session', market_state: 'Market state',
   code: 'Symbol', pub_type: 'Publication session', earnings_date: 'Market-local earnings date',
   earnings_timestamp: 'Publication time (Unix µs)', eps_actual: 'Actual EPS', eps_predict: 'Estimated EPS',
   period_text: 'Fiscal period', capital_flow_item_time: 'Flow time (Unix ms)', in_flow: 'Net inflow',
@@ -24,9 +25,9 @@ function rowList(parent, rows, node) {
     list.replaceChildren();
     for (let index = offset; index < end; index++) {
       const row = rows[index], item = node('details');
-      const identity = [row.symbol, row.code, row.factor, row.display_name, row.category_name, row.name, row.holding_name, row.timestamp]
+      const identity = [row.symbol, row.code, row.market, row.factor, row.display_name, row.category_name, row.name, row.holding_name, row.timestamp]
         .find(value => value != null && String(value).trim() !== '');
-      const detail = row.earnings_date ?? row.capital_flow_item_time ?? row.exchange ?? row.sequence ?? row.time_ms ?? row.period_text ?? (row.factor ? row.value : undefined);
+      const detail = row.market_state ?? row.earnings_date ?? row.market_date ?? row.capital_flow_item_time ?? row.exchange ?? row.sequence ?? row.time_ms ?? row.period_text ?? (row.factor ? row.value : undefined);
       const summary = [identity ?? 'Row ' + (index + 1), detail].filter(value => value != null).join(' · ');
       item.append(node('summary', summary));
       item.addEventListener('toggle', function expand() {
@@ -54,8 +55,21 @@ function rowList(parent, rows, node) {
   render();
 }
 
-function marketChart(parent, page, node, { diagrams, diagram, volumeChart }) {
+function marketChart(parent, page, node, { diagrams, diagram, volumeChart, columnChart, showTable }) {
   const { operation, rows } = page;
+  if (operation === 'read.trading-days' && rows.length) {
+    const days = rows.slice(0, 30);
+    columnChart(parent, 'Reported trading seconds · ' + days.length + ' of ' + rows.length + ' days',
+      days.map(row => ({ label: row.market_date, value: row.trade_second, detail: row.trade_date_type + ' · ' + row.trade_second + ' s' })));
+    return;
+  }
+  if (operation === 'read.market-state' && rows.length) {
+    const page = rows.slice(0, 12);
+    const title = 'Market sessions · ' + page.length + ' of ' + rows.length + ' rows';
+    showTable(parent, title, title, ['Symbol', 'Market state', 'Broker ID'], page.map(row =>
+      [row.symbol, row.market_state, row.broker_id].map(value => typeof value === 'string' && value.length > 128 ? value.slice(0, 127) + '…' : value)));
+    return;
+  }
   if (!rows.length || !['read.depth', 'read.tape', 'read.candles', 'read.candle-history'].includes(operation)) return;
   const usable = value => value !== null && Number.isFinite(Number(value));
   const volumeKnown = row => usable(row.volume) && Number(row.volume) >= 0;
