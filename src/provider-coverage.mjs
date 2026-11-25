@@ -1,5 +1,6 @@
 import { publicRoutes } from 'agentic-gateway/connectors/moomoo-coverage';
-import { ipoRegions, regionalIpoTools, rankingNames, rankingTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
+import { marketRestRoutes, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { ipoRegions, regionalIpoTools, rankingNames, rankingTools, researchRestTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
 // source (path + on-disk SHA-256), the listed MCP tool names (see each route for evidence), the proposed semantic read operations, the outbound transport and an honest status.
@@ -57,9 +58,19 @@ export const providerCoverage = Object.freeze([
      source('api/quote/industry/industrial-chain-list.md', 'b446c6175a9198f884c20864327a1f300307ea460c516767dc68449befea20c5')],
     'MCP and REST sector-list fixtures preserve sector codes, IDs and names. The imported heatmap and industrial-chain documents cover related routes.'),
   family('news-research', 'News search and analyst ratings', 'mapped', 'MCP+REST',
-    ['read.news', 'read.research'], ['news_search'],
-    [source('api/quote/research/research-analyst-ratings.md', '31cf7fb1d42fa1da41dcda3c8bb3b036ac4ec648fd79c7b7a3baf4b31a22ea28')],
-    'MCP and REST fixtures cover headline metadata. Analyst rating pages use the REST mapping.'),
+    ['read.news', 'read.research', ...Object.keys(researchRestTools)], ['news_search'],
+    [source('api/quote/research/research-analyst-ratings.md', '31cf7fb1d42fa1da41dcda3c8bb3b036ac4ec648fd79c7b7a3baf4b31a22ea28'),
+     source('api/quote/research/research-analyst-stock-ratings.md', '10f97bcd37d001f5ee62d63ed44821c8e1718e584b3c19bc67745dcb4f552e19'),
+     source('api/quote/research/research-institution-rating-summary.md', '5d491f8c980caa8166c436bb6dbbd2787eb21731921a0e7e11019bcc843f31fe'),
+     source('api/quote/research/research-institution-ratings.md', 'b6524693db7819d068f6be33b2e3c068bb364ba8a9fb820b20c888eadad2e672'),
+     source('api/quote/research/research-institution-stock-ratings.md', '56f849101ec2a7c535d32ceacac763b22e8e7e48feb9de646b7e33fdb93f6ca9'),
+     source('api/quote/research/research-latest-ratings.md', 'c47dee8fa15e506e002244ec0cd268000ed6e27fd608bd8bc1f7b21c17978643'),
+     source('api/quote/research/research-rating-plot.md', '05082a7c63e8d573b4d9cda0b9ae9d16d51dfb1181dcaaea842f99f2e4f9a72f'),
+     source('api/quote/research/research-stock-ratings.md', 'bdda552f256cd23c81c587e84216cb203f99d9cd0d1d701825068bc991c1e0c1'),
+     source('api/quote/research/research-target-plot.md', 'fe9394f706a117e3ca79ee9043863edb467d0c5aa3bee0f03d4e8a8324b736b1'),
+     source('api/quote/research/research-target-price.md', '9e62f9b6413a0135ef043832c4c78f3ba172c7fc414ab14e6536d5f08f98ade0'),
+     source('api/quote/research/research-top-analysts.md', '85020a9cfc784d0945697827a147aed0b931c5e77b2897872dbbffd12fa9f6e8')],
+    'MCP headline and analyst-result reads use separate Gateway transports. Ten descriptor-backed REST research reads preserve listed fields, exact decimal text and bounded pagination; other documented research routes remain candidates.'),
   family('ipo', 'Regional IPO listings', 'mapped', 'MCP+REST',
     ['read.ipo', ...Object.keys(regionalIpoTools)], Object.values(regionalIpoTools).filter(tool => tool.startsWith('quote_')),
     [source('api/quote/ipo/ipo-list-hk.md', '41f89c3b7de8000cfd72892975c9835ae781824f87b2cbd513bc0278375528d7')],
@@ -189,7 +200,16 @@ const stockScreenEvidence = { evidence: 'Signed local stock-screen fixture',
   units: 'Prices and market cap ×1000, valuation multiples ×100000, dividend yield percent ×1000, listing time in seconds. Exact raw integer and decimal text.' };
 const sessionMcpNames = new Set(Object.values(sessionTools));
 const marketFixture = units => ({ evidence: 'Signed local market REST fixture', units });
+const researchRestEvidence = Object.entries(researchRestTools).map(([, tool]) => {
+  const descriptor = describeMoomooResearch(tool);
+  const fields = Object.keys(descriptor.fields);
+  const decimals = descriptor.decimal_text ?? [];
+  const units = 'Documented fields: ' + fields.join(', ') +
+    (decimals.length ? '; exact decimal text: ' + decimals.join(', ') : '');
+  return [marketRestRoutes[tool], marketFixture(units)];
+});
 const reviewedRest = new Map([
+  ...researchRestEvidence,
   ...ipoRegions.map(region => ['GET /api/v1.0/quote/ipo-list/' + region, marketFixture('Native offering currency, share counts and timestamps as reported')]),
   ...rankingNames.map(name => ['GET /api/v1.0/quote/rank/' + name, marketFixture('Provider-ranked symbols, original field units and exact numeric values')]),
   ['POST /api/v1.0/quote/market-state', marketFixture('Provider state per symbol and broker, with reported session seconds and optional trade section')],

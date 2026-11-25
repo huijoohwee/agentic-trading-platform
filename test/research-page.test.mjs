@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { marketPage, marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
+import { marketRestRoutes, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { researchRestTools } from '../src/moomoo-research-tools.mjs';
 import { captureCalendarFixture } from '../scripts/export-calendar-fixture.mjs';
 import { researchDisplaySchema } from '../src/research-display-schema.mjs';
 import { readResearchPage } from '../src/research-page.mjs';
@@ -25,6 +27,32 @@ test('every reviewed research mapping has named columns, units and a readable em
     assert.deepEqual(page.rows, []);
     assert.equal(page.units, schema.units);
   }
+});
+
+test('research REST columns and saved cursors follow Gateway descriptors', async () => {
+  assert.equal(Object.keys(researchRestTools).length, 10);
+  for (const [operation, tool] of Object.entries(researchRestTools)) {
+    const descriptor = describeMoomooResearch(tool), schema = researchDisplaySchema[operation];
+    assert.deepEqual(schema.columns, Object.keys(descriptor.fields), operation);
+    assert.deepEqual(schema.decimalText ?? [], descriptor.decimal_text ?? [], operation);
+    const maximum = descriptor.row_limit
+      ? descriptor.params[descriptor.row_limit.input].integer[1] : descriptor.series_limit ?? 600;
+    assert.equal(schema.rowLimit, maximum, operation);
+    assert.equal(marketRestSpecs[operation].method + ' ' + marketRestSpecs[operation].path, marketRestRoutes[tool], operation);
+  }
+  const operation = 'read.latest-ratings';
+  const row = { code: 'CA.DEMO', rating: 0, target_price: '12.3400', institution_uid: 'inst-1',
+    institution_name: 'Fixture Institution', recommendation_date: '2026-11-20' };
+  const projected = marketPage(marketRestSpecs[operation], { market: 'CA', page_size: 1 }, JSON.stringify({ ret_code: 0,
+    data: { items: [row] }, pagination: { completed: false, page_flag: 'next-page' } }));
+  assert.deepEqual(projected.pagination, { completed: false, next_cursor: 'next-page' });
+  const page = await readResearchPage(gateway(operation, projected.rows, projected.decimals,
+    { pagination: projected.pagination }));
+  assert.equal(page.rows[0].target_price, '12.3400');
+  assert.deepEqual(page.pagination, { completed: false, cursor: 'next-page', total: null });
+  assert.equal(researchDisplaySchema[operation].optionalTotal, true);
+  await assert.rejects(readResearchPage(gateway('read.top-analysts', [], [],
+    { pagination: { completed: false, next_cursor: 'next-page' } })), /invalid research result/i);
 });
 
 test('saved capital flow history binds its millisecond cursor to the page and rejects mixed series', async () => {

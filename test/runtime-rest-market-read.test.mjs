@@ -1,7 +1,9 @@
 import test from 'node:test';
 import { compareResearchTransports } from './research-mcp-fixture.mjs';
 import { companyResearchOperations, researchMapping } from '../runtime/moomoo-research.mjs';
-import { marketRestMapping } from '../runtime/moomoo-market-rest.mjs';
+import { marketRestMapping, marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
+import { marketRestRoutes, describeMoomooResearch, buildMoomooMarketRequest } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { researchRestTools } from '../src/moomoo-research-tools.mjs';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -176,7 +178,8 @@ test('gateway admits a PROVIDER REST read with identical HTTP and MCP decisions 
 
 async function researchRead(t, operation, inputs, response, inspect = () => {}, permittedInputs = inputs) {
   const { store } = await fixture(t);
-  const mapping = Object.hasOwn(companyResearchOperations, operation) ? marketRestMapping : researchMapping;
+  const mapping = Object.hasOwn(companyResearchOperations, operation) || Object.hasOwn(marketRestSpecs, operation)
+    ? marketRestMapping : researchMapping;
   const spec = mapping.operations[operation];
   const provider = { ...definition, mapping, mapping_digest: sha(mapping),
     operations: [operation], allowlist: [spec.tool], schema_digest: spec.schema_digest };
@@ -286,6 +289,50 @@ test('analyst rating pages keep provider target text and allow the documented cu
   await assert.rejects(researchRead(t, 'read.research', inputs, { ...response, pagination: { completed: true, page_flag: '', total: -1 } }), /INVALID_PAGE/);
   assert.deepEqual((await researchRead(t, 'read.research', inputs, { ret_code: -10 })).pagination, { completed: true, next_cursor: null });
   await assert.rejects(researchRead(t, 'read.research', inputs, { ret_code: -9 }), /SCOPE_DENIED/);
+});
+
+test('Gateway research readers derive their routes, inputs, field types and cursors from descriptors', async t => {
+  assert.equal(Object.keys(researchRestTools).length, 10);
+  for (const [operation, tool] of Object.entries(researchRestTools)) {
+    const descriptor = describeMoomooResearch(tool), inputs = descriptor.symbol_path ? { symbol: 'US.AAPL' } : {};
+    for (const [name, rule] of Object.entries(descriptor.params)) {
+      if (rule.required || rule.enum || name === 'market') {
+        if (rule.enum) inputs[name] = rule.enum[0];
+        else if (rule.integer) inputs[name] = rule.integer[0];
+        else if (rule.length) inputs[name] = name === 'market' ? 'US' : 'fixture-uid';
+      }
+    }
+    const row = {};
+    for (const [name, field] of Object.entries(descriptor.fields)) {
+      if (field.source === 'input') continue;
+      row[name] = descriptor.decimal_text?.includes(name) ? '12.3400'
+        : descriptor.date?.includes(name) ? '2026-11-20'
+          : descriptor.integers?.includes(name) ? name === 'rating' ? 0 : 1
+            : descriptor.text?.includes(name) ? name === 'code' ? 'US.DEMO' : 'fixture-' + name
+              : 'fixture-' + name;
+    }
+    const data = descriptor.single_row ? row : { items: [row] };
+    const response = { ret_code: 0, data };
+    if (descriptor.pagination) response.pagination = { completed: false, page_flag: 'fixture-next',
+      ...(descriptor.optional_total === false && { total: 1 }) };
+    const result = await researchRead(t, operation, inputs, response, calls => {
+      const expected = buildMoomooMarketRequest(tool, inputs);
+      assert.equal(calls[0].method, expected.method);
+      assert.equal(calls[0].url, 'https://webapi.moomoo.com' + expected.path);
+      const [method, template] = marketRestRoutes[tool].split(' ');
+      assert.equal(method, expected.method);
+      assert.ok(expected.path.startsWith(template.replace('{code}', encodeURIComponent(inputs.symbol ?? ''))));
+    });
+    assert.equal(result.rows.length, 1, operation);
+    for (const name of descriptor.decimal_text ?? []) assert.equal(result.rows[0][name], '12.3400', operation + ' ' + name);
+    assert.equal(result.pagination?.next_cursor, descriptor.pagination ? 'fixture-next' : undefined, operation);
+  }
+});
+
+test('Gateway research parameter bounds reject before the provider call', async t => {
+  await assert.rejects(researchRead(t, 'read.analyst-stock-ratings',
+    { symbol: 'US.AAPL', analyst_uid: 'fixture-uid', count: 21 },
+    { ret_code: 0, data: { items: [] } }, calls => assert.equal(calls.length, 0)), /INVALID_PARAMETER/);
 });
 
 const hk = { symbol: 'HK.00700' };

@@ -3,6 +3,7 @@ import { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from '../
 import { researchDisplaySchema } from '../src/research-display-schema.mjs';
 import { routeInventory } from '../src/provider-coverage.mjs';
 import { routeValues, unpackMarketQueries } from '../src/market-query-report.mjs';
+import { marketRestRoutes, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -166,6 +167,17 @@ export async function assemble({ devDocumentPolicy } = {}) {
   assets.set(coveragePath, resolveImport(await readFile(coverageModule), linksModule, '../../base/src/record-links.mjs'));
   for (const path of ['src/provider-coverage.mjs', 'src/coverage-view.mjs']) {
     assets.set(path, resolveImport(assets.get(path), coverageImport, '../' + coveragePath));
+  }
+  const researchRouteEntries = Object.entries(marketRestRoutes).filter(([tool]) => tool.startsWith('rest_research_'));
+  const researchRoutes = Object.fromEntries(researchRouteEntries);
+  const researchDescriptors = Object.fromEntries(researchRouteEntries.map(([tool]) => [tool, describeMoomooResearch(tool)]));
+  assets.set('owners/gateway/connectors/moomoo-research.mjs', Buffer.from(
+    'export const marketRestRoutes = Object.freeze(' + JSON.stringify(researchRoutes) + ');\n' +
+    'const descriptors = ' + JSON.stringify(researchDescriptors) + ';\n' +
+    'export function describeMoomooResearch(tool) { if (!Object.hasOwn(descriptors, tool)) throw new Error("UNSUPPORTED"); return structuredClone(descriptors[tool]); }\n'));
+  const marketRestImport = 'agentic-gateway/connectors/moomoo-market-rest';
+  for (const path of ['src/provider-coverage.mjs', 'src/moomoo-research-tools.mjs']) {
+    assets.set(path, resolveImport(assets.get(path), marketRestImport, '../owners/gateway/connectors/moomoo-research.mjs'));
   }
   const tradeEvents = import.meta.resolve('agentic-gateway/connectors/moomoo-trade-event');
   for (const name of ['moomoo-trade-event.mjs', 'moomoo-crypto-report.mjs', 'moomoo-watchlist.mjs', 'moomoo-rest-wire.mjs', 'moomoo-securities-history.mjs']) {

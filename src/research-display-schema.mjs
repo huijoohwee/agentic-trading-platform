@@ -1,7 +1,7 @@
 import { researchMapping } from '../runtime/moomoo-research.mjs';
 import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
-import { describeMoomooIpo, describeMoomooRanking } from 'agentic-gateway/connectors/moomoo-market-rest';
-import { rankingTools, regionalIpoTools } from './moomoo-research-tools.mjs';
+import { describeMoomooIpo, describeMoomooRanking, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { rankingTools, regionalIpoTools, researchRestTools } from './moomoo-research-tools.mjs';
 import { researchRouteUnits } from './provider-coverage.mjs';
 
 // The builder seals these display fields. Dispatch definitions and Node runtime dependencies stay on the host.
@@ -23,6 +23,19 @@ function columns(spec) {
     ...(spec.decimal_text && { decimalText: spec.decimal_text }),
     ...(spec.nested && { nested: Object.fromEntries(Object.entries(spec.nested).map(([field, child]) => [field, columns(child)])) }) };
 }
+function researchRestColumns(tool) {
+  const spec = describeMoomooResearch(tool);
+  const pageLimit = spec.row_limit
+    ? spec.params[spec.row_limit.input]?.integer?.[1] ?? spec.row_limit.fallback
+    : spec.series_limit ?? 600;
+  return { columns: Object.keys(spec.fields), rowLimit: pageLimit,
+    ...(spec.text?.length && { text: spec.text }),
+    ...(spec.date?.length && { text: [...new Set([...(spec.text ?? []), ...spec.date])] }),
+    ...(spec.integers?.length && { integers: spec.integers }),
+    ...(spec.decimal_text?.length && { decimalText: spec.decimal_text }),
+    ...(spec.pagination && { paged: true, cursorLimit: spec.cursor_limit,
+      optionalTotal: spec.optional_total !== false }) };
+}
 
 const level = { columns: ['price', 'raw_volume', 'volume', 'order_count'], decimalText: ['price', 'volume'],
   exactIntegers: ['raw_volume'], integers: ['order_count'], nullable: ['volume'] };
@@ -31,6 +44,8 @@ const distributionAmounts = ['in', 'out'].flatMap(side =>
 const flowAmounts = ['in_flow', 'main_in_flow', 'super_in_flow', 'big_in_flow', 'mid_in_flow', 'sml_in_flow'];
 const optionalFlow = ['main_deal_ratio', 'acc_main_in_flow'];
 const marketColumns = {
+  ...Object.fromEntries(Object.entries(researchRestTools).map(([operation, tool]) =>
+    [operation, researchRestColumns(tool)])),
   ...Object.fromEntries(Object.entries(regionalIpoTools).map(([operation, tool]) => {
     const { textFields, integerFields, decimalFields, booleanFields } = describeMoomooIpo(tool);
     return [operation, { columns: ['code', 'name'], optional: [...textFields.slice(2), ...integerFields, ...decimalFields, ...booleanFields],
