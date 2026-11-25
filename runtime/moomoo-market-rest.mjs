@@ -1,12 +1,12 @@
 import fieldRegister from 'agentic-gateway/connectors/moomoo-fields.json' with { type: 'json' };
-import { rankingTools, regionalIpoTools, researchRestTools, researchTools, sessionTools } from '../src/moomoo-research-tools.mjs';
+import { arkTools, rankingTools, regionalIpoTools, researchRestTools, researchTools, sessionTools } from '../src/moomoo-research-tools.mjs';
 import { buildMoomooSessionArguments, buildMoomooMarketRequest, projectMoomooMarketResponse, marketRestRoutes } from 'agentic-gateway/connectors/moomoo-market-rest';
 import { requireThat, sha } from './core.mjs';
 import { researchMapping } from './moomoo-research.mjs';
 
 const profile = 'moomoo-market-rest/v1';
 const restOnly = {
-  ...rankingTools, ...regionalIpoTools, ...researchRestTools,
+  ...arkTools, ...rankingTools, ...regionalIpoTools, ...researchRestTools,
   'read.candle-history': 'quote_history_kline',
   'read.dividend-calendar': 'rest_dividend_calendar',
   'read.economic-calendar': 'rest_economic_calendar_list',
@@ -62,10 +62,12 @@ export function marketRequest(spec, inputs, allowed) {
   return buildMoomooMarketRequest(spec.tool, parameters);
 }
 export function marketPage(spec, parameters, wire) {
-  const { rows, requested, pagination } = projectMoomooMarketResponse(spec.tool, parameters, wire);
+  const { rows, requested, pagination, metadata, summary } = projectMoomooMarketResponse(spec.tool, parameters, wire);
   // Bind the signed candle selectors to each visible bar also when opening the saved page offline.
   const page = { rows: requested ? rows.map(row => ({ ...row, ...requested })) : rows, decimals: rows.map(() => ({})) };
-  if (pagination && Object.hasOwn(pagination, 'completed')) page.pagination = Object.values(researchRestTools).includes(spec.tool)
+  if (metadata) page.metadata = metadata;
+  if (summary) page.summary = summary;
+  if (pagination && Object.hasOwn(pagination, 'completed')) page.pagination = [...Object.values(researchRestTools), ...Object.values(arkTools)].includes(spec.tool)
     ? { completed: pagination.completed, next_cursor: pagination.next_page_token ?? null,
       ...(Object.hasOwn(pagination, 'total') && { total: pagination.total }) }
     : pagination;

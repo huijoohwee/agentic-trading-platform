@@ -2,17 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { marketPage, marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
-import { marketRestRoutes, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
-import { researchRestTools } from '../src/moomoo-research-tools.mjs';
+import { marketRestRoutes, describeMoomooArk, describeMoomooResearch } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { arkTools, researchRestTools } from '../src/moomoo-research-tools.mjs';
 import { captureCalendarFixture } from '../scripts/export-calendar-fixture.mjs';
 import { researchDisplaySchema } from '../src/research-display-schema.mjs';
 import { readResearchPage } from '../src/research-page.mjs';
 
 const at = Date.UTC(2026, 10, 24);
 function gateway(operation, rows, decimals, metadata = {}) {
+  const context = schema => Object.fromEntries(schema.columns.map(key => [key,
+    schema.decimalText?.includes(key) ? '0.0000' : schema.integers?.includes(key) ? 0 : 'fixture']));
+  const schema = researchDisplaySchema[operation];
   return { status: 'OK', request_id: 'fixture-read', ledger_revision: 2,
     provenance: { provider: 'local-test', source: 'PROVIDER', operation },
-    data: { source: 'AUTHENTICATED_ADAPTER', at, rows, decimals, ...metadata } };
+    data: { source: 'AUTHENTICATED_ADAPTER', at, rows, decimals,
+      ...(schema.metadata && { metadata: context(schema.metadata) }), ...(schema.summary && { summary: context(schema.summary) }), ...metadata } };
 }
 
 test('every reviewed research mapping has named columns, units and a readable empty result', async () => {
@@ -53,6 +57,28 @@ test('research REST columns and saved cursors follow Gateway descriptors', async
   assert.equal(researchDisplaySchema[operation].optionalTotal, true);
   await assert.rejects(readResearchPage(gateway('read.top-analysts', [], [],
     { pagination: { completed: false, next_cursor: 'next-page' } })), /invalid research result/i);
+});
+
+test('ARK columns, context fields and routes follow the pinned Gateway descriptors', async () => {
+  assert.equal(Object.keys(arkTools).length, 9);
+  for (const [operation, tool] of Object.entries(arkTools)) {
+    const descriptor = describeMoomooArk(tool), schema = researchDisplaySchema[operation];
+    assert.deepEqual(marketRestSpecs[operation].method + ' ' + marketRestSpecs[operation].path, marketRestRoutes[tool]);
+    assert.deepEqual([...schema.columns, ...(schema.optional ?? [])].sort(), descriptor.field_names.slice().sort());
+    assert.deepEqual(schema.decimalText ?? [], (descriptor.decimal_text ?? []).filter(name => descriptor.field_names.includes(name)));
+    assert.deepEqual(schema.metadata?.columns ?? [], descriptor.metadata_fields ?? []);
+    assert.deepEqual(schema.summary?.columns ?? [], descriptor.summary_fields ?? []);
+  }
+  const operation = 'read.ark-fund-return-rate', schema = researchDisplaySchema[operation];
+  const row = { date: '2026-11-24', return_rate: '9007199254740993.1000', compare_increase: '-0.0100' };
+  const page = await readResearchPage(gateway(operation, [row], [{}], {
+    summary: { total_return_rate: '0.1200', market_value: '9007199254740993.0000', stock_count: 7,
+      market_value_change: '-1.2500', stock_count_change: -2, update_time: at, update_date: '2026-11-24' }
+  }));
+  assert.equal(page.rows[0].return_rate, row.return_rate);
+  assert.equal(page.summary.market_value, '9007199254740993.0000');
+  assert.equal(page.summary.stock_count_change, -2);
+  assert.deepEqual(Object.keys(page.summary), schema.summary.columns);
 });
 
 test('saved capital flow history binds its millisecond cursor to the page and rejects mixed series', async () => {

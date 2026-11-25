@@ -11,7 +11,8 @@ import { openStore } from '../runtime/store.mjs';
 import { readBudgetScope, reserveHistoryRead } from '../runtime/read-budget.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 import { readResearchPage } from '../src/research-page.mjs';
-import { describeMoomooRanking } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { buildMoomooMarketRequest, describeMoomooArk, describeMoomooRanking } from 'agentic-gateway/connectors/moomoo-market-rest';
+import { arkTools } from '../src/moomoo-research-tools.mjs';
 
 const scope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'fixture-market-rest' };
 const candidate = sha('market-rest-fixture'), operator = generateKeyPairSync('ed25519'), integration = generateKeyPairSync('ed25519');
@@ -140,13 +141,42 @@ test('running gateway signs current and historical market REST reads, replays th
     row.name = 'Fixture';
     cases.push([op, inputs, 'GET', 'rank/' + name + '?' + new URLSearchParams(inputs), null, { items: [row] }]);
   }
+  for (const [op, tool] of Object.entries(arkTools)) {
+    const descriptor = describeMoomooArk(tool), inputs = descriptor.symbol_path ? { symbol: 'US.AAPL' } : {};
+    for (const [name, rule] of Object.entries(descriptor.params)) {
+      if (name === 'page_size') inputs[name] = 1;
+      else if (name === 'page_flag') inputs[name] = 'prior/1';
+      else if (rule.enum) inputs[name] = rule.enum[0];
+      else if (rule.integer) inputs[name] = rule.integer[0];
+      else if (rule.boolean) inputs[name] = true;
+      else if (rule.string) inputs[name] = 'fixture';
+    }
+    const row = {};
+    for (const name of descriptor.field_names) {
+      if (descriptor.fields[name]?.source === 'input' || descriptor.optional_fields.includes(name)) continue;
+      row[name] = descriptor.decimal_text.includes(name) ? '9007199254740993.1000'
+        : descriptor.date.includes(name) ? '2026-11-24'
+          : descriptor.integers.includes(name) ? 17 : 'Fixture ' + name;
+    }
+    const context = names => Object.fromEntries(names.map(name => [name,
+      descriptor.decimal_text.includes(name) ? name === 'max_abs_value_change' ? '12.3400' : '9007199254740993.1000'
+        : descriptor.date.includes(name) ? '2026-11-24'
+          : descriptor.integers.includes(name) ? 17 : 'Fixture ' + name]));
+    const data = descriptor.single_row ? { ...row }
+      : descriptor.groups ? { increased: [row], decreased: [] }
+        : { items: [row] };
+    if (descriptor.metadata_fields) Object.assign(data, context(descriptor.metadata_fields));
+    if (descriptor.summary_fields) Object.assign(data, context(descriptor.summary_fields));
+    const expected = buildMoomooMarketRequest(tool, inputs);
+    cases.push([op, inputs, 'GET', expected.path.replace(/^\/api\/v1\.0\/quote\//, ''), null, data]);
+  }
   const calls = [], network = globalThis.fetch;
   t.mock.method(globalThis, 'fetch', (url, options) => {
     if (new URL(url).hostname === '127.0.0.1') return network(url, options);
     const entry = cases.find(x => url === origin + 'api/v1.0/quote/' + x[3]);
     calls.push({ url, method: options.method, body: options.body && JSON.parse(options.body), token: options.headers.Authorization, redirect: options.redirect });
-    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...((entry?.[0].startsWith('read.rank-') || ['read.dividend-calendar', 'read.economic-calendar'].includes(entry?.[0])) &&
-      { pagination: { total: 2, completed: false, page_flag: 'next/2' } }), ...(entry?.[0] === 'read.capital-flow-history' && { pagination: { has_more: true } }), ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23]|-?9007199254740993\.1000)"/g, '$1');
+    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...((entry?.[0].startsWith('read.rank-') || Object.hasOwn(arkTools, entry?.[0]) || ['read.dividend-calendar', 'read.economic-calendar'].includes(entry?.[0])) &&
+      { pagination: { total: 2, completed: false, page_flag: Object.hasOwn(arkTools, entry?.[0]) ? 'next/2' : 'next/2' } }), ...(entry?.[0] === 'read.capital-flow-history' && { pagination: { has_more: true } }), ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23]|-?9007199254740993\.1000)"/g, '$1');
     return new Response(wire, { headers: { 'content-type': 'application/json' } });
   });
   const server = await runtimeCommand(['gateway', path, '0']); t.after(() => new Promise(resolve => server.close(resolve)));
@@ -189,12 +219,15 @@ test('running gateway signs current and historical market REST reads, replays th
       assert.equal(calls.length, before);
     }
     const admitted = request(op, op, inputs, sha(inputs)), result = await post('/api/gateway', admitted);
-    assert.equal(result.status, 'OK', JSON.stringify(result.error)); assert.equal(result.data.cost.tool_calls, 1);
+    assert.equal(result.status, 'OK', op + ': ' + JSON.stringify(result.error)); assert.equal(result.data.cost.tool_calls, 1);
     const replay = await post('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: op, arguments: admitted } });
     assert.deepEqual(replay.result.structuredContent, result); assert.equal(calls.length, before + 1);
     assert.deepEqual(calls.at(-1), { url: origin + 'api/v1.0/quote/' + path, method,
       body: body ?? undefined, token: 'Bearer fixture-market-rest-credential', redirect: 'error' });
-    const display = await readResearchPage(replay);
+    let display;
+    try { display = await readResearchPage(replay); } catch (error) {
+      throw Error(op + ': ' + error.message + '; projected context=' + JSON.stringify(replay.result.structuredContent.data.metadata), { cause: error });
+    }
     if (op.startsWith('read.ipo-')) {
       assert.deepEqual(display.rows[0], { code: data[0].code, name: 'Fixture',
         [op === 'read.ipo-cn' || op === 'read.ipo-my' ? 'ipo_price' : 'ipo_price_min']: '9007199254740993.1000' });
@@ -211,6 +244,25 @@ test('running gateway signs current and historical market REST reads, replays th
       assert.deepEqual(display.pagination, { completed: false, cursor: 'next/2', total: 2 });
       if (op === 'read.dividend-calendar') assert.equal(display.rows[0].statement, 'USD 0.1000');
       else assert.equal(display.rows[0].previous, '0.1200%');
+    }
+    if (Object.hasOwn(arkTools, op)) {
+      const descriptor = describeMoomooArk(arkTools[op]);
+      const attested = replay.result.structuredContent.data.market_attestation?.header;
+      assert.equal(display.rows.length, 1, op);
+      for (const field of descriptor.decimal_text) {
+        if (Object.hasOwn(display.rows[0], field)) assert.equal(display.rows[0][field], '9007199254740993.1000', op + ' ' + field);
+      }
+      if (descriptor.symbol_path) assert.equal(display.rows[0].symbol, inputs.symbol);
+      if (descriptor.groups) assert.equal(display.rows[0].direction, 'INCREASED');
+      if (descriptor.metadata_fields) {
+        assert.deepEqual(Object.keys(display.metadata).sort(), descriptor.metadata_fields.slice().sort());
+        assert.deepEqual(display.metadata, attested.metadata, op + ' metadata must come from the signed page');
+      }
+      if (descriptor.summary_fields) {
+        assert.deepEqual(Object.keys(display.summary).sort(), descriptor.summary_fields.slice().sort());
+        assert.deepEqual(display.summary, attested.summary, op + ' summary must come from the signed page');
+      }
+      assert.deepEqual(display.pagination, descriptor.pagination ? { completed: false, cursor: 'next/2', total: 2 } : null);
     }
     if (op === 'read.capital-flow-history') {
       assert.deepEqual(display.pagination, { completed: false, cursor: String(flowTime), total: null, nextTime: flowTime });

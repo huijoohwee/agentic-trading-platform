@@ -39,3 +39,8 @@ const researchRestPrefix = 'rest_research_';
 export const researchRestTools = Object.freeze(Object.fromEntries(Object.keys(marketRestRoutes)
   .filter(tool => tool.startsWith(researchRestPrefix))
   .map(tool => ['read.' + tool.slice(researchRestPrefix.length).replaceAll('_', '-'), tool])));
+
+const arkRestPrefix = 'rest_ark_';
+export const arkTools = Object.freeze(Object.fromEntries(Object.keys(marketRestRoutes)
+  .filter(tool => tool.startsWith(arkRestPrefix))
+  .map(tool => ['read.' + tool.slice('rest_'.length).replaceAll('_', '-'), tool])));

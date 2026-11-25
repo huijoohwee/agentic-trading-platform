@@ -142,6 +142,9 @@ export function mountResearchPageView(parent, node, charts) {
       if (page.symbol) fact('Symbol', page.symbol);
       if (page.observed) fact('Observed (UTC)', page.observed);
       if (Object.hasOwn(page, 'lastValid')) fact('Last valid time (UTC)', page.lastValid);
+      for (const section of ['metadata', 'summary']) if (page[section]) {
+        for (const [key, value] of Object.entries(page[section])) fact(label(key), value);
+      }
       if (page.pagination) {
         fact('Provider page', page.pagination.completed ? 'Final page' : 'More results available');
         if (page.pagination.total !== null) fact('Reported total', page.pagination.total);

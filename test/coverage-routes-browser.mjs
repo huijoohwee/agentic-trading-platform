@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { providerCoverage, mappedReads } from '../src/provider-coverage.mjs';
+import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
+import { providerCoverageForCatalog, mappedReads } from '../src/provider-coverage.mjs';
+
+const providerCoverage = providerCoverageForCatalog(catalog);
 
 async function downloadView(page, view, label) {
   await view.getByRole('button', { name: 'Export view' }).click();
@@ -71,6 +74,11 @@ export async function verifyRouteViews(page) {
     assert.match(await details.textContent(), /SHA-256 [a-f0-9]{64}/);
     await choose.selectOption('table');
   }
+  await family.getByRole('button', { name: 'Next', exact: true }).click();
+  await family.getByRole('button', { name: 'Next', exact: true }).click();
+  await family.getByText('25–28 of 28', { exact: true }).waitFor();
+  const ark = family.getByRole('row').filter({ hasText: 'ARK market research' }).getByRole('cell').nth(3);
+  assert.deepEqual(await ark.locator('code').allTextContents(), providerCoverage.find(entry => entry.id === 'ark-market-research').operations);
   await routes.getByText('1–12 of 389', { exact: true }).waitFor();
   await routes.getByRole('button', { name: 'Next', exact: true }).click();
   await routes.getByText('13–24 of 389', { exact: true }).waitFor();

@@ -36,6 +36,6 @@
     "esbuild": "0.25.12"
   },
   "dependencies": {
-    "agentic-gateway": "https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/9b37a78d9f72ff8281dcd3fd05a25f35194b556b"
+    "agentic-gateway": "https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/995041137eff1c271606fe303d45c5cc08ad9711"
   }
 }
