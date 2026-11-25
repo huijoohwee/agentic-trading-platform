@@ -49,6 +49,10 @@ function pagination(page, required, operation, rows) {
   check(page.completed ? page.next_cursor === null : typeof page.next_cursor === 'string' &&
     page.next_cursor.length > 0 && page.next_cursor.length <= 1000, 'Invalid continuation cursor.');
   if (Object.hasOwn(page, 'total')) check(Number.isSafeInteger(page.total) && page.total >= 0);
+  if (operation === 'read.dividend-calendar' || operation === 'read.economic-calendar') {
+    check(Number.isSafeInteger(page.total) && page.total >= 0);
+    check(page.next_cursor === null || page.next_cursor.length <= (operation === 'read.dividend-calendar' ? 64 : 128));
+  }
   if (operation === 'read.capital-flow-history') {
     const time = page.next_time;
     check(page.completed ? time === null : Number.isSafeInteger(time) && time > 0 && rows.length > 0);
@@ -109,6 +113,9 @@ export async function readResearchPage(file) {
   const symbol = data.market?.symbol;
   check(symbol == null || typeof symbol === 'string' && symbol.length <= 128);
   const rows = data.rows.map((row, i) => projectRow(row, schema, data.decimals?.[i]));
+  if (operation === 'read.economic-calendar') check(rows.every(row =>
+    row.star >= 0 && row.star <= 5 && row.timestamp >= 0 && row.timestamp <= 8.64e12 &&
+    (typeof row.item_type === 'string' || Number.isSafeInteger(row.item_type) && row.item_type >= 0)));
   if (operation === 'read.capital-flow-history') {
     const times = rows.map(row => row.capital_flow_item_time);
     check(new Set(times).size === rows.length && times.every(time => time >= 0 && time <= 8.64e15));

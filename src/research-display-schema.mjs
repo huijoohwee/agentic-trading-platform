@@ -29,6 +29,13 @@ const distributionAmounts = ['in', 'out'].flatMap(side =>
 const flowAmounts = ['in_flow', 'main_in_flow', 'super_in_flow', 'big_in_flow', 'mid_in_flow', 'sml_in_flow'];
 const optionalFlow = ['main_deal_ratio', 'acc_main_in_flow'];
 const marketColumns = {
+  'read.dividend-calendar': { columns: ['code', 'name', 'statement', 'ex_date', 'record_date', 'dividend_payable_date'],
+    text: ['code', 'name', 'statement', 'ex_date', 'record_date', 'dividend_payable_date'],
+    nullable: ['record_date', 'dividend_payable_date'], paged: true, rowLimit: 200 },
+  'read.economic-calendar': { columns: ['article_id', 'title', 'timestamp', 'item_type', 'country', 'star'],
+    optional: ['previous', 'consensus', 'actual', 'detail_url', 'is_focus'],
+    text: ['article_id', 'title', 'country', 'previous', 'consensus', 'actual', 'detail_url'],
+    integers: ['timestamp', 'star'], booleans: ['is_focus'], paged: true, rowLimit: 100 },
   'read.capital-distribution': { columns: ['symbol', 'update_time', ...distributionAmounts], rowLimit: 1,
     text: ['symbol'], integers: ['update_time'], decimalText: distributionAmounts },
   'read.capital-flow-history': { columns: ['symbol', 'period_type', 'capital_flow_item_time', ...flowAmounts],

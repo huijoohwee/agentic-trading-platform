@@ -84,6 +84,14 @@ test('running gateway signs current and historical market REST reads, replays th
     ['super', 'big', 'mid', 'small'].map(size => ['capital_' + side + '_' + size, '9007199254740993.1000'])));
   const flowTime = time - 1000;
   const cases = [
+    ['read.dividend-calendar', { market: 'US', date: '2026-06-03', page_size: 1, page_flag: 'a/1' }, 'GET',
+      'dividend-calendar?market=US&date=2026-06-03&page_size=1&page_flag=a%2F1', null,
+      { items: [{ code: 'US.AAPL', name: 'Example', statement: 'USD 0.1000', ex_date: '2026-06-03',
+        record_date: '', dividend_payable_date: '2026-07-01' }] }],
+    ['read.economic-calendar', { begin_date: '2026-06-03', star: 3, page_size: 1 }, 'GET',
+      'economic-calendar/list?begin_date=2026-06-03&star=3&page_size=1', null,
+      { items: [{ article_id: '1000200030004000', item_type: 'ECONOMIC_DATA', title: 'Release', timestamp: Math.floor(time / 1000),
+        country: 'US', star: 3, previous: '0.1200%', actual: '' }] }],
     ['read.capital-distribution', { symbol }, 'GET', symbol + '/capital-distribution', null, { ...distribution, update_time: time }],
     ['read.capital-flow-history', { symbol, period_type: 'WEEK', count: 2, next_time: time }, 'GET',
       symbol + '/capital-flow/history?period_type=WEEK&count=2&next_time=' + time, null,
@@ -115,7 +123,8 @@ test('running gateway signs current and historical market REST reads, replays th
     if (new URL(url).hostname === '127.0.0.1') return network(url, options);
     const entry = cases.find(x => url === origin + 'api/v1.0/quote/' + x[3]);
     calls.push({ url, method: options.method, body: options.body && JSON.parse(options.body), token: options.headers.Authorization, redirect: options.redirect });
-    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...(entry?.[0] === 'read.capital-flow-history' && { pagination: { has_more: true } }), ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23]|-?9007199254740993\.1000)"/g, '$1');
+    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...(['read.dividend-calendar', 'read.economic-calendar'].includes(entry?.[0]) &&
+      { pagination: { total: 2, completed: false, page_flag: 'next/2' } }), ...(entry?.[0] === 'read.capital-flow-history' && { pagination: { has_more: true } }), ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23]|-?9007199254740993\.1000)"/g, '$1');
     return new Response(wire, { headers: { 'content-type': 'application/json' } });
   });
   const server = await runtimeCommand(['gateway', path, '0']); t.after(() => new Promise(resolve => server.close(resolve)));
@@ -165,6 +174,11 @@ test('running gateway signs current and historical market REST reads, replays th
       body: body ?? undefined, token: 'Bearer fixture-market-rest-credential', redirect: 'error' });
     const display = await readResearchPage(replay);
     pages[op] = display.rows;
+    if (['read.dividend-calendar', 'read.economic-calendar'].includes(op)) {
+      assert.deepEqual(display.pagination, { completed: false, cursor: 'next/2', total: 2 });
+      if (op === 'read.dividend-calendar') assert.equal(display.rows[0].statement, 'USD 0.1000');
+      else assert.equal(display.rows[0].previous, '0.1200%');
+    }
     if (op === 'read.capital-flow-history') {
       assert.deepEqual(display.pagination, { completed: false, cursor: String(flowTime), total: null, nextTime: flowTime });
       assert.equal(display.rows[0].in_flow, '-9007199254740993.1000');
