@@ -1,17 +1,17 @@
 ---
 title: "Agentic Trading Skills: native gateway consumer"
 doc_type: "PRD-TAD-ADR-MVP-GTM"
-version: "0.35.2"
+version: "0.35.3"
 date: "2026-11-25"
 lang: "en-US"
 frontmatter_contract: "required"
 owner: "Product function"
 continuity_id: "AGENTIC-TRADING-SKILLS-001"
-prd_revision: "0.35.2"
-tad_revision: "0.35.2"
-adr_revision: "0.35.2"
-mvp_revision: "0.35.2"
-gtm_revision: "0.35.2"
+prd_revision: "0.35.3"
+tad_revision: "0.35.3"
+adr_revision: "0.35.3"
+mvp_revision: "0.35.3"
+gtm_revision: "0.35.3"
 local_rung: "dev-proven"
 delivered_rung: "undocumented"
 lane: "authoring"
@@ -44,16 +44,15 @@ source_docs:
   - "agentic-gateway@a0b437fad862df3b501ffef50dfe115e09c62e6d:connectors/profiles.json"
   - "agentic-trading-platform@afb60fbbc966010767adf5ac8e201d3bea06e214:qualification/moomoo/README.md"
   - "agentic-os@1b7f3726fd250127d93d8a0ccaa08ae356974385:skills/trading/SKILL.md"
-  - "AGENTIC-TRADING-HYBRID-001@0.39.2"
+  - "AGENTIC-TRADING-HYBRID-001@0.39.3"
 ---
 # Agentic Trading Skills: native gateway consumer
 
-`AGENTIC-TRADING-SKILLS-001@0.35.2` accompanies [Trading 0.39.2](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests. E-64 covers signed market sessions and calendars. E-65 records how Base and Sheets resolve linked records and formula cells. E-66 covers opening private watchlist files offline.
+`AGENTIC-TRADING-SKILLS-001@0.35.3` accompanies [Trading 0.39.3](./prd-tad-adr-mvp-gtm-agentic-trading.md). OS owns the portable instruction and catalog identity. Gateway publishes shared connector profiles and conversions. Trading admits domain operations, enforces rights, records the ledger and signs results. Graph renders permitted results. VCC-14 covers the released synthetic desk. VCC-15–18 define the remaining laboratory acceptance tests. E-64 covers signed market sessions and calendars. E-65 records how Base and Sheets resolve linked records and formula cells. E-66 covers opening private watchlist files offline.
 
 Trading admits API and MCP through one signed-grant boundary (Product E-42/E-44). Outbound mappings, connected rights and host binding require independent qualification. Graph Integrations can present admitted capabilities through Design System. The skill discovers and explains them with `authority: false`. Product-local scope and S1 ownership continue to apply.
 
 **Historical release status, 21 November 2026.** E-28 records the native desk instruction source, offline installation and local ZIP inspection. Product E-46 records local synthetic desk behavior. E-09–27 describe earlier candidates and specification work. Operator-attested external runtime, provider permissions, Cloud package acceptance and commercial adoption remain open.
-
 ## Decision record (ranked next outcome)
 
 | Field | Value |
@@ -566,6 +565,7 @@ E-01–30 refer to earlier candidates. E-31 verifies the current audit-lane sour
 | E-64 | Symbol sessions and market calendars | Bind the symbols and optional state selectors, or the market and inclusive date window, to the signed read. The native MCP market list is transport-specific. | Trading candidate `2e89c27` shows each broker state and session duration per date from saved fixtures. Both transports use the same Gateway conversion. [Gateway #16](https://github.com/huijoohwee/agentic-gateway/pull/16) · [Trading session reads](https://github.com/huijoohwee/agentic-trading-platform/pull/85) |
 | E-65 | Linked records and formula inputs | Base owns the target table, display field, supporting picker fields and cardinality. Sheets extracts the original formula text, offsets and resolved cell addresses. | The Base picker and reverse links reopen offline. Sheets resolves absolute and mixed addresses to the same cell identity used for dependent lookup. [Base #114](https://github.com/huijoohwee/agentic-base/pull/114) · [Sheets #21](https://github.com/huijoohwee/agentic-sheets/pull/21) |
 | E-66 | Private watchlist inspection | In Trading `868b888`, load a saved directory, select the group used for the request, then load its saved members. Base provides table, matrix and Kanban views. Switching groups clears the members. The operator supplies the group association. The viewer makes zero provider calls. A ZIP of 498,415 bytes passed 22 extracted tests. [Gateway pin](https://github.com/huijoohwee/agentic-trading-platform/pull/88) · [Trading viewer](https://github.com/huijoohwee/agentic-trading-platform/pull/89) |
+| E-67 | Calendar research and coverage exports | Sign the dividend market and ex-date, or the economic date range and filters, including the requested page cursor. Open saved results in the research inspector. | Desktop and 360-pixel offline checks recovered the statement `USD 0.1000`, the previous value `2.1000%` and the continuation `next/2`. The public coverage toolbar exports CSV, JSON and Markdown through Gateway. [Calendar reads](https://github.com/huijoohwee/agentic-trading-platform/pull/101) · [Coverage exports](https://github.com/huijoohwee/agentic-trading-platform/pull/98) |
 
 [Previous Trading owner edition](https://github.com/huijoohwee/agentic-trading-platform/blob/afb60fbbc966010767adf5ac8e201d3bea06e214/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md) preserves the earlier owner text. The prior register retains exact commands, hashes, skipped tests, owner-supplied observations and historical lane dispositions for E-01–29. Product E-50 holds the N1 release evidence. [Archived skills register](https://github.com/huijoohwee/joohwee/blob/4bad2d7e0c0ce4cb753a108f62176fdb19d4d567/undocumented-draft/prd-tad-adr-mvp-gtm-agentic-trading-skills.md#evidence-register) · [Audited native instruction](https://github.com/huijoohwee/agentic-os/blob/f5cca6b1cd0d7bd16a0dd57abba35996262c481f/skills/trading/SKILL.md)
 
