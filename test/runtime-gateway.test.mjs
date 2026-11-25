@@ -281,7 +281,7 @@ test('a gateway without trusted keys cannot admit connected reads or writes', as
   assert.equal(f.calls.snapshot, 0);
 });
 test('portable resolver preserves the native fixture quote and refusals across direct, HTTP and MCP', async t => {
-  const { createResolver } = await import('../qualification/universal-gateway/resolver.mjs');
+  const { createResolver } = await import('agentic-gateway');
   const { default: manifest } = await import('../qualification/universal-gateway/quote.json', { with: { type: 'json' } });
   const { createHash } = await import('node:crypto');
   const { readFileSync } = await import('node:fs');
