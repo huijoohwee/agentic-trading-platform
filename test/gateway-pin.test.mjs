@@ -14,12 +14,14 @@ const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 // Reviewed pin of the exact Gateway tree Trading consumes (E-57). npm seals the tarball with the lock
 // integrity; the file digests protect the installed manifest, connector and profile bytes against an
 // edited fixture, a forked revision or a local override. No network and no provider call here.
-const REVISION = '8382f5fcd33d54d38070505134c6a76a5e86ea61';
+const REVISION = '95ebdc99572bd863c2c6879d14f535ea742302ac';
 const DEP_URL = 'https://codeload.github.com/huijoohwee/agentic-gateway/tar.gz/' + REVISION;
-const LOCK_INTEGRITY = 'sha512-gGVnfTYeIJU+68twnlKxqPkkqo9EmHtsPip6P06Ssb4aMmRPO7WjHsBhwsdPz46hxNfNutf6VqIQaYGbekMn6w==';
+const LOCK_INTEGRITY = 'sha512-6+2GjVTA+XdpTRSa/P96PBDBGgcLMkoQFGq9AXXa5E/UndFcajvkSpGZ8kV1KWNFPpOHgZwXrRmoDsV8/Vy34g==';
 const INSTALLED_VERSION = '0.1.0';
 const INSTALLED_DIGESTS = {
-  'package.json': 'e6f2d44d2e5d88a1f7fb630e18676db011af31b4ba6ac3c756724e89a15ed6bf',
+  'transfer/record-export.mjs': '79e108308b536935f48277d956a25a76d0fa9c3fe0a90e2b63cb3645a121c5b8',
+  'transfer/browser-files.mjs': '5816be9e6336695bf53e5b4d4d3019e99c1ccb18a8665783ece9471dfa52f595',
+  'package.json': '6536046536154f21c7c3af8ab4a41d5d97ebc397f305cc1f7ab4ccc4d2696433',
   'connectors/moomoo-securities-history.mjs': '3006992c4c22f3add8b53ab0752ba9fbb864284b02960b5458dc14a2d70f9e2b',
   'vendor/agentic-base/record-links.mjs': 'abe47bd1d080c4522b3f3808c724ddaf7283abb75e6499bba213a1cbfb301b1f',
   'resolver.mjs': '3beccdaaa511086434c8628edab831ad47ebe3a585c04947fc9020b7f66d4116',
@@ -27,8 +29,8 @@ const INSTALLED_DIGESTS = {
   'connectors/moomoo-trade-event.mjs': 'b58d462a0983fbde0bf27c4d5acc8d52640b10fda6182dbd32e89c34f11e694d',
   'connectors/moomoo-crypto-report.mjs': 'c2b3243017953859f0a3bd62488039fd9c9c52d2ce74e0459f7e033929d7cbb1',
   'connectors/moomoo-watchlist.mjs': 'c413faab25621f69dd450d3f31e57d22e5cf4e64122bf60f71f1fa823af135b6',
-  'connectors/moomoo-rest-wire.mjs': '2df064d2807ed9c3b450991c3199bf1bf73d4673b03500b0dc8ae07c969e1a8d',
-  'connectors/moomoo-market-rest.mjs': 'f4d45a2f6859f4535e7bf79e7fd25cd54af24d1760f5f14282bccc18ec6ecfe7',
+  'connectors/moomoo-rest-wire.mjs': '83c70e80614c537f821300e8c9126cfb186554241958940cd357b21aa76eea65',
+  'connectors/moomoo-market-rest.mjs': '844dcda2985cee55b9d10fc10f022956abd733a87a3beaffc266ae8f9d41269f',
   'connectors/moomoo-stock-screen.mjs': '637730130ac76d63f7f39c54527716e663694c458cc21612a6590d6db4b3d1a1',
   'connectors/moomoo-fields.json': '5a3adf13c7925ef33884fcbe87b882992a93733933fbd631f572218b6d7c1d13',
   'connectors/moomoo-catalog.json': 'b6046103367e103e9eca1424a1984d35c4cd9ef72ff1813cc1aca3c47dcbfe64',

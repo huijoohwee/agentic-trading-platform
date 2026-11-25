@@ -81,8 +81,9 @@ export async function verifyOpenOrders(page) {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth) <= page.viewportSize().width);
   await panel.locator('summary').click();
   page.off('request', record);
-  assert.ok(requests.every(url => new URL(url).origin === new URL(page.url()).origin &&
-    /\/(journal\.css|browser-data-view\.css)$/.test(new URL(url).pathname)));
+  const stylesheets = ['/journal.css', '/owners/design/profile.css', '/owners/base/packages/views-react/dist/browser-data-view.css']
+    .map(path => new URL(path, page.url()).href);
+  assert.ok(requests.every(url => stylesheets.includes(url)), 'Private reads may load only the sealed stylesheets');
   const stored = JSON.stringify(await page.context().storageState({ indexedDB: true })) +
     await page.evaluate(() => JSON.stringify(sessionStorage));
   for (const value of [id, 'private-A', 'private-B', 'private-fill', order.qty, fill.qty, second]) assert.ok(!stored.includes(value));

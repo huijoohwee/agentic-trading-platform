@@ -1,3 +1,4 @@
+import { downloadRecordView, recordFormats } from '../owners/gateway/transfer/record-export.mjs';
 import { mountDataView, mountRecordViewToolbar } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 
 const pageSize = 12;
@@ -81,6 +82,18 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
       ariaLabel: tableView ? title + ' table' : title + ' by ' + labelFor(groupDimension).toLowerCase(), onActivateRow: selectRecord,
       ...(tableView ? { selectedRowId: page.some(row => row === selected) ? selected.recordId : null } : { groupByColumnId: groupDimension }) };
   }
+  function exportData() {
+    if (layout === 'multiDimensional') {
+      const matrix = matrixState();
+      return { name: title + '-matrix', columns: matrix.columns, orientation,
+        rows: matrix.rows.map(row => ({ cells: row.cells.map((value, i) => i ? Number(value) : value) })) };
+    }
+    const columns = config.exportColumns ?? fields;
+    return { name: title, columns, rows: matches.map(row => ({ cells: columns.map(field => row[field.id] ?? null) })) };
+  }
+  const exports = config.exportable ? Object.entries(recordFormats).map(([format, { label }]) => ({
+    id: format, label, invoke: () => downloadRecordView(host.ownerDocument, exportData(), format),
+  })) : undefined;
   function toggle(panel, input) {
     panel.hidden = !panel.hidden;
     refreshToolbar();
@@ -100,7 +113,7 @@ export function mountCoverageRecords(host, inventory, node, config, inspect) {
     if (length) actions.push(
       { id: 'previous', label: 'Previous', disabled: !offset, invoke: () => changePage(-length) },
       { id: 'next', label: 'Next', disabled: offset + length >= count, invoke: () => changePage(length) });
-    const state = { layout, status, actions, label: title + ' views',
+    const state = { layout, status, actions, exports, label: title + ' views',
       onLayoutChange(value) { layout = value; offset = 0; selected = null; evidence.replaceChildren(); render(); } };
     if (toolbar) toolbar.update(state); else toolbar = mountRecordViewToolbar(toolbarHost, state);
   }
