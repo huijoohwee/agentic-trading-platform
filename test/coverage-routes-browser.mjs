@@ -80,6 +80,10 @@ export async function verifyRouteViews(page) {
   await routes.getByRole('button', { name: 'Filter routes' }).click();
   await routes.getByLabel('Transport', { exact: true }).selectOption('Push');
   await routes.getByText('24 matching routes').waitFor();
+  const filtered = JSON.parse(await downloadView(page, routes, 'JSON'));
+  assert.equal(filtered.rows.length, 24);
+  assert.ok(filtered.rows.every(cells => cells[1] === 'Push'));
+
   await board.getByRole('heading', { name: /offline replay.*24/ }).waitFor();
   await board.getByRole('heading', { name: /Ungrouped.*0/ }).waitFor();
   assert.equal(await board.getByRole('heading').count(), 2);

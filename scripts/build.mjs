@@ -77,7 +77,7 @@ export function readPinnedBytes(repoRoot, revision, path, maxBuffer = 500000) {
 }
 const pins = [
   { repo: 'agentic-base', prefix: 'base', revision: ownerRevisions['agentic-base'],
-    digest: '0585f0a073a30c21640108b20b72719ad2f513d9bdc6a233ffef720ddb95c194',
+    digest: '7a8d0d043a66a9a40bc986535a5efbaf8ab908687e582ced7ef55443098f32b7',
     paths: ['LICENSE', ...['index','record-workspace','record-field-controls','record-fields','record-links','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
   { repo: 'agentic-sheets', prefix: 'sheets', revision: ownerRevisions['agentic-sheets'],
