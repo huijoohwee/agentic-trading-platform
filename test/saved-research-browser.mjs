@@ -76,6 +76,19 @@ export async function verifySavedResearch(page, calendar) {
   await view.getByText('market_cap · 9007199254740.993', { exact: true }).click();
   await view.getByText('9007199254740993', { exact: true }).waitFor();
   await view.getByText('17', { exact: true }).waitFor();
+  for (const [operation, row, summary, exact] of [
+    ['read.dividend-calendar', { code: 'US.AAPL', name: 'Example', ex_date: '2026-10-16', record_date: null,
+      dividend_payable_date: '', statement: 'USD 0.1000' }, 'US.AAPL · 2026-10-16', 'USD 0.1000'],
+    ['read.economic-calendar', { article_id: 'economic-1', title: 'Rate announcement', item_type: 'ECONOMIC_DATA',
+      timestamp: 1792108800, star: 5, country: 'US', previous: '2.1000%', actual: '' }, 'Rate announcement', '2.1000%'],
+  ]) {
+    await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'calendar-fixture', operation },
+      data: { at: 1800000000000, source: 'AUTHENTICATED_ADAPTER', rows: [row], decimals: [{}],
+        pagination: { total: 2, completed: false, next_cursor: 'next/2' } } });
+    await view.locator('summary').filter({ hasText: summary }).click();
+    await view.getByText(exact, { exact: true }).waitFor();
+    await view.getByText('next/2', { exact: true }).waitFor();
+  }
   await select({ ...calendar, eps_actual: 0 });
   await view.getByText(/calendar fixture checksum does not match/).waitFor();
   assert.equal(await view.getByText('9007199254740993', { exact: true }).count(), 0);

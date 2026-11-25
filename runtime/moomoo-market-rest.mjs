@@ -7,6 +7,8 @@ import { researchMapping } from './moomoo-research.mjs';
 const profile = 'moomoo-market-rest/v1';
 const restOnly = {
   'read.candle-history': 'quote_history_kline',
+  'read.dividend-calendar': 'rest_dividend_calendar',
+  'read.economic-calendar': 'rest_economic_calendar_list',
   'read.capital-distribution': 'quote_capital_distribution',
   'read.capital-flow-history': 'quote_capital_flow_history',
 };
@@ -61,7 +63,8 @@ export function marketPage(spec, parameters, wire) {
   const { rows, requested, pagination } = projectMoomooMarketResponse(spec.tool, parameters, wire);
   // Bind the signed candle selectors to each visible bar also when opening the saved page offline.
   const page = { rows: requested ? rows.map(row => ({ ...row, ...requested })) : rows, decimals: rows.map(() => ({})) };
-  if (pagination) {
+  if (pagination && Object.hasOwn(pagination, 'completed')) page.pagination = pagination;
+  else if (pagination) {
     page.pagination = { completed: !pagination.has_more, next_cursor: pagination.next_page_token ?? pagination.next_time?.toString() ?? null,
       ...(Object.hasOwn(pagination, 'next_page_token') && { next_page_token: pagination.next_page_token }), next_time: pagination.next_time };
   }

@@ -25,9 +25,9 @@ function rowList(parent, rows, node) {
     list.replaceChildren();
     for (let index = offset; index < end; index++) {
       const row = rows[index], item = node('details');
-      const identity = [row.symbol, row.code, row.market, row.factor, row.display_name, row.category_name, row.name, row.holding_name, row.timestamp]
+      const identity = [row.symbol, row.code, row.market, row.factor, row.display_name, row.category_name, row.name, row.holding_name, row.title, row.timestamp]
         .find(value => value != null && String(value).trim() !== '');
-      const detail = row.market_state ?? row.earnings_date ?? row.market_date ?? row.capital_flow_item_time ?? row.exchange ?? row.sequence ?? row.time_ms ?? row.period_text ?? (row.factor ? row.value : undefined);
+      const detail = row.market_state ?? row.ex_date ?? row.earnings_date ?? row.market_date ?? row.capital_flow_item_time ?? row.exchange ?? row.sequence ?? row.time_ms ?? row.period_text ?? (row.factor ? row.value : undefined);
       const summary = [identity ?? 'Row ' + (index + 1), detail].filter(value => value != null).join(' · ');
       item.append(node('summary', summary));
       item.addEventListener('toggle', function expand() {
