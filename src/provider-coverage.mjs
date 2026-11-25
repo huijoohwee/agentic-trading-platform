@@ -22,6 +22,7 @@ const securitiesEvents = new Set(['EVENT_NEW', 'EVENT_REPLACED', 'EVENT_CANCELED
   'EVENT_PRICE_PROTECT', 'EVENT_TRIGGER_WAITING', 'EVENT_TRIGGER']);
 const cryptoReports = new Set(['1', '3', '4', '5']);
 const replayTopics = new Set(['QUOTE', 'ORDER_BOOK', 'TICKER', 'KLINE', 'BROKER_QUEUE', 'MARKET_STATE']);
+const companyResearchOperations = Object.keys(researchTools).filter(operation => operation.startsWith('read.company-'));
 
 export const providerCoverage = Object.freeze([
   family('market-reads', 'Realtime quotes, history, book and tape', 'mapped', 'MCP+REST',
@@ -64,10 +65,14 @@ export const providerCoverage = Object.freeze([
     [source('api/quote/ipo/ipo-list-hk.md', '41f89c3b7de8000cfd72892975c9835ae781824f87b2cbd513bc0278375528d7')],
     'Hong Kong is mapped through MCP and REST. Signed REST fixtures cover mainland China, the US, Singapore, Malaysia and Japan. Offering prices, share counts and reported timestamps retain their source precision.'),
   family('financials', 'Company profile and financial statements', 'mapped', 'MCP+REST',
-    ['read.financials', 'read.financial-statements'], ['quote_financials_statements'],
+    ['read.financials', ...companyResearchOperations, 'read.financial-statements'],
+    ['quote_financial_statements', ...companyResearchOperations.map(operation => researchTools[operation])],
     [source('api/quote/company/profile.md', 'de67cc6e2ac7fd84acb650086fc38830e50d41fb2ae6a09569edfcc8b7c370d4'),
+     source('api/quote/company/executive-background.md', 'e58bb81745f7a2d489d96fbbb03a4c093295efdad6aedd349715cef2c366ce00'),
+     source('api/quote/company/executives.md', 'f1db4fff26435f981236df586ede89a68f8e8011dd3cdfc94da556b71cd1e82c'),
+     source('api/quote/company/operational-efficiency.md', '564c656653d699d35691c0502cc0ecbbc68809da75c5a3abe0ab9887ea77e39c'),
      source('api/quote/financials/statements.md', 'f879dec57ec725c119c0e7d31e595198cbc8c890ba94d5c788b54a5e42085f8a')],
-    'Local fixtures cover profile labels and reported line items by fiscal period, currency, accounting standard and value type.'),
+    'Local fixtures cover profile labels, executive disclosures and operational efficiency by fiscal period. Decimal strings, market dates and page cursors are preserved.'),
   family('corporate-actions', 'Dividend announcements', 'mapped', 'MCP+REST',
     ['read.corporate-actions', 'read.dividend-calendar'], [],
     [source('api/quote/corporate-actions/dividends.md', '8d1688ba5a6003fe96da5c6a002fbd1c32f403b84a8076d7f7bc2db95b1b54ed'),
@@ -215,6 +220,12 @@ const reviewedRest = new Map([
   ['GET /api/v1.0/news/search', { evidence: 'Local headline fixture', units: 'Unix milliseconds and opaque news IDs' }],
   ['GET /api/v1.0/quote/research/analyst-ratings', { evidence: 'Local analyst-rating fixture', units: 'Market-local dates and native target-price text' }],
   ['GET /api/v1.0/quote/{symbol}/company/profile', { evidence: 'Local profile fixture', units: 'Localized labels and source field types' }],
+  ['GET /api/v1.0/quote/{symbol}/company/executive-background', { evidence: 'Local company research fixture',
+    units: 'Executive identity and source biography text' }],
+  ['GET /api/v1.0/quote/{symbol}/company/executives', { evidence: 'Local company research fixture',
+    units: 'Executive roles, source dates and exact share and salary strings' }],
+  ['GET /api/v1.0/quote/{symbol}/company/operational-efficiency', { evidence: 'Local company research fixture',
+    units: 'Fiscal periods, market dates, exact per-capita values and continuation cursor' }],
   ['GET /api/v1.0/quote/{symbol}/corporate-actions/dividends', { evidence: 'Local dividends fixture', units: 'Provider statements and market-local dividend dates' }],
   ['GET /api/v1.0/quote/{symbol}/shareholders/overview', { evidence: 'Local overview fixture', units: 'Portfolio percentages and dated holder identifiers' }],
   ['GET /api/v1.0/quote/influencer/holdings', { evidence: 'Local holdings fixture', units: 'USD estimates, portfolio percentages and US Eastern dates' }],

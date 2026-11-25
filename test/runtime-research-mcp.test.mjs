@@ -31,7 +31,8 @@ const { provider, descriptor } = mcpDefinition({ schema: 'trading-provider-defin
   qualification: { status: 'QUALIFIED', receipt_digest: sha('local-research-fixture'), expires_utc: expiry } }, operation);
 
 test('each public research tool has the same HTTP method and path as its reviewed projection', () => {
-  assert.equal(Object.keys(researchTools).length, 14);
+  assert.deepEqual(Object.keys(researchMcpMapping.operations).filter(name => Object.hasOwn(researchTools, name)).sort(),
+    Object.keys(researchTools).sort());
   for (const [operation, name] of Object.entries(researchTools)) {
     const rest = researchMapping.operations[operation];
     assert.equal(catalog.tools.find(tool => tool.name === name).http, rest.method + ' ' + rest.path);

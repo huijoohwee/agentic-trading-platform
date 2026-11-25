@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
 import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
+import { researchTools } from '../src/moomoo-research-tools.mjs';
 import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
 
 const statuses = ['mapped', 'candidate', 'paper-candidate', 'excluded'];
@@ -81,9 +82,9 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
   const researchPaths = Object.values({ ...researchMapping.operations, ...marketRestSpecs, ...simulatorSpecs }).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
-  assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 26);
+  assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 29);
   const dual = on('MCP').filter(row => row.evidence === 'Signed local MCP research fixture');
-  assert.equal(dual.length, 14);
+  assert.equal(dual.length, Object.keys(researchTools).length);
   for (const row of dual) {
     const rest = on('REST').find(entry => entry.sources.some(source => source.tool === row.label));
     assert.equal(rest.status, 'mapped');
