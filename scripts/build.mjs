@@ -204,7 +204,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   // Compact the dashboard views for the sealed offline download. Keep module boundaries for lazy loading.
   const { transform } = await import('esbuild');
   for (const [path, bytes] of assets) {
-    if (!/^src\/(?:.+-view|desk-.+|rehearsal-.+|market-.+|replay|browser|offline-shell|coverage-page|coverage-relations|skills-toolbar)\.mjs$/.test(path)) continue;
+    if (!/^src\/(?:.+-view|desk-.+|rehearsal-.+|market-.+|replay|browser|offline-shell|coverage-page|coverage-relations|provider-coverage|research-page|skills-toolbar)\.mjs$/.test(path)) continue;
     const { code } = await transform(bytes, { sourcefile: path, format: 'esm', target: 'esnext', minify: true });
     assets.set(path, Buffer.from(code));
   }

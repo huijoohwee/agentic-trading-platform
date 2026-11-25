@@ -8,6 +8,14 @@ export async function verifySavedResearch(page, calendar) {
   await view.getByText('Synthetic example · read.calendar', { exact: true }).waitFor();
   await view.getByText('Rows 1–3 of 3', { exact: true }).waitFor();
   const select = data => file.setInputFiles({ name: 'research.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+  const ranked = { code: 'US.DIA', name: 'Fixture', cur_price: '415.0000', change_ratio: '1.20%', change_amount: '2.00',
+    turnover: '9007199254740993', volume: '100', turnover_ratio: '0.4%', pe_ttm: '21.0000000000000001', amplitude: '0.1' };
+  await select({ status: 'OK', ledger_revision: 2, provenance: { source: 'PROVIDER', provider: 'rank-fixture', operation: 'read.rank-top-movers' },
+    data: { source: 'AUTHENTICATED_ADAPTER', at: 1800000000000, decimals: [{}], rows: [ranked],
+      pagination: { completed: false, next_cursor: 'next/+2', total: 2 } } });
+  await view.getByText('US.DIA', { exact: true }).click();
+  await view.getByText(ranked.pe_ttm, { exact: true }).waitFor();
+  await view.getByText('next/+2', { exact: true }).waitFor();
   await select(calendar);
   await view.getByText('Local file · read.calendar · origin unverified', { exact: true }).waitFor();
   await view.getByText(calendar.code + ' · ' + calendar.earnings_date, { exact: true }).click();
