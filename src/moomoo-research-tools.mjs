@@ -25,3 +25,7 @@ export const rankingNames = Object.freeze(['top-movers', 'us-pre-market', 'us-af
   'period-change', 'dividend', 'high-dividend-soe', 'earnings-beat', 'short-selling']);
 export const rankingTools = Object.freeze(Object.fromEntries(rankingNames.map(name =>
   ['read.rank-' + name, 'rest_rank_' + name.replaceAll('-', '_')])));
+
+export const ipoRegions = Object.freeze(['cn', 'us', 'sg', 'my', 'jp']);
+export const regionalIpoTools = Object.freeze(Object.fromEntries(ipoRegions.map(region =>
+  ['read.ipo-' + region, (region === 'jp' ? 'rest' : 'quote') + '_ipo_list_' + region])));

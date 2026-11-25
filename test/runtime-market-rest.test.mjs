@@ -119,6 +119,13 @@ test('running gateway signs current and historical market REST reads, replays th
       { kline_list: [{ code: symbol, date: 20260603, time_key: time, open_price: '345.50', high_price: 346, low_price: 344,
         close_price: '345.000', volume: 100, turnover: '34500.00' }] }],
   ];
+  for (const [region, code, requestType] of [['us', 'US.NEW', 11], ['cn', 'SH.601077', 1],
+    ['my', 'BMS.MYIPO007', 9], ['sg', 'SG.1V2', 10], ['jp', 'JP.7203', null]]) {
+    const inputs = requestType === null ? {} : { request_type: requestType };
+    const price = ['cn', 'my'].includes(region) ? 'ipo_price' : 'ipo_price_min';
+    cases.push(['read.ipo-' + region, inputs, 'GET', 'ipo-list/' + region + (requestType === null ? '' : '?request_type=' + requestType),
+      null, [{ code, name: 'Fixture', [price]: '9007199254740993.1000', is_user_applied: true }]]);
+  }
   const rankings = {
     'top-movers': { market: 'US' }, 'us-pre-market': {}, 'us-after-hours': {}, 'us-overnight': {},
     'period-change': { market: 'SH' }, dividend: { market: 'US', rank_type: 'HIGH_YIELD' },
@@ -166,9 +173,9 @@ test('running gateway signs current and historical market REST reads, replays th
       inputs: { ...parameters, grant }, deadline_utc: utc(Date.now() + 60000) };
   }
   const pages = {};
-  for (const [op, inputs, method, path, body] of cases) {
+  for (const [op, inputs, method, path, body, data] of cases) {
     const before = calls.length;
-    for (const [suffix, args, digest] of [['-missing', inputs, null], ['-changed', inputs, sha({})],
+    for (const [suffix, args, digest] of [['-missing', inputs, null], ['-changed', inputs, sha({ ...inputs, account: 'other' })],
       ['-extra', { ...inputs, account: 'other' }, sha({ ...inputs, account: 'other' })]]) {
       const refused = await post('/api/gateway', request(op, op + suffix, args, digest)); assert.equal(refused.status, 'REFUSED');
     }
@@ -188,6 +195,10 @@ test('running gateway signs current and historical market REST reads, replays th
     assert.deepEqual(calls.at(-1), { url: origin + 'api/v1.0/quote/' + path, method,
       body: body ?? undefined, token: 'Bearer fixture-market-rest-credential', redirect: 'error' });
     const display = await readResearchPage(replay);
+    if (op.startsWith('read.ipo-')) {
+      assert.deepEqual(display.rows[0], { code: data[0].code, name: 'Fixture',
+        [op === 'read.ipo-cn' || op === 'read.ipo-my' ? 'ipo_price' : 'ipo_price_min']: '9007199254740993.1000' });
+    }
     pages[op] = display.rows;
     if (op.startsWith('read.rank-')) {
       assert.deepEqual(display.pagination, { completed: false, cursor: 'next/2', total: 2 });

@@ -1,5 +1,5 @@
 import { publicRoutes } from 'agentic-gateway/connectors/moomoo-coverage';
-import { rankingNames, rankingTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
+import { ipoRegions, regionalIpoTools, rankingNames, rankingTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
 // source (path + on-disk SHA-256), the listed MCP tool names (see each route for evidence), the proposed semantic read operations, the outbound transport and an honest status.
@@ -59,10 +59,10 @@ export const providerCoverage = Object.freeze([
     ['read.news', 'read.research'], ['news_search'],
     [source('api/quote/research/research-analyst-ratings.md', '31cf7fb1d42fa1da41dcda3c8bb3b036ac4ec648fd79c7b7a3baf4b31a22ea28')],
     'MCP and REST fixtures cover headline metadata. Analyst rating pages use the REST mapping.'),
-  family('ipo', 'Hong Kong IPO listings', 'mapped', 'MCP+REST',
-    ['read.ipo'], ['quote_ipo_list_us', 'quote_ipo_list_hk', 'quote_ipo_list_cn', 'quote_ipo_list_sg', 'quote_ipo_list_my'],
+  family('ipo', 'Regional IPO listings', 'mapped', 'MCP+REST',
+    ['read.ipo', ...Object.keys(regionalIpoTools)], Object.values(regionalIpoTools).filter(tool => tool.startsWith('quote_')),
     [source('api/quote/ipo/ipo-list-hk.md', '41f89c3b7de8000cfd72892975c9835ae781824f87b2cbd513bc0278375528d7')],
-    'The HK MCP and REST fixtures map public listing dates, lot sizes and HKD offer prices. Other IPO markets await qualification.'),
+    'Hong Kong is mapped through MCP and REST. Signed REST fixtures cover mainland China, the US, Singapore, Malaysia and Japan. Offering prices, share counts and reported timestamps retain their source precision.'),
   family('financials', 'Company profile and financial statements', 'mapped', 'MCP+REST',
     ['read.financials', 'read.financial-statements'], ['quote_financials_statements'],
     [source('api/quote/company/profile.md', 'de67cc6e2ac7fd84acb650086fc38830e50d41fb2ae6a09569edfcc8b7c370d4'),
@@ -185,6 +185,7 @@ const stockScreenEvidence = { evidence: 'Signed local stock-screen fixture',
 const sessionMcpNames = new Set(Object.values(sessionTools));
 const marketFixture = units => ({ evidence: 'Signed local market REST fixture', units });
 const reviewedRest = new Map([
+  ...ipoRegions.map(region => ['GET /api/v1.0/quote/ipo-list/' + region, marketFixture('Native offering currency, share counts and timestamps as reported')]),
   ...rankingNames.map(name => ['GET /api/v1.0/quote/rank/' + name, marketFixture('Provider-ranked symbols, original field units and exact numeric values')]),
   ['POST /api/v1.0/quote/market-state', marketFixture('Provider state per symbol and broker, with reported session seconds and optional trade section')],
   ['GET /api/v1.0/quote/trading-days', marketFixture('Market-local date, session type and reported trading seconds')],
