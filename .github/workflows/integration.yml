@@ -78,6 +78,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Enforce shared owner reuse
+        uses: huijoohwee/agentic-os/.github/actions/owner-reuse@2a394c589064105387f1c58e6db54da135059c28
+        with:
+          baseline: 64463f80b82064066b39fa2138c3b81b04b2edec
+
       - name: Qualify registered fleet reuse
         uses: huijoohwee/agentic-os/.github/actions/fleet-reuse@3ed239e9f3591ade6bfb84b5262e2c0487bd7039
 
