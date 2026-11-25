@@ -1,12 +1,53 @@
 import ownerRevisions from './owner-revisions.json' with { type: 'json' };
 import { deskProvenance, deskQuote, deskDepth, deskTape, deskCandles } from '../src/provider-desk.mjs';
 import { researchDisplaySchema } from '../src/research-display-schema.mjs';
+import { routeInventory } from '../src/provider-coverage.mjs';
+import { routeValues, unpackMarketQueries } from '../src/market-query-report.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// Share the route metadata already present on the offline desk. Each integer in
+// the packed report refers to the corresponding route's ordered field values.
+// The snapshot exporter quotes every cell. Accept repository and exported line endings.
+function packMarketQueries(csv, catalog) {
+  const records = [], field = /"((?:[^"]|"")*)"(,|\r?\n|$)/y;
+  let row = [], offset = 0;
+  while (offset < csv.length) {
+    field.lastIndex = offset;
+    const match = field.exec(csv);
+    if (!match) throw Error('Invalid market query CSV at ' + offset);
+    offset = field.lastIndex;
+    row.push(match[1].replaceAll('""', '"'));
+    if (match[2] !== ',') { records.push(row); row = []; }
+  }
+  const headers = records.shift();
+  if (row.length || !headers || new Set(headers).size !== headers.length || !records.length ||
+      records.some(cells => cells.length !== headers.length)) throw Error('Invalid market query records');
+  const routes = routeInventory(catalog);
+  const byKey = new Map(routes.map((route, i) => [route.transport + ' ' + route.label, i]));
+  const transport = headers.indexOf('Transport'), label = headers.indexOf('Route or tool');
+  const routeIndexes = records.map(cells => byKey.get(cells[transport] + ' ' + cells[label]) ?? -1);
+  const encoded = records.map((cells, i) => {
+    const values = routeValues(routes[routeIndexes[i]]);
+    return cells.map(cell => { const index = values.indexOf(cell); return index < 0 ? cell : index; });
+  });
+  const columns = headers.map((_, i) => {
+    const values = encoded.map(cells => cells[i]);
+    if (records.every(cells => cells[i] === records[0][i])) return records[0][i];
+    return values.every(value => value === values[0]) ? values[0] : values;
+  });
+  // Store offsets between adjacent catalog rows. A negative offset preserves reordered snapshots.
+  const offsets = routeIndexes.map((index, i) => index - (i ? routeIndexes[i - 1] : 0));
+  const report = { headers, offsets, columns };
+  const restored = unpackMarketQueries(report, routes);
+  if (records.some((cells, i) => cells.some((cell, j) => cell !== restored[i][headers[j]])))
+    throw Error('Market query snapshot lost a field');
+  return JSON.stringify(report);
+}
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -109,8 +150,11 @@ export async function assemble({ devDocumentPolicy } = {}) {
   for (const name of ['moomoo-trade-event.mjs', 'moomoo-crypto-report.mjs', 'moomoo-watchlist.mjs', 'moomoo-rest-wire.mjs', 'moomoo-securities-history.mjs']) {
     assets.set('owners/gateway/' + name, await readFile(new URL(name, tradeEvents)));
   }
-  assets.set('qualification/moomoo/route-inventory.json',
-    await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo-catalog.json'))));
+  const catalog = await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo-catalog.json')));
+  assets.set('qualification/moomoo/route-inventory.json', catalog);
+  const queryCsv = await readFile(join(root, 'qualification/moomoo/outstanding-market-queries.csv'), 'utf8');
+  const reportModule = await readFile(join(root, 'src/market-query-report.mjs'), 'utf8');
+  assets.set('src/market-query-report.mjs', Buffer.from(reportModule + '\nexport const report = ' + packMarketQueries(queryCsv, JSON.parse(catalog)) + ';\n'));
   assets.set('qualification/moomoo/route-fields.json',
     await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo-fields.json'))));
   assets.set('src/research-display-schema.mjs', Buffer.from('export const researchDisplaySchema = ' + JSON.stringify(researchDisplaySchema) + ';'));

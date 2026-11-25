@@ -80,11 +80,9 @@ with tempfile.NamedTemporaryFile(dir=build.parent, suffix='.zip') as stage:
                 deflater = zlib.compressobj(level=9, wbits=-zlib.MAX_WBITS)
                 deflated_size = len(deflater.compress(body)) + len(deflater.flush())
                 sizes = {ZIP_DEFLATED: deflated_size, ZIP_BZIP2: len(bz2.compress(body, compresslevel=9))}
-                # Compare the actual LZMA member size for the larger modules and owner assets.
-                if len(body) >= 8192:
-                    with ZipFile(BytesIO(), 'w', compression=ZIP_LZMA) as trial:
-                        trial.writestr(name, body)
-                        sizes[ZIP_LZMA] = trial.getinfo(name).compress_size
+                with ZipFile(BytesIO(), 'w', compression=ZIP_LZMA) as trial:
+                    trial.writestr(name, body)
+                    sizes[ZIP_LZMA] = trial.getinfo(name).compress_size
                 method = min(sizes, key=sizes.get)
             archive.writestr(entry, body, compress_type=method, compresslevel=9)
     stage.flush()
