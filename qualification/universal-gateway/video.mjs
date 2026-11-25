@@ -8,7 +8,7 @@ import { pinnedOwner } from './pinned-owner.mjs';
 const root = process.argv[2], pin = pinnedOwner(root, manifest);
 const require = createRequire(resolve(root, 'package.json'));
 const { chromium } = require('playwright');
-const core = fileURLToPath(new URL('./resolver.mjs', import.meta.url));
+const core = fileURLToPath(import.meta.resolve('agentic-gateway'));
 const { outputFiles } = await require('esbuild').build({
   absWorkingDir: resolve(root, 'canvas'), stdin: { resolveDir: resolve(root, 'canvas'), contents:
     'export {createResolver} from ' + JSON.stringify(core) +

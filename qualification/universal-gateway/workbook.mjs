@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import manifest from './workbook.json' with { type: 'json' };
 import { pinnedOwner } from './pinned-owner.mjs';
-import { createResolver } from './resolver.mjs';
+import { createResolver } from 'agentic-gateway';
 
 const root = process.argv[2], pin = pinnedOwner(root, manifest);
 const { decodeSnapshot, encodeSnapshot } = await import(pathToFileURL(resolve(root, 'sheets/core.mjs')));

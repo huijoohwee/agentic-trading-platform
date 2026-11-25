@@ -1,6 +1,6 @@
 # Shared gateway qualification
 
-This local test host runs the same resolver in a browser and Node. Native adapters retain dispatch, authorization and error handling. A successful resolution returns the native response under `native`, including a native refusal. A thrown native error propagates.
+This local test host runs Trading’s locked `agentic-gateway` resolver in both the browser bundle and Node. Native adapters retain dispatch, authorization and error handling. A successful resolution returns the native response under `native`, including a native refusal. A thrown native error propagates.
 
 Run from the Trading checkout using Node 22.22 or later. Supply clean local checkouts at the revisions in the JSON manifests. Graph needs its installed build tools and Chromium. The workbook fixture is the canonical download from Trading’s rehearsal-workbook export.
 
