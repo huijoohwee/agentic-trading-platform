@@ -1,8 +1,9 @@
 // The Gateway supplies decimal spellings of provider numbers. Keep subtraction and
 // the final percentage rounding in base 10, even when the quote uses an exponent.
-function decimalParts(text) {
+export function decimalParts(text, { signed = false } = {}) {
   if (typeof text !== 'string' || text.length > 64) return null;
-  const match = /^(0|[1-9]\d*)(?:\.(\d+))?(?:e([+-]?\d{1,3}))?$/i.exec(text);
+  if (!signed && /^(?:-|0\d)/.test(text)) return null;
+  const match = /^(-?\d+)(?:\.(\d+))?(?:e([+-]?\d{1,3}))?$/i.exec(text);
   if (!match || Math.abs(Number(match[3] ?? 0)) > 324) return null;
   const fraction = match[2] ?? '';
   return { units: BigInt(match[1] + fraction), power: Number(match[3] ?? 0) - fraction.length };
@@ -11,6 +12,18 @@ function decimalParts(text) {
 function fixed(units, places) {
   const digits = String(units).padStart(places + 1, '0');
   return places ? digits.slice(0, -places) + '.' + digits.slice(-places) : digits;
+}
+
+export function decimalPriceLabel(units, power) {
+  if (units === 0n) return '0';
+  const sign = units < 0n ? '-' : '';
+  const raw = String(units < 0n ? -units : units);
+  const digits = raw.replace(/0+$/, '');
+  const exponent = power + raw.length - 1;
+  const scale = exponent + 1 - digits.length;
+  const plain = scale < 0 ? fixed(digits, -scale) : digits + '0'.repeat(scale);
+  const scientific = (digits.length === 1 ? digits : digits[0] + '.' + digits.slice(1)) + 'e' + exponent;
+  return sign + (plain.length > 12 && scientific.length < plain.length ? scientific : plain);
 }
 
 export function quoteChange(last, previous) {
