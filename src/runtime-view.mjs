@@ -61,7 +61,17 @@ export async function mountRuntimeView(host) {
     try { (await import('./trade-event-view.mjs')).mountTradeEvents(events, node); }
     catch { events.append(node('p', 'Private trade-event viewer unavailable.')); }
   });
-  host.replaceChildren(status, privacy, controls, output, simulator, events);
+  const orders = node('details');
+  orders.id = 'private-open-orders';
+  orders.className = 'rehearsal-table-content';
+  orders.append(node('summary', 'Inspect saved orders and fills'));
+  orders.addEventListener('toggle', async function open() {
+    if (!orders.open) return;
+    orders.removeEventListener('toggle', open);
+    try { (await import('./open-orders-view.mjs')).mountOpenOrders(orders, node); }
+    catch { orders.append(node('p', 'Saved orders and fills viewer unavailable.')); }
+  });
+  host.replaceChildren(status, privacy, controls, output, simulator, events, orders);
   const baseId = 'trading-runtime-projections-v1', tableId = 'observations', recordId = 'latest';
   const { run, ensureTable } = localFixtureTable(new IndexedDBAdapter({ databaseName: baseId }), {
     baseId, tableId, title: 'Redacted runtime observations', baseName: 'Trading runtime readback',

@@ -1,13 +1,14 @@
 """Build a local, fixed-inventory ZIP from the sealed browser output and headless replay."""
 import bz2
 import hashlib
+from io import BytesIO
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 import zlib
-from zipfile import ZIP_BZIP2, ZIP_DEFLATED, ZipFile, ZipInfo
+from zipfile import ZIP_BZIP2, ZIP_DEFLATED, ZIP_LZMA, ZipFile, ZipInfo
 
 root = Path(__file__).resolve().parent.parent
 build = Path(subprocess.check_output(['node', 'scripts/build.mjs'], cwd=root, text=True).strip())
@@ -39,6 +40,7 @@ files['server-policy.json'] = subprocess.check_output([
 files['README.md'] = b'''# Offline trading replay
 
 Use Node 22.22+ and Python 3. The samples use synthetic paper observations.
+Extract all members with python3 -m zipfile -e <archive.zip> <destination>.
 From the extracted directory run these checks without accounts or package installation.
 
     node --test test/*.test.mjs
@@ -77,8 +79,13 @@ with tempfile.NamedTemporaryFile(dir=build.parent, suffix='.zip') as stage:
             if len(body) >= 4096:
                 deflater = zlib.compressobj(level=9, wbits=-zlib.MAX_WBITS)
                 deflated_size = len(deflater.compress(body)) + len(deflater.flush())
-                if len(bz2.compress(body, compresslevel=9)) < deflated_size:
-                    method = ZIP_BZIP2
+                sizes = {ZIP_DEFLATED: deflated_size, ZIP_BZIP2: len(bz2.compress(body, compresslevel=9))}
+                # Compare the actual LZMA member size for the larger modules and owner assets.
+                if len(body) >= 8192:
+                    with ZipFile(BytesIO(), 'w', compression=ZIP_LZMA) as trial:
+                        trial.writestr(name, body)
+                        sizes[ZIP_LZMA] = trial.getinfo(name).compress_size
+                method = min(sizes, key=sizes.get)
             archive.writestr(entry, body, compress_type=method, compresslevel=9)
     stage.flush()
     body = Path(stage.name).read_bytes()

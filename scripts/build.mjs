@@ -103,9 +103,10 @@ export async function assemble({ devDocumentPolicy } = {}) {
     'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/simulator-receipt-view.mjs', 'src/private-receipt-view.mjs', 'src/trade-event-view.mjs', 'src/skills-toolbar.mjs', 'src/skills-panel.mjs', 'src/provider-coverage.mjs', 'src/moomoo-research-tools.mjs', 'src/coverage-view.mjs', 'src/coverage-routes-view.mjs', 'src/coverage-relations.mjs', 'src/provider-capture.mjs', 'src/capture-view.mjs', 'src/provider-hosted.mjs', 'src/hosted-view.mjs', 'src/moomoo-desk-view.mjs', 'src/desk-diagrams.mjs', 'src/quote-display.mjs', 'src/quote-push-view.mjs', 'src/research-page.mjs', 'src/research-page-view.mjs'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   assets.set('src/watchlist-view.mjs', await readFile(join(root, 'src/watchlist-view.mjs')));
+  assets.set('src/open-orders-view.mjs', await readFile(join(root, 'src/open-orders-view.mjs')));
   assets.set('owners/gateway/moomoo.mjs', await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo'))));
   const tradeEvents = import.meta.resolve('agentic-gateway/connectors/moomoo-trade-event');
-  for (const name of ['moomoo-trade-event.mjs', 'moomoo-crypto-report.mjs', 'moomoo-watchlist.mjs', 'moomoo-rest-wire.mjs']) {
+  for (const name of ['moomoo-trade-event.mjs', 'moomoo-crypto-report.mjs', 'moomoo-watchlist.mjs', 'moomoo-rest-wire.mjs', 'moomoo-securities-history.mjs']) {
     assets.set('owners/gateway/' + name, await readFile(new URL(name, tradeEvents)));
   }
   assets.set('qualification/moomoo/route-inventory.json',
