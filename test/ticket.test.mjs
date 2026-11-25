@@ -100,9 +100,13 @@ test('the sealed graph rejects legacy Sheets imports and modified UI projection 
 });
 
 
-test('the journal obtains its shell and cards from the executable Design System owner', () => {
-  const template = assets.get('index.html').toString();
-  assert.doesNotMatch(template, /agentic-dashboard-layout|data-agentic-base-dashboard-layout|agentic-dashboard-card/);
+test('both dashboard pages obtain their layout from the executable Design System owner', () => {
+  for (const [path, id] of [['index.html', 'journal'], ['coverage.html', 'coverage']]) {
+    const template = assets.get(path).toString();
+    assert.doesNotMatch(template, /agentic-dashboard-layout|data-agentic-base-dashboard-layout|agentic-dashboard-card/);
+    assert.ok(template.includes('data-page="' + id + '" aria-current="page"'));
+    assert.equal(template.match(/aria-current="page"/g)?.length, 1);
+  }
   const adapter = assets.get('src/dashboard.mjs').toString();
   assert.match(adapter, /import \{ createNativeDashboard \} from '\.\.\/owners\/design\/site\/dashboard\.mjs'/);
   assert.doesNotMatch(adapter, /agentic-base-dashboard-layout|agentic-dashboard-card/);
@@ -129,7 +133,7 @@ test('Trading Skills project the pinned OS catalog through the shared FloatingPa
     const changed = new Map(sources); changed.set(name, Buffer.from('changed'));
     assert.throws(() => verifyOwner('agentic-os', changed), /Owner bytes/);
   }
-  for (const path of ['index.html', 'desk.html']) {
+  for (const path of ['index.html', 'desk.html', 'coverage.html']) {
     const html = assets.get(path).toString();
     assert.ok(html.includes('href="./owners/design/site/toolbar.css"'));
     assert.ok(html.includes('href="./trading.css"'));

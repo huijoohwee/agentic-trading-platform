@@ -1,29 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
-  <title>Decision journal · Agentic Trading</title>
-  <link rel="icon" href="./owners/design/site/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./owners/design/profile.css">
-  <link rel="stylesheet" href="./owners/design/site/collection-layout.css">
-  <link rel="stylesheet" href="./owners/design/site/toolbar.css">
-  <link rel="stylesheet" href="./trading.css">
-  <link rel="stylesheet" href="./journal.css">
-  <script type="module" src="./src/landing-tools.mjs"></script>
-  <script type="module" src="./src/browser.mjs"></script>
-  <script type="module" src="./src/skills-toolbar.mjs"></script>
-</head>
-<body data-agentic-typography>
-  <!-- trading-toolbar -->
-  <main id="journal" aria-label="Decision journal">
-    <noscript>Enable JavaScript to open the offline trading journal.</noscript>
-  </main>
-  <template id="session-slot">
-    <div class="session"><strong>Agentic Trading</strong><span id="offline-status" class="agentic-text-detail" role="status">Opening local workspace…</span></div>
-  </template>
   <template id="age-slot">
     <div class="measure"><div><span>Quote age</span><strong id="age" class="agentic-mono-detail">—</strong></div>
     <progress id="window" aria-label="Quote age within the five-minute policy window" value="0" max="300"></progress>
@@ -69,7 +43,6 @@
     <nav class="journal-sections-nav agentic-dashboard-actions" aria-label="Journal sections">
       <a href="#provider-desk">Market desk</a>
       <a href="#private-watchlists">Watchlists</a>
-      <a href="#provider-coverage">Provider routes</a>
       <a href="#provider-capture">Desktop capture</a>
       <a href="#provider-hosted">Hosted capture</a>
       <a href="#rehearsal">Competition rehearsal</a>
@@ -82,9 +55,6 @@
     </section>
     <section class="journal-section" id="private-watchlists" aria-labelledby="watchlist-heading"><h2 id="watchlist-heading">Private watchlists</h2>
       <div id="watchlist-body"><p role="status">Loading this section…</p></div>
-    </section>
-    <section class="journal-section" id="provider-coverage" aria-labelledby="provider-coverage-heading"><h2 id="provider-coverage-heading">Moomoo OpenAPI coverage · evidence-led feature families</h2>
-      <div id="coverage-body"><p role="status">Loading this section…</p></div>
     </section>
     <section class="journal-section" id="provider-capture" aria-labelledby="provider-capture-heading"><h2 id="provider-capture-heading">Moomoo Desktop capture · entitled $0 quote replay</h2>
       <div id="capture-body"><p role="status">Loading this section…</p></div>
@@ -122,5 +92,3 @@
     </section>
   </template>
   <div id="fatal" role="alert" hidden></div>
-</body>
-</html>
