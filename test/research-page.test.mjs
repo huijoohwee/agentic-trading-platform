@@ -16,7 +16,7 @@ function gateway(operation, rows, decimals, metadata = {}) {
 test('every reviewed research mapping has named columns, units and a readable empty result', async () => {
   const operations = ['read.calendar', ...Object.keys(researchMapping.operations), ...Object.keys(marketRestSpecs)].sort();
   assert.deepEqual(Object.keys(researchDisplaySchema).sort(), operations);
-  assert.equal(operations.length, 41);
+  assert.equal(operations.length, 50);
   for (const name of operations) {
     const schema = researchDisplaySchema[name];
     assert.ok(schema.columns.length && schema.units);
@@ -90,6 +90,19 @@ test('flow and ranking previews retain source decimals, observation time and opa
   assert.deepEqual(second.pagination, { completed: false, cursor: '2/+=', total: 3 });
   rank.data.decimals[0].news_heat = '1.29';
   await assert.rejects(readResearchPage(rank), /decimal disagrees/);
+});
+
+test('saved rankings enforce the provider cursor, total, integer fields and page limit', async () => {
+  const op = 'read.rank-short-selling', schema = researchDisplaySchema[op];
+  const row = Object.fromEntries(schema.columns.map(column => [column, '1']));
+  row.short_number = '9007199254740993';
+  const page = (rows, metadata = {}) => gateway(op, rows, rows.map(() => ({})),
+    { pagination: { completed: false, next_cursor: 'next/?', total: 40, ...metadata } });
+  assert.equal((await readResearchPage(page([row]))).rows[0].short_number, row.short_number);
+  await assert.rejects(readResearchPage(page(Array(36).fill(row))));
+  await assert.rejects(readResearchPage(page([{ ...row, short_number: '1.5' }])));
+  for (const bad of [{ total: null }, { next_cursor: 'x'.repeat(65) }, { next_cursor: 'next\n' }])
+    await assert.rejects(readResearchPage(page([row], bad)));
 });
 
 test('nested financial statement and futures rows keep reported units, source text and nulls', async () => {

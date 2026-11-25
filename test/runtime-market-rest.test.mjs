@@ -11,6 +11,7 @@ import { openStore } from '../runtime/store.mjs';
 import { readBudgetScope, reserveHistoryRead } from '../runtime/read-budget.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 import { readResearchPage } from '../src/research-page.mjs';
+import { describeMoomooRanking } from 'agentic-gateway/connectors/moomoo-market-rest';
 
 const scope = { environment: 'SIMULATE', profile: 'practice', account_alias: 'fixture-market-rest' };
 const candidate = sha('market-rest-fixture'), operator = generateKeyPairSync('ed25519'), integration = generateKeyPairSync('ed25519');
@@ -118,12 +119,26 @@ test('running gateway signs current and historical market REST reads, replays th
       { kline_list: [{ code: symbol, date: 20260603, time_key: time, open_price: '345.50', high_price: 346, low_price: 344,
         close_price: '345.000', volume: 100, turnover: '34500.00' }] }],
   ];
+  const rankings = {
+    'top-movers': { market: 'US' }, 'us-pre-market': {}, 'us-after-hours': {}, 'us-overnight': {},
+    'period-change': { market: 'SH' }, dividend: { market: 'US', rank_type: 'HIGH_YIELD' },
+    'high-dividend-soe': {}, 'earnings-beat': { market: 'HK', beat_type: 'EPS' }, 'short-selling': { market: 'US' },
+  };
+  for (const [name, selectors] of Object.entries(rankings)) {
+    const op = 'read.rank-' + name, inputs = { ...selectors, page_flag: 'prior/1', page_size: 1 };
+    const fields = describeMoomooRanking(marketRestSpecs[op].tool);
+    const row = Object.fromEntries([...fields.textFields.map(key => [key, '1.2000']),
+      ...fields.decimalFields.map(key => [key, '-9007199254740993.1000']), ...fields.integerFields.map(key => [key, 17])]);
+    row.code = (selectors.market ?? (name === 'high-dividend-soe' ? 'HK' : 'US')) + '.ABC';
+    row.name = 'Fixture';
+    cases.push([op, inputs, 'GET', 'rank/' + name + '?' + new URLSearchParams(inputs), null, { items: [row] }]);
+  }
   const calls = [], network = globalThis.fetch;
   t.mock.method(globalThis, 'fetch', (url, options) => {
     if (new URL(url).hostname === '127.0.0.1') return network(url, options);
     const entry = cases.find(x => url === origin + 'api/v1.0/quote/' + x[3]);
     calls.push({ url, method: options.method, body: options.body && JSON.parse(options.body), token: options.headers.Authorization, redirect: options.redirect });
-    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...(['read.dividend-calendar', 'read.economic-calendar'].includes(entry?.[0]) &&
+    const wire = JSON.stringify({ ret_code: 0, data: entry?.[5], ...((entry?.[0].startsWith('read.rank-') || ['read.dividend-calendar', 'read.economic-calendar'].includes(entry?.[0])) &&
       { pagination: { total: 2, completed: false, page_flag: 'next/2' } }), ...(entry?.[0] === 'read.capital-flow-history' && { pagination: { has_more: true } }), ...(entry?.[0] === history && { pagination: { has_more: true, next_page_token: token } }) }).replace(/"(764705696406055802[23]|-?9007199254740993\.1000)"/g, '$1');
     return new Response(wire, { headers: { 'content-type': 'application/json' } });
   });
@@ -174,6 +189,13 @@ test('running gateway signs current and historical market REST reads, replays th
       body: body ?? undefined, token: 'Bearer fixture-market-rest-credential', redirect: 'error' });
     const display = await readResearchPage(replay);
     pages[op] = display.rows;
+    if (op.startsWith('read.rank-')) {
+      assert.deepEqual(display.pagination, { completed: false, cursor: 'next/2', total: 2 });
+      assert.equal(display.rows[0].code, cases.find(entry => entry[0] === op)[5].items[0].code);
+      const { decimalFields, integerFields } = describeMoomooRanking(marketRestSpecs[op].tool);
+      for (const key of decimalFields) assert.equal(display.rows[0][key], '-9007199254740993.1000');
+      for (const key of integerFields) assert.equal(display.rows[0][key], '17');
+    }
     if (['read.dividend-calendar', 'read.economic-calendar'].includes(op)) {
       assert.deepEqual(display.pagination, { completed: false, cursor: 'next/2', total: 2 });
       if (op === 'read.dividend-calendar') assert.equal(display.rows[0].statement, 'USD 0.1000');

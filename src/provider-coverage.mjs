@@ -1,4 +1,4 @@
-import { researchTools, sessionTools } from './moomoo-research-tools.mjs';
+import { rankingNames, rankingTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
 // source (path + on-disk SHA-256), the listed MCP tool names (see each route for evidence), the proposed semantic read operations, the outbound transport and an honest status.
@@ -44,11 +44,11 @@ export const providerCoverage = Object.freeze([
      source('api/quote/capital-flow/capital-flow-history.md', '86f133f76acee218bfce251c403f0dbbe9a27544d6f48df8d56fa69b208ad9d4')],
     'MCP and REST fixtures cover capital flow. REST fixtures also cover inflow and outflow by trade size and historical flow pages with millisecond cursors.'),
   family('rank', 'Stock screening and rankings', 'mapped', 'MCP+REST',
-    ['read.rank', 'read.stock-screen'], ['quote_stock_screen'],
+    ['read.rank', 'read.stock-screen', ...Object.keys(rankingTools)], ['quote_stock_screen'],
     [source('api/quote/screening/stock-screen.md', 'e19263aeea9615a0262950b57df146deffd945ec1fd5ba329057d316008b6f88'),
      source('api/quote/rank/rank-hot-list.md', 'c863d51e04fdd576a24be433ddaff86e931a7ebadcfaa734473c16784561baa7'),
      source('api/quote/rank/rank-earnings-beat.md', '4689cb06a31b34f6a020aaa32b977b8a9ed8f0ba6d2a2d4521703f1680f7f934')],
-    'Signed local fixtures cover market-wide screening over MCP and REST, plus the REST hot list. Each screen binds its market, factor bounds, sorting, columns and cursor.'),
+    'Signed local fixtures cover stock screening, the hot list and nine REST rankings. Ranking results retain provider order, exact values and continuation cursors.'),
   family('plate-industry', 'Sector directory', 'mapped', 'MCP+REST',
     ['read.plate'], ['quote_plate_list', 'quote_plate_stock', 'quote_owner_plate'],
     [source('api/quote/industry/heatmap.md', 'a636ade5e00f7018f4cb7461b1bd82e607119f3714483eff68476bb8665a0297'),
@@ -184,6 +184,7 @@ const stockScreenEvidence = { evidence: 'Signed local stock-screen fixture',
 const sessionMcpNames = new Set(Object.values(sessionTools));
 const marketFixture = units => ({ evidence: 'Signed local market REST fixture', units });
 const reviewedRest = new Map([
+  ...rankingNames.map(name => ['GET /api/v1.0/quote/rank/' + name, marketFixture('Provider-ranked symbols, original field units and exact numeric values')]),
   ['POST /api/v1.0/quote/market-state', marketFixture('Provider state per symbol and broker, with reported session seconds and optional trade section')],
   ['GET /api/v1.0/quote/trading-days', marketFixture('Market-local date, session type and reported trading seconds')],
   ['POST /api/v1.0/quote/stock-quote', marketFixture('Source quote price and representation, market date, Unix milliseconds, shares and turnover')],

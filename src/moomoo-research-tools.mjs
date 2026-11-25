@@ -20,3 +20,8 @@ export const sessionTools = Object.freeze({
   'read.market-state': 'quote_market_state',
   'read.trading-days': 'quote_trading_days',
 });
+
+export const rankingNames = Object.freeze(['top-movers', 'us-pre-market', 'us-after-hours', 'us-overnight',
+  'period-change', 'dividend', 'high-dividend-soe', 'earnings-beat', 'short-selling']);
+export const rankingTools = Object.freeze(Object.fromEntries(rankingNames.map(name =>
+  ['read.rank-' + name, 'rest_rank_' + name.replaceAll('-', '_')])));

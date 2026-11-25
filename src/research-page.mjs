@@ -35,6 +35,7 @@ function projectRow(source, schema, precise = {}) {
     if (value !== null) {
       if (schema.integers?.includes(key)) check(Number.isSafeInteger(value));
       if (schema.text?.includes(key)) check(typeof value === 'string');
+      if (schema.integerText?.includes(key)) check(typeof value === 'string' && /^-?\d+$/.test(value));
       if (schema.booleans?.includes(key)) check(typeof value === 'boolean');
       if (schema.exactIntegers?.includes(key)) check(typeof value === 'string' && /^-?\d{1,20}$/.test(value));
       if (schema.decimalText?.includes(key)) check(typeof value === 'string' && decimal.test(value));
@@ -49,6 +50,11 @@ function pagination(page, required, operation, rows) {
   check(page.completed ? page.next_cursor === null : typeof page.next_cursor === 'string' &&
     page.next_cursor.length > 0 && page.next_cursor.length <= 1000, 'Invalid continuation cursor.');
   if (Object.hasOwn(page, 'total')) check(Number.isSafeInteger(page.total) && page.total >= 0);
+  const limit = researchDisplaySchema[operation].cursorLimit;
+  if (limit !== undefined) {
+    check(Number.isSafeInteger(page.total) && page.total >= 0);
+    check(page.next_cursor === null || (page.next_cursor.length <= limit && !/[\u0000-\u001f\u007f]/u.test(page.next_cursor)));
+  }
   if (operation === 'read.dividend-calendar' || operation === 'read.economic-calendar') {
     check(Number.isSafeInteger(page.total) && page.total >= 0);
     check(page.next_cursor === null || page.next_cursor.length <= (operation === 'read.dividend-calendar' ? 64 : 128));

@@ -1,11 +1,12 @@
 import fieldRegister from 'agentic-gateway/connectors/moomoo-fields.json' with { type: 'json' };
-import { sessionTools } from '../src/moomoo-research-tools.mjs';
+import { rankingTools, sessionTools } from '../src/moomoo-research-tools.mjs';
 import { buildMoomooSessionArguments, buildMoomooMarketRequest, projectMoomooMarketResponse, marketRestRoutes } from 'agentic-gateway/connectors/moomoo-market-rest';
 import { requireThat, sha } from './core.mjs';
 import { researchMapping } from './moomoo-research.mjs';
 
 const profile = 'moomoo-market-rest/v1';
 const restOnly = {
+  ...rankingTools,
   'read.candle-history': 'quote_history_kline',
   'read.dividend-calendar': 'rest_dividend_calendar',
   'read.economic-calendar': 'rest_economic_calendar_list',
