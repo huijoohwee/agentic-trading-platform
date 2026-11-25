@@ -1,9 +1,9 @@
 import { createRecordLinkCodec } from '../owners/base/packages/views-react/dist/browser-data-view.js';
 import { report, unpackMarketQueries } from './market-query-report.mjs';
 import { mountCoverageRecords as mountRecords } from './coverage-routes-view.mjs';
-import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from './provider-coverage.mjs';
+import { providerCoverage, coverageSummary, mappedReads, routeInventory } from './provider-coverage.mjs';
 
-import { coverageRelations, httpFieldInventory, routeId } from './coverage-relations.mjs';
+import { coverageRelations, httpFieldInventory, namingDictionaries, routeId } from 'agentic-gateway/connectors/moomoo-coverage';
 
 // Browse the saved catalog and evidence for each host.
 export async function mountCoverageView(host) {
@@ -15,19 +15,19 @@ export async function mountCoverageView(host) {
   const status = node('p', `${summary.families} feature families · ${summary.mapped_operations.length} mapped read operations · hosted read.ticker qualified`);
   status.id = 'coverage-status'; status.setAttribute('role', 'status');
   const references = catalog.sources.filter(source => source.reference);
-  const intro = node('p', `${COVERAGE_INDEX.known_sources} known OpenAPI sources · ${COVERAGE_INDEX.imported_sources} from the original mirror · ${references.length} additional public references. Select a row or card for full values and source links. Connected qualification applies to the named host and read.`);
+  const intro = node('p', `${catalog.sources.length} known OpenAPI sources · ${catalog.sources.length - references.length} from the original mirror · ${references.length} additional public references. Select a row or card for full values and source links. Connected qualification applies to the named host and read.`);
   const counts = node('p', Object.entries(summary.by_status).map(([key, value]) => `${key}: ${value}`).join(' · '));
   const dictionaries = node('nav');
   dictionaries.className = 'journal-sections-nav';
   dictionaries.setAttribute('aria-label', 'Naming dictionaries');
   dictionaries.append(node('strong', 'Naming dictionaries'));
   const dictionaryNames = { quote: 'Quotes', trading: 'Securities trading', crypto_trading: 'Crypto trading' };
-  const sourcesByPath = new Map(catalog.sources.map(source => [source.path, source]));
+  const dictionariesByArea = new Map(namingDictionaries(catalog).map(item => [item.area, item]));
   for (const [area, name] of Object.entries(dictionaryNames)) {
-    const source = sourcesByPath.get('/api/' + area + '/naming-dictionary');
-    if (!source) throw Error('MISSING_NAMING_DICTIONARY');
+    const dictionary = dictionariesByArea.get(area);
+    if (!dictionary) throw Error('MISSING_NAMING_DICTIONARY');
     const anchor = node('a', name);
-    anchor.href = new URL(source.path, catalog.origin);
+    anchor.href = dictionary.url;
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
     dictionaries.append(anchor);

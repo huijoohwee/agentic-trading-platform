@@ -152,11 +152,21 @@ export async function assemble({ devDocumentPolicy } = {}) {
   const files = ['web/observe.html','src/observer-view.mjs','web/desk.html', 'web/trading.css', 'web/desk.css', ...['desk-lab','research-catalog','desk-actions','landing-tools','contracts','market','market-reads','indicators','chart','experiment','strategy-language','scientific-packages','strategy-example','experiment-worker',
     'practice-account','practice-defaults','practice-cache','predictions','desk','desk-panels','desk-session'].map(name=>'src/'+name+'.mjs'), 'web/index.html', 'web/journal.css', 'src/browser.mjs', 'src/coverage-page.mjs', 'src/offline-shell.mjs', 'src/dashboard.mjs', 'src/rules.mjs', 'src/tickets.mjs', 'src/fixture.json',
     'src/audit-view.mjs', 'src/local-audit.mjs', 'src/landing.mjs', 'src/audit-fixture.json',
-    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/simulator-receipt-view.mjs', 'src/private-receipt-view.mjs', 'src/trade-event-view.mjs', 'src/skills-toolbar.mjs', 'src/skills-panel.mjs', 'src/provider-coverage.mjs', 'src/moomoo-research-tools.mjs', 'src/coverage-view.mjs', 'src/coverage-routes-view.mjs', 'src/coverage-relations.mjs', 'src/provider-capture.mjs', 'src/capture-view.mjs', 'src/provider-hosted.mjs', 'src/hosted-view.mjs', 'src/moomoo-desk-view.mjs', 'src/desk-diagrams.mjs', 'src/quote-display.mjs', 'src/quote-push-view.mjs', 'src/research-page.mjs', 'src/research-page-view.mjs'];
+    'src/forward-schedule.mjs', 'src/forward-rehearsal.mjs', 'src/competition-rules.mjs', 'src/replay.mjs', 'src/rehearsal-view.mjs', 'src/rehearsal-dashboard.mjs', 'src/rehearsal-workbook.mjs', 'src/rehearsal-analysis.mjs', 'src/rehearsal-worksheets.mjs', 'src/rehearsal-tables.mjs', 'src/rehearsal.json', 'src/runtime-view.mjs', 'src/simulator-receipt-view.mjs', 'src/private-receipt-view.mjs', 'src/trade-event-view.mjs', 'src/skills-toolbar.mjs', 'src/skills-panel.mjs', 'src/provider-coverage.mjs', 'src/moomoo-research-tools.mjs', 'src/coverage-view.mjs', 'src/coverage-routes-view.mjs', 'src/provider-capture.mjs', 'src/capture-view.mjs', 'src/provider-hosted.mjs', 'src/hosted-view.mjs', 'src/moomoo-desk-view.mjs', 'src/desk-diagrams.mjs', 'src/quote-display.mjs', 'src/quote-push-view.mjs', 'src/research-page.mjs', 'src/research-page-view.mjs'];
   for (const path of files) assets.set(path.replace(/^web\//, ''), await readFile(join(root, path)));
   assets.set('src/watchlist-view.mjs', await readFile(join(root, 'src/watchlist-view.mjs')));
   assets.set('src/open-orders-view.mjs', await readFile(join(root, 'src/open-orders-view.mjs')));
   assets.set('owners/gateway/moomoo.mjs', await readFile(new URL(import.meta.resolve('agentic-gateway/connectors/moomoo'))));
+  const coverageImport = 'agentic-gateway/connectors/moomoo-coverage';
+  const coveragePath = 'owners/gateway/connectors/moomoo-coverage.mjs';
+  const coverageModule = new URL(import.meta.resolve(coverageImport));
+  const linksModule = '../vendor/agentic-base/record-links.mjs';
+  // Use the device's pinned Base relationship implementation for the Gateway connector too.
+  const resolveImport = (bytes, source, target) => Buffer.from(bytes.toString().replaceAll("'" + source + "'", "'" + target + "'"));
+  assets.set(coveragePath, resolveImport(await readFile(coverageModule), linksModule, '../../base/src/record-links.mjs'));
+  for (const path of ['src/provider-coverage.mjs', 'src/coverage-view.mjs']) {
+    assets.set(path, resolveImport(assets.get(path), coverageImport, '../' + coveragePath));
+  }
   const tradeEvents = import.meta.resolve('agentic-gateway/connectors/moomoo-trade-event');
   for (const name of ['moomoo-trade-event.mjs', 'moomoo-crypto-report.mjs', 'moomoo-watchlist.mjs', 'moomoo-rest-wire.mjs', 'moomoo-securities-history.mjs']) {
     assets.set('owners/gateway/' + name, await readFile(new URL(name, tradeEvents)));
@@ -204,7 +214,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   // Compact the dashboard views for the sealed offline download. Keep module boundaries for lazy loading.
   const { transform } = await import('esbuild');
   for (const [path, bytes] of assets) {
-    if (!/^src\/(?:.+-view|desk-.+|rehearsal-.+|market-.+|replay|browser|offline-shell|coverage-page|coverage-relations|provider-coverage|research-page|skills-toolbar)\.mjs$/.test(path)) continue;
+    if (!/^src\/(?:.+-view|desk|desk-.+|rehearsal-.+|market-.+|replay|browser|offline-shell|coverage-page|provider-coverage|research-page|skills-toolbar)\.mjs$/.test(path)) continue;
     const { code } = await transform(bytes, { sourcefile: path, format: 'esm', target: 'esnext', minify: true });
     assets.set(path, Buffer.from(code));
   }

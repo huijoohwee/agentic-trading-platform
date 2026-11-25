@@ -142,9 +142,16 @@ test('every declared reference route and public field has a reversible catalog i
   const { build } = await import('../scripts/build.mjs');
   const { pathToFileURL } = await import('node:url');
   const { destination } = await build();
-  const { coverageRelations, httpFieldInventory, routeId } = await import(pathToFileURL(destination + '/src/coverage-relations.mjs'));
+  const { coverageRelations, httpFieldInventory, routeId } = await import(pathToFileURL(destination + '/owners/gateway/connectors/moomoo-coverage.mjs'));
   const { default: register } = await import('agentic-gateway/connectors/moomoo-fields.json', { with: { type: 'json' } });
   const routes = routeInventory(catalog), links = coverageRelations(catalog, routes);
+  const owner = await import('agentic-gateway/connectors/moomoo-coverage');
+  const native = owner.coverageRelations(catalog);
+  for (const row of routes) {
+    const key = routeId(row);
+    assert.deepEqual(links.references.to(key), native.references.to(key));
+    assert.deepEqual(links.tools.to(key), native.tools.to(key));
+  }
   for (const doc of catalog.sources.filter(doc => doc.reference)) {
     for (const spelling of doc.reference.routes) {
       const edge = links.references.from(doc.path).find(item => item.label === spelling);

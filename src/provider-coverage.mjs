@@ -1,3 +1,4 @@
+import { publicRoutes } from 'agentic-gateway/connectors/moomoo-coverage';
 import { rankingNames, rankingTools, researchTools, sessionTools } from './moomoo-research-tools.mjs';
 import { captureMapping } from './provider-capture.mjs';
 // Evidence-led moomoo OpenAPI feature-family coverage. Each entry pins the imported documentation
@@ -253,7 +254,6 @@ const simulationRoutes = new Map([
   ['POST ' + simOrder + 'modify', simEffect('Amend an independently approved paper ticket', 'Original order ID, new quantity and price')],
   ['POST ' + simOrder + 'cancel', simEffect('Cancel an independently approved paper ticket', 'Account market ID and original order ID')]
 ]);
-const routeKey = http => http.replace(/\{[A-Za-z_][\w]*\}/g, '{}');
 
 // Labels describe the evidence needed at Trading admission. This inventory has
 // no transport handler and supplies neither permission nor spendable headroom.
@@ -303,34 +303,14 @@ function disposition(methodPath, topic, name) {
 }
 
 export function routeInventory(catalog) {
-  if (catalog.schema !== 'moomoo-documentation-catalog/v1' || catalog.authority !== false ||
-      catalog.index_sha256 !== COVERAGE_INDEX.index_sha256) throw Error('COVERAGE_SOURCE_DRIFT');
-  const routes = new Map();
-  function add(transport, label, methodPath, topic, name, source) {
-    const key = transport + ' ' + (transport === 'REST' ? routeKey(label) : label);
-    let route = routes.get(key);
-    if (!route) {
-      const [status, scope, evidence] = disposition(methodPath, topic, name);
-      const units = transport === 'REST' ? (reviewedRest.get(methodPath) ?? simulationRoutes.get(methodPath))?.units
-        : name === 'quote_stock_screen' ? stockScreenEvidence.units : (researchMcpNames.has(name) || sessionMcpNames.has(name)) ? reviewedRest.get(methodPath)?.units : undefined;
-      route = { transport, label, status, scope, evidence, units: units ?? 'See source field definitions', sources: [] };
-      routes.set(key, route);
-    }
-    route.sources.push(source);
-  }
-  for (const doc of catalog.sources) {
-    const record = doc.reference ?? doc;
-    for (const route of record.routes ?? []) {
-      const url = doc.reference ? catalog.origin + '/' + record.file : catalog.origin + doc.path;
-      const source = { url, digest: record.sha256 };
-      if (route.startsWith('PUSH ')) add('Push', route.slice(5), null, route.slice(5), null, source);
-      else add('REST', route, route, null, null, { ...source, http: route });
-    }
-  }
-  for (const tool of catalog.tools) {
-    const source = { url: catalog.directory, digest: tool.http_schema_sha256, tool: tool.name, http: tool.http };
-    add('MCP', tool.name, tool.http, null, tool.name, source);
-    add('REST', tool.http, tool.http, null, null, source);
-  }
-  return [...routes.values()];
+  if (catalog.index_sha256 !== COVERAGE_INDEX.index_sha256) throw Error('COVERAGE_SOURCE_DRIFT');
+  return publicRoutes(catalog).map(route => {
+    const { transport, label, sources } = route;
+    const name = transport === 'MCP' ? label : null;
+    const methodPath = name ? sources[0].http : label;
+    const [status, scope, evidence] = disposition(methodPath, transport === 'Push' ? label : null, name);
+    const units = transport === 'REST' ? (reviewedRest.get(methodPath) ?? simulationRoutes.get(methodPath))?.units
+      : name === 'quote_stock_screen' ? stockScreenEvidence.units : (researchMcpNames.has(name) || sessionMcpNames.has(name)) ? reviewedRest.get(methodPath)?.units : undefined;
+    return { ...route, status, scope, evidence, units: units ?? 'See source field definitions' };
+  });
 }
