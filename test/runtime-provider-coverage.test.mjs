@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import catalog from 'agentic-gateway/connectors/moomoo-catalog.json' with { type: 'json' };
 import { marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { researchMapping } from '../runtime/moomoo-research.mjs';
-import { researchTools } from '../src/moomoo-research-tools.mjs';
+import { researchRestTools, researchTools } from '../src/moomoo-research-tools.mjs';
 import { providerCoverage, coverageSummary, mappedReads, routeInventory, COVERAGE_INDEX } from '../src/provider-coverage.mjs';
 
 const statuses = ['mapped', 'candidate', 'paper-candidate', 'excluded'];
@@ -49,6 +49,10 @@ test('mapped reads cover the MCP market family and reviewed REST projections', (
   assert.equal(calendar.sources[0].sha256, '36da3343d16f677f29c49f8194f6c645b5ce273bda0ccc2a1c442c8f29bf4bc2');
   assert.equal(summary.families, providerCoverage.length);
   assert.equal(Object.values(summary.by_status).reduce((a, b) => a + b, 0), providerCoverage.length);
+  const analyst = providerCoverage.find(entry => entry.id === 'news-research');
+  assert.deepEqual(Object.keys(researchRestTools).filter(operation => !analyst.operations.includes(operation)), []);
+  assert.equal(Object.keys(researchRestTools).length, 10);
+  for (const operation of Object.keys(researchRestTools)) assert(summary.mapped_operations.includes(operation));
 });
 
 test('pinned route inventory reconciles aliases, transport-specific evidence and known gaps', () => {
@@ -82,6 +86,13 @@ test('pinned route inventory reconciles aliases, transport-specific evidence and
   const mappedPaths = on('REST').filter(row => row.status === 'mapped').map(row => row.label).sort();
   const researchPaths = Object.values({ ...researchMapping.operations, ...marketRestSpecs, ...simulatorSpecs }).map(spec => spec.method + ' ' + spec.path);
   assert.deepEqual(mappedPaths, ['GET /api/v1.0/quote/earnings-calendar', ...researchPaths].sort());
+  for (const [operation, spec] of Object.entries(marketRestSpecs)) {
+    if (!Object.hasOwn(researchRestTools, operation)) continue;
+    const route = on('REST').find(row => row.label === spec.method + ' ' + spec.path);
+    assert.equal(route.status, 'mapped', operation);
+    assert.match(route.units, /Documented fields:/, operation);
+    assert.equal(route.evidence, 'Signed local market REST fixture', operation);
+  }
   assert.equal(on('MCP').filter(row => row.status === 'mapped').length, 29);
   const dual = on('MCP').filter(row => row.evidence === 'Signed local MCP research fixture');
   assert.equal(dual.length, Object.keys(researchTools).length);

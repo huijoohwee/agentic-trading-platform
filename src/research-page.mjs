@@ -52,7 +52,9 @@ function pagination(page, required, operation, rows) {
   if (Object.hasOwn(page, 'total')) check(Number.isSafeInteger(page.total) && page.total >= 0);
   const limit = researchDisplaySchema[operation].cursorLimit;
   if (limit !== undefined) {
-    check(Number.isSafeInteger(page.total) && page.total >= 0);
+    if (researchDisplaySchema[operation].optionalTotal !== true)
+      check(Number.isSafeInteger(page.total) && page.total >= 0);
+    else if (Object.hasOwn(page, 'total')) check(Number.isSafeInteger(page.total) && page.total >= 0);
     check(page.next_cursor === null || (page.next_cursor.length <= limit && !/[\u0000-\u001f\u007f]/u.test(page.next_cursor)));
   }
   if (operation === 'read.dividend-calendar' || operation === 'read.economic-calendar') {

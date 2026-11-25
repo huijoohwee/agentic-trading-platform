@@ -1,3 +1,5 @@
+import { marketRestRoutes } from 'agentic-gateway/connectors/moomoo-market-rest';
+
 // Reviewed intersection of Trading research projections and Gateway's pinned public directory.
 export const researchTools = Object.freeze({
   'read.capital-flow': 'quote_capital_flow',
@@ -32,3 +34,8 @@ export const rankingTools = Object.freeze(Object.fromEntries(rankingNames.map(na
 export const ipoRegions = Object.freeze(['cn', 'us', 'sg', 'my', 'jp']);
 export const regionalIpoTools = Object.freeze(Object.fromEntries(ipoRegions.map(region =>
   ['read.ipo-' + region, (region === 'jp' ? 'rest' : 'quote') + '_ipo_list_' + region])));
+
+const researchRestPrefix = 'rest_research_';
+export const researchRestTools = Object.freeze(Object.fromEntries(Object.keys(marketRestRoutes)
+  .filter(tool => tool.startsWith(researchRestPrefix))
+  .map(tool => ['read.' + tool.slice(researchRestPrefix.length).replaceAll('_', '-'), tool])));
