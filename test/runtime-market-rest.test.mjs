@@ -8,6 +8,7 @@ import { canonical, sha } from '../runtime/core.mjs';
 import { createRestMarketReadAdapter } from '../runtime/rest-market-read.mjs';
 import { marketRestMapping, marketRestSpecs } from '../runtime/moomoo-market-rest.mjs';
 import { openStore } from '../runtime/store.mjs';
+import { createMarketReadBoundary } from '../runtime/market-ingestion.mjs';
 import { readBudgetScope, reserveHistoryRead } from '../runtime/read-budget.mjs';
 import { runtimeCommand } from '../scripts/runtime.mjs';
 import { readResearchPage } from '../src/research-page.mjs';
@@ -36,6 +37,50 @@ test('each native market REST method, origin, route and operation are pinned', (
   for (const delta of [{ path: '/api/v1.0/accounts/order' }, { method: 'GET' }, { tool: 'quote_rt_ticker' }, { pin_inputs: false }]) {
     const map = { ...mapping, operations: { 'read.depth': { ...marketRestSpecs['read.depth'], ...delta } } };
     assert.throws(() => adapter({ ...provider, mapping: map, mapping_digest: sha(map) }), /INVALID_MAPPING/);
+  }
+});
+
+test('signed ingestion preserves Gateway metadata and summary for the offline ARK page', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'trading-market-context-'));
+  const store = openStore(join(dir, 'state.sqlite'));
+  t.after(async () => { store.close(); await rm(dir, { recursive: true, force: true }); });
+  const issue = (role, kind, extra) => {
+    const time = Date.now(), pair = role === 'operator' ? operator : integration;
+    const payload = { schema: 'trading-runtime-envelope/v1', kind, scope, candidate,
+      principal: role, runtime: role, issued_utc: utc(time - 1000), expires_utc: utc(time + 60000), ...extra };
+    return { key_id: role, payload, signature: sign(null, Buffer.from(canonical(payload)), pair.privateKey).toString('base64url') };
+  };
+  for (const [index, operation] of ['read.ark-active-transaction', 'read.ark-fund-return-rate'].entries()) {
+    const tool = arkTools[operation], descriptor = describeMoomooArk(tool), toolGrant = {
+      operation, name: tool, schema_digest: marketRestSpecs[operation].schema_digest, effect: 'read' };
+    const row = Object.fromEntries(descriptor.field_names.filter(name => descriptor.fields[name]?.source !== 'input' &&
+      !descriptor.optional_fields.includes(name)).map(name => [name,
+      descriptor.decimal_text.includes(name) ? '1.2300' : descriptor.date.includes(name) ? '2026-11-24'
+        : descriptor.integers.includes(name) ? 1 : 'Fixture ' + name]));
+    const fields = names => Object.fromEntries((names ?? []).map(name => [name,
+      descriptor.decimal_text.includes(name) ? '2.3400' : descriptor.date.includes(name) ? '2026-11-24'
+        : descriptor.integers.includes(name) ? 2 : 'Fixture ' + name]));
+    const metadata = fields(descriptor.metadata_fields), summary = fields(descriptor.summary_fields);
+    const grant = issue('operator', 'read', { nonce: 'ark-context-' + index, tools: [toolGrant],
+      limits: { max_calls: 3, timeout_ms: 1000 }, cost: { hard_cap_usd: 0, deny_at_exhaustion: true, remaining_calls: 3 },
+      proofs: ['cost', 'rights', 'account'].map(kind => ({ kind, digest: sha(kind + index), expires_utc: utc(Date.now() + 60000) })) });
+    const response = { rows: [row], decimals: [{}], ...(descriptor.pagination && { pagination: { completed: true, next_cursor: null, total: 1 } }),
+      ...(descriptor.metadata_fields && { metadata }),
+      ...(descriptor.summary_fields && { summary }), market_request: { request_id: 'fixture' } };
+    const adapter = {
+      open: async ({ grant: signedGrant }) => issue('integration', 'read-capabilities', { tools: signedGrant.tools, calls: 1 }),
+      read: async () => issue('integration', 'provider-market-page', { operation,
+        schema_digest: toolGrant.schema_digest, response_digest: sha('ark-wire-' + index), observed_utc: utc(Date.now()),
+        source_event: 'market-ark-fixture-' + index, ...response }),
+    };
+    const boundary = createMarketReadBoundary({ store, scope, candidate, keys, adapter });
+    const result = await boundary({ operation, inputs: {}, grant });
+    assert.deepEqual(result.metadata, descriptor.metadata_fields ? metadata : undefined);
+    assert.deepEqual(result.summary, descriptor.summary_fields ? summary : undefined);
+    const saved = await readResearchPage({ status: 'OK', ledger_revision: 1, at: Date.now(),
+      provenance: { provider: 'moomoo-fixture', source: 'PROVIDER', operation }, data: { ...result, at: Date.now() } });
+    assert.deepEqual(saved.metadata, descriptor.metadata_fields ? metadata : undefined);
+    assert.deepEqual(saved.summary, descriptor.summary_fields ? summary : undefined);
   }
 });
 
