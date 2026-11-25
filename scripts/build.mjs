@@ -77,14 +77,14 @@ export function readPinnedBytes(repoRoot, revision, path, maxBuffer = 500000) {
 }
 const pins = [
   { repo: 'agentic-base', prefix: 'base', revision: ownerRevisions['agentic-base'],
-    digest: '7a8d0d043a66a9a40bc986535a5efbaf8ab908687e582ced7ef55443098f32b7',
+    digest: '36eca57ea9bf2ed0e5f750d6a04d9b3e9c9220bba2931840c96143c1ba39a08d',
     paths: ['LICENSE', ...['index','record-workspace','record-field-controls','record-fields','record-links','schema','engine','errors','projectors','query','adapters/indexeddb','adapters/memory'].map(name => 'src/' + name + '.mjs'),
       'packages/views-react/dist/browser-data-view.js', 'packages/views-react/dist/browser-data-view.css'] },
   { repo: 'agentic-sheets', prefix: 'sheets', revision: ownerRevisions['agentic-sheets'],
     digest: '067f22546a65190f7010830ba6b9d9d66b70dd1a67b1c9a32c504c128fb95c69',
     paths: ['LICENSE', 'sheets/core.mjs', 'sheets/schema.mjs', 'sheets/formula.mjs'] },
   { repo: 'agentic-design-system', prefix: 'design', revision: ownerRevisions['agentic-design-system'],
-    digest: '7ab1b507fc91793c3df29e2d85e3e9cb04a3e9ed1097b8f6e146cf8c8fc93581',
+    digest: 'd578002d4facfd9921559a2a943f66679cf24842c4ffc19bee6e3a6509623a0a',
     paths: ['LICENSE', 'site/favicon.svg', 'site/vendor/shared-ui-profile.css', 'site/collection-layout.css', 'site/dashboard.mjs', 'site/dashboard-range.mjs', 'site/dashboard-range.css', 'site/THIRD-PARTY-NOTICES.txt',
       'site/panel-section.js', 'site/panel-section.css', 'site/toolbar-icons.js', 'site/icons.json', 'site/key-type-value.js', 'site/floating-panel.js', 'site/floating-panel.css', 'site/hover.css',
       'site/skills-commands.js', 'site/skills-commands.css', 'site/collection-layout.js', 'site/toolbar.css'] },
@@ -214,7 +214,7 @@ export async function assemble({ devDocumentPolicy } = {}) {
   // Compact the dashboard views for the sealed offline download. Keep module boundaries for lazy loading.
   const { transform } = await import('esbuild');
   for (const [path, bytes] of assets) {
-    if (!/^src\/(?:.+-view|desk|desk-.+|rehearsal-.+|market-.+|replay|browser|offline-shell|coverage-page|provider-coverage|research-page|skills-toolbar)\.mjs$/.test(path)) continue;
+    if (!/^src\/(?:.+-view|desk|desk-.+|rehearsal-.+|market-.+|chart|replay|browser|offline-shell|coverage-page|provider-coverage|research-page|skills-toolbar)\.mjs$/.test(path)) continue;
     const { code } = await transform(bytes, { sourcefile: path, format: 'esm', target: 'esnext', minify: true });
     assets.set(path, Buffer.from(code));
   }
